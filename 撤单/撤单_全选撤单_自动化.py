@@ -58,16 +58,20 @@ def activate_window(hwnd: int):
 
 def switch_panel(win, tree_item: str):
     """点击左侧树节点,切换到指定面板。"""
-    # 先让 TreeView 滚到顶部,无论滚轮当前在哪
     tree = win.child_window(auto_id="1223", control_type="Tree")
     tree.wait("ready", timeout=10)
     tree.set_focus()
+
+    # 先滚到顶部
     tree.type_keys("{HOME}", with_spaces=False)
     time.sleep(0.2)
-    # 再点击目标节点
-    item = win.child_window(title=tree_item, control_type="TreeItem")
+
+    # 直接查找并 select
+    item = tree.child_window(title=tree_item, control_type="TreeItem")
     item.wait("visible", timeout=10)
-    item.click_input()
+    item.select()
+    time.sleep(0.15)
+    # item.click_input()
     print(f"[OK] 已切换到面板: {tree_item}")
 
 def click_button(win, auto_id: str, title: str):

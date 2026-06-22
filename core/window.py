@@ -64,31 +64,62 @@ def countdown(seconds: int):
     print(" " * 30, end="\r")
 
 
+def _select_tree_item_by_path(tree, panel_path: str):
+    """逐级 select 展开树节点。
+
+    Args:
+        tree: Tree 控件
+        panel_path: 树形面板路径,如 r"\查询\资金持仓" 或 "\撤单"
+    """
+    # 规范化路径
+    path = panel_path.replace("/", "\\")
+    if not path.startswith("\\"):
+        path = "\\" + path
+
+    # 解析路径,过滤空字符串
+    parts = [p for p in path.split("\\") if p]
+    if not parts:
+        raise ValueError(f"无效的面板路径: {panel_path}")
+
+    # 逐级 select 展开
+    for part in parts:
+        item = tree.child_window(title=part, control_type="TreeItem", found_index=0)
+        item.wait("visible", timeout=5)
+        item.select()
+        time.sleep(0.15)
+
+    return tree.child_window(title=parts[-1], control_type="TreeItem", found_index=0)
+
+
 def switch_panel(win, panel_path: str, use_title: bool = False):
     """切换到指定面板。
 
     Args:
         win: 主窗口
-        panel_path: 树形面板路径,如 r"\查询\资金持仓"
+        panel_path: 树形面板路径,如 r"\查询\资金持仓" 或 "撤单"
         use_title: 是否用title定位TreeItem(历史委托/历史成交需要)
     """
+    tree = win.child_window(auto_id="1223", control_type="Tree")
+    tree.wait("ready", timeout=10)
+    tree.set_focus()
+
+    # 先滚到顶部
+    tree.type_keys("{HOME}", with_spaces=False)
+    time.sleep(0.2)
+
     if use_title:
         # 历史委托/历史成交使用 title 定位
         panel_name = panel_path.rsplit("\\", 1)[-1]
-        tree = win.child_window(title=panel_name, control_type="TreeItem")
-        tree.set_focus()
-        tree.type_keys("{HOME}", with_spaces=False)
-        tree.wait("exists", timeout=10)
-        item = tree.get_item(panel_path)
+        item = tree.child_window(title=panel_name, control_type="TreeItem")
+        item.wait("visible", timeout=10)
         item.select()
-        item.click_input()
+        time.sleep(0.15)
     else:
-        # 标准方式：通过 auto_id="1223" 定位 Tree
-        tree = win.child_window(auto_id="1223", control_type="Tree")
-        tree.wait("ready", timeout=10)
-        item = tree.get_item(panel_path)
-        item.select()
+        # 标准方式: 逐级 select 展开
+        item = _select_tree_item_by_path(tree, panel_path)
 
+    # 最后 click_input 确保触发点击事件
+    item.click_input()
     print(f"[OK] 已切换到'{panel_path.rsplit(chr(92), 1)[-1]}'面板")
 
 
