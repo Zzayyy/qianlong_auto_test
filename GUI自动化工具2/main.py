@@ -32,37 +32,12 @@ from tkinter import ttk, scrolledtext, messagebox, filedialog
 # 判断是否从 PyInstaller 打包的 exe 运行
 IS_FROZEN = getattr(sys, 'frozen', False)
 
-def _find_python_executable():
-    """查找可用的 Python 解释器"""
-    import shutil
-    # 优先尝试 pythonw.exe（无控制台窗口）
-    for name in ['pythonw.exe', 'python.exe']:
-        path = shutil.which(name)
-        if path:
-            return path
-    # 尝试常见路径
-    common_paths = [
-        r'C:\Python312\python.exe',
-        r'C:\Python311\python.exe',
-        r'C:\Python310\python.exe',
-        r'C:\Users\%USERNAME%\AppData\Local\Programs\Python\Python312\python.exe',
-        r'C:\Users\%USERNAME%\AppData\Local\Programs\Python\Python311\python.exe',
-    ]
-    for p in common_paths:
-        p = os.path.expandvars(p)
-        if os.path.exists(p):
-            return p
-    # 最后回退到 sys.executable
-    return sys.executable
-
 if IS_FROZEN:
-    # 打包后：exe 所在目录
-    BASE_DIR = os.path.dirname(sys.executable)
-    PYTHON_EXECUTABLE = _find_python_executable()
+    # 打包后：脚本在 _internal 目录下
+    BASE_DIR = os.path.join(os.path.dirname(sys.executable), '_internal')
 else:
     # 开发环境：脚本所在目录
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    PYTHON_EXECUTABLE = sys.executable
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 try:
     import openpyxl
@@ -71,8 +46,79 @@ except ImportError:
     HAS_OPENPYXL = False
 
 
+# ====================== 脚本运行器模式 ======================
+# 打包后exe自身充当Python解释器，用于在无Python环境的电脑上执行子脚本
+# 用法: main.exe --_run_script <脚本路径>
+def _run_script_mode():
+    """
+    脚本运行器模式：
+    当exe收到 --_run_script 参数时，不启动GUI，而是直接执行指定的Python脚本。
+    这样子脚本就能复用exe自带的Python环境和所有打包进去的依赖包。
+    """
+    if '--_run_script' not in sys.argv:
+        return
+
+    # 强制设置 stdout/stderr 编码为 UTF-8，避免特殊字符编码错误
+    # 同时设置 line_buffering=True，确保 print 输出实时传递到父进程管道
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace', line_buffering=True)
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace', line_buffering=True)
+
+    # 打包环境下，统一添加 pywin32 DLL 搜索路径
+    # 这样所有子脚本（包括不导入 core.window 的脚本）都能正常加载 pywinauto
+    if IS_FROZEN:
+        dll_dir = os.path.join(os.path.dirname(sys.executable), "_internal", "pywin32_system32")
+        if os.path.exists(dll_dir):
+            os.environ['PATH'] = dll_dir + os.pathsep + os.environ.get('PATH', '')
+            try:
+                os.add_dll_directory(dll_dir)
+            except AttributeError:
+                pass
+
+    idx = sys.argv.index('--_run_script')
+    if idx + 1 >= len(sys.argv):
+        print("错误: --_run_script 后需要指定脚本路径")
+        sys.exit(1)
+
+    script_path = sys.argv[idx + 1]
+
+    if not os.path.exists(script_path):
+        print(f"错误: 脚本文件不存在: {script_path}")
+        sys.exit(1)
+
+    # 设置子脚本环境
+    sys.argv = sys.argv[idx + 1:]  # 子脚本看到的 argv[0] 是脚本路径
+
+    # 确保子脚本所在目录在 sys.path 中
+    script_dir = os.path.dirname(os.path.abspath(script_path))
+    if script_dir not in sys.path:
+        sys.path.insert(0, script_dir)
+
+    # 确保 _internal 目录也在 sys.path 中（打包后依赖包在这里）
+    if IS_FROZEN and BASE_DIR not in sys.path:
+        sys.path.insert(0, BASE_DIR)
+
+    try:
+        import runpy
+        runpy.run_path(script_path, run_name='__main__')
+    except SystemExit:
+        raise
+    except Exception as e:
+        print(f"执行脚本失败: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+    sys.exit(0)
+
+
 # ====================== 用户配置 ======================
-CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+# 配置文件路径：打包后放在exe同级目录，开发环境放在脚本同级目录
+if IS_FROZEN:
+    CONFIG_DIR = os.path.dirname(sys.executable)
+else:
+    CONFIG_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 DEFAULT_OUTPUT_DIR = r"E:\Code\3\output"
 CATEGORIES = ["查询", "期权下单", "组合申报"]
 
@@ -127,8 +173,8 @@ def get_script_filename(script_name: str) -> str:
 
 
 # ====================== 脚本配置 ======================
-# 项目根目录（core模块所在目录）
-PROJECT_ROOT = r"e:\Code\6.GUI模块化"
+# 项目根目录（打包后指向 _internal，开发环境指向项目根目录）
+PROJECT_ROOT = BASE_DIR
 
 SCRIPTS_CONFIG = {
     "查询": [
@@ -194,8 +240,11 @@ class AutomationGUI:
         self.countdown_sec = tk.IntVar(value=3)
         self.xlsx_file = tk.StringVar(value="")
 
-        # 日志目录
-        self.log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+        # 日志目录：打包后放在exe同级目录
+        if IS_FROZEN:
+            self.log_dir = os.path.join(os.path.dirname(sys.executable), "logs")
+        else:
+            self.log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
         os.makedirs(self.log_dir, exist_ok=True)
 
         self._setup_logging()
@@ -703,12 +752,24 @@ class AutomationGUI:
             env["GUI_XLSX_FILE"] = self.xlsx_file.get()
             env["GUI_CATEGORY"] = self.current_category
 
+            # 构建命令：打包后用exe自身充当Python解释器，开发环境用系统Python
+            if IS_FROZEN:
+                cmd = [sys.executable, "--_run_script", script["path"]]
+            else:
+                cmd = [sys.executable, "-u", script["path"]]
+
+            self._log(f"目标: {cmd[0]}")
+            self.logger.info(f"执行命令: {cmd}")
+
+            env["PYTHONIOENCODING"] = "utf-8"  # 子进程用UTF-8输出，避免gbk编码错误
+            env["PYTHONUTF8"] = "1"
+
             self.current_process = subprocess.Popen(
-                [PYTHON_EXECUTABLE, "-u", script["path"]],
+                cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                encoding='gbk',
+                encoding='utf-8',
                 errors='replace',
                 creationflags=subprocess.CREATE_NO_WINDOW,
                 env=env
@@ -785,4 +846,6 @@ def main():
 
 
 if __name__ == "__main__":
+    # 脚本运行器模式：如果收到 --_run_script 参数，执行子脚本后直接退出
+    _run_script_mode()
     main()

@@ -1,0 +1,10 @@
+pywinauto==0.6.8
+openpyxl
+pandas
+pyinstaller
+paddlepaddle==2.6.2
+paddleocr==2.7.3
+opencv-python
+numpy
+mss
+pillow

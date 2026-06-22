@@ -1,10 +1,38 @@
+import os
+import sys
 # -*- coding: utf-8 -*-
 """窗口操作公共模块：查找、激活、倒计时、面板切换"""
+
+# 必须在 import win32api/pywinauto 之前执行！
+if getattr(sys, 'frozen', False):
+    # 获取 exe 所在的根目录（即 dist 下的 "钱龙期权交易自动化工具" 文件夹）
+    base_dir = os.path.dirname(sys.executable)
+    
+    # 拼接出 DLL 所在的完整路径
+    dll_dir = os.path.join(base_dir, "_internal", "pywin32_system32")
+    
+    # 检查文件夹是否存在
+    if os.path.exists(dll_dir):
+        # 方法1：添加到系统 PATH（传统方法，兼容性好）
+        os.environ['PATH'] = dll_dir + os.pathsep + os.environ.get('PATH', '')
+        
+        # 方法2（Python 3.8+ 官方推荐）：注册为 DLL 搜索目录
+        try:
+            os.add_dll_directory(dll_dir)
+            print(f"✓ 成功添加 DLL 搜索路径: {dll_dir}")
+        except AttributeError:
+            pass  # 低版本 Python 忽略
+    else:
+        print(f"⚠ 警告：未找到 DLL 文件夹，路径为 {dll_dir}")
+
+# --- 现在可以正常导入 pywinauto 了 ---
+
 
 import time
 import sys
 from pywinauto import Application, findwindows
 from pywinauto.timings import Timings
+
 
 
 def find_window(keyword: str) -> int:
