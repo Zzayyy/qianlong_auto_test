@@ -120,9 +120,10 @@ def switch_panel(win, tree_item: str):
     tree.type_keys("{HOME}", with_spaces=False)
     time.sleep(0.2)
     # 再点击目标节点
-    item = win.child_window(title=tree_item, control_type="TreeItem")
-    item.wait("visible", timeout=10)
-    item.click_input()
+    #item = win.child_window(title=tree_item, control_type="TreeItem")
+    #item.wait("visible", timeout=10)
+    # item.click_input()
+    # item.select()
     print(f"[OK] 已切换到面板: {tree_item}")
 
 
@@ -504,13 +505,32 @@ def press_enter_to_confirm(dialog_patterns=None, timeout: float = 3):
     return False
 
 
-def confirm_all_dialogs(expected: int = 2, timeout: float = 8):
-    for i in range(1, expected + 1):
-        print(f"[..] 等待第 {i}/{expected} 个弹窗...")
-        ok = press_enter_to_confirm(timeout=timeout)
-        if not ok:
-            print(f"[WARN] 第 {i} 个弹窗未出现,跳过")
-        time.sleep(1)
+def confirm_all_dialogs(
+    max_dialogs: int = 5,
+    no_dialog_timeout: float = 2.0,
+    per_dialog_timeout: float = 4.0,
+):
+    """自动确认所有弹窗，直到一段时间内没有新弹窗出现。
+    
+    Args:
+        max_dialogs: 最大弹窗数量上限（防止死循环）
+        no_dialog_timeout: 等待新弹窗的超时时间（秒），超过此时间无新弹窗则认为全部处理完毕
+        per_dialog_timeout: 单个弹窗的等待超时时间（秒）
+    """
+    count = 0
+    for i in range(1, max_dialogs + 1):
+        print(f"[..] 等待第 {i} 个弹窗 (超时{no_dialog_timeout}s无新弹窗则结束)...")
+        ok = press_enter_to_confirm(timeout=per_dialog_timeout)
+        if ok:
+            count += 1
+            print(f"[OK] 已确认第 {count} 个弹窗")
+            time.sleep(0.4)  # 弹窗间短暂间隔
+        else:
+            # 超时未出现弹窗，认为全部处理完毕
+            print(f"[OK] 无更多弹窗，共确认 {count} 个")
+            break
+    else:
+        print(f"[WARN] 达到最大弹窗数量上限({max_dialogs})")
 
 
 # ---------- Excel 读取 ----------
@@ -658,7 +678,7 @@ def locate_and_click_contract(win, rect, contract_code: str,
     return False
 
 
-def execute_action(win, action_name: str, expected_dialogs: int = 2):
+def execute_action(win, action_name: str):
     """执行指定的平仓按钮操作"""
     auto_id = POSITION_BUTTONS.get(action_name)
     if not auto_id:
@@ -675,9 +695,9 @@ def execute_action(win, action_name: str, expected_dialogs: int = 2):
     time.sleep(0.5)
 
 
-    # 确认弹窗
-    print(f"  [..] 等待 {expected_dialogs} 个确认弹窗...")
-    confirm_all_dialogs(expected=expected_dialogs, timeout=8)
+    # 确认弹窗(自动适配数量)
+    print(f"  [..] 等待确认弹窗...")
+    confirm_all_dialogs()
     return True
 
 

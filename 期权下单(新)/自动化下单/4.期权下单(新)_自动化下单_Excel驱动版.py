@@ -137,9 +137,10 @@ def switch_panel(win, tree_item: str):
     tree.type_keys("{HOME}", with_spaces=False)
     time.sleep(0.2)
     # 再点击目标节点
-    item = win.child_window(title=tree_item, control_type="TreeItem")
-    item.wait("visible", timeout=10)
-    item.click_input()
+    #item = win.child_window(title=tree_item, control_type="TreeItem")  # HOME后默认是期权下单，不然有的电脑可有问题，蓝色选中的就识别不到
+    #item.wait("visible", timeout=10)
+    # item.click_input()
+    # item.select()
     print(f"[OK] 已切换到面板: {tree_item}")
 
 
@@ -305,16 +306,33 @@ def press_enter_to_confirm(
 
 
 def confirm_all_dialogs(
-    expected: int = 2,
+    max_dialogs: int = 5,
+    no_dialog_timeout: float = 2.0,
+    per_dialog_timeout: float = 3.0,
     use_enter: bool = USE_ENTER_CONFIRM,
 ):
-    """连续确认 N 个弹窗。"""
-    for i in range(1, expected + 1):
-        print(f"[..] 等待第 {i}/{expected} 个弹窗...")
-        ok = press_enter_to_confirm(timeout=3)
-        if not ok:
-            print(f"[WARN] 第 {i} 个弹窗未出现,跳过")
-        time.sleep(0.6)
+    """自动确认所有弹窗，直到一段时间内没有新弹窗出现。
+    
+    Args:
+        max_dialogs: 最大弹窗数量上限（防止死循环）
+        no_dialog_timeout: 等待新弹窗的超时时间（秒），超过此时间无新弹窗则认为全部处理完毕
+        per_dialog_timeout: 单个弹窗的等待超时时间（秒）
+        use_enter: 是否使用回车确认
+    """
+    count = 0
+    for i in range(1, max_dialogs + 1):
+        print(f"[..] 等待第 {i} 个弹窗 (超时{no_dialog_timeout}s无新弹窗则结束)...")
+        ok = press_enter_to_confirm(timeout=per_dialog_timeout)
+        if ok:
+            count += 1
+            print(f"[OK] 已确认第 {count} 个弹窗")
+            time.sleep(0.4)  # 弹窗间短暂间隔
+        else:
+            # 超时未出现弹窗，认为全部处理完毕
+            print(f"[OK] 无更多弹窗，共确认 {count} 个")
+            break
+    else:
+        print(f"[WARN] 达到最大弹窗数量上限({max_dialogs})")
 
 
 def fill_order_quantity(win, value, auto_id: str = QTY_AUTO_ID):
@@ -457,9 +475,8 @@ def main():
                 click_action_button(win, action)
                 time.sleep(1)
 
-                # 涨停价会多一个熔断提示弹窗
-                expected_dialogs = 3 if quote_type == "涨停价" else 2
-                confirm_all_dialogs(expected=expected_dialogs)
+                # 自动确认所有弹窗(无论2个还是3个)
+                confirm_all_dialogs()
 
             time.sleep(INTERVAL)
 

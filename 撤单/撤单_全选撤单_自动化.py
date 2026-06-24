@@ -98,7 +98,7 @@ def press_enter_to_confirm(
     """
     if dialog_patterns is None:
         # 撤单场景下,可能出现的弹窗标题: "提示"、"撤单"、"期权下单" 等
-        dialog_patterns = ["提示", "撤单", "期权下单", "期权撤单"]
+        dialog_patterns = ["提示", "撤单", "期权下单", "期权撤单", "警告"]
 
     end = time.time() + timeout
     while time.time() < end:
@@ -123,37 +123,32 @@ def press_enter_to_confirm(
     return False
 
 
-def confirm_option_window(timeout: float = 8):
-    """专门处理标题含"期权撤单"的置顶弹窗,回车关闭。
-
-    用 visible_only=True 过滤可见窗口,避免抓不到隐藏窗口句柄。
+def confirm_all_dialogs(
+    max_dialogs: int = 5,
+    no_dialog_timeout: float = 2.0,
+    per_dialog_timeout: float = 4.0,
+):
+    """自动确认所有弹窗，直到一段时间内没有新弹窗出现。
+    
+    Args:
+        max_dialogs: 最大弹窗数量上限（防止死循环）
+        no_dialog_timeout: 等待新弹窗的超时时间（秒），超过此时间无新弹窗则认为全部处理完毕
+        per_dialog_timeout: 单个弹窗的等待超时时间（秒）
     """
-    end = time.time() + timeout
-    while time.time() < end:
-        elements = findwindows.find_elements(
-            title_re=r".*期权撤单.*",
-            visible_only=True,
-        )
-        if elements:
-            for elem in elements:
-                hwnd = elem.handle
-                print(f"[INFO] 发现'期权撤单'弹窗,句柄={hwnd}")
-                try:
-                    dlg_app = Application(backend="uia").connect(
-                        handle=hwnd, timeout=0.5,
-                    )
-                    dlg = dlg_app.window(handle=hwnd)
-                    dlg.set_focus()
-                    time.sleep(0.1)
-                    dlg.type_keys("{ENTER}", with_spaces=False)
-                    print(f"[OK] 已关闭弹窗 (hwnd={hwnd}, title='{dlg.window_text()}')")
-                    return True
-                except Exception as e:
-                    print(f"[WARN] 处理句柄 {hwnd} 失败: {e}")
-                    continue
-        time.sleep(0.15)
-    print("[WARN] 未找到'期权撤单'弹窗")
-    return False
+    count = 0
+    for i in range(1, max_dialogs + 1):
+        print(f"[..] 等待第 {i} 个弹窗 (超时{no_dialog_timeout}s无新弹窗则结束)...")
+        ok = press_enter_to_confirm(timeout=per_dialog_timeout)
+        if ok:
+            count += 1
+            print(f"[OK] 已确认第 {count} 个弹窗")
+            time.sleep(0.4)  # 弹窗间短暂间隔
+        else:
+            # 超时未出现弹窗，认为全部处理完毕
+            print(f"[OK] 无更多弹窗，共确认 {count} 个")
+            break
+    else:
+        print(f"[WARN] 达到最大弹窗数量上限({max_dialogs})")
 
 
 def countdown(seconds: int):
@@ -189,16 +184,9 @@ def main():
         # 2) 撤单
         click_button(win, CANCEL_BTN_AID, "撤单")
 
-        # 3) 处理置顶弹窗(默认按钮是"确定(Y)",直接回车)
+        # 3) 自动确认所有弹窗(无论1个还是多个)
         if AUTO_CONFIRM:
-            for i in range(1, EXPECTED_DIALOGS + 1):
-                print(f"[..] 等待第 {i}/{EXPECTED_DIALOGS} 个弹窗...")
-                press_enter_to_confirm(timeout=8)
-                time.sleep(0.6)
-
-        # 4) 处理"期权撤单"置顶弹窗(单独窗口,回车关闭)
-        print("[..] 等待'期权撤单'弹窗...")
-        confirm_option_window(timeout=10)
+            confirm_all_dialogs()
 
         print("\n=== 全选撤单操作完成 ===")
 

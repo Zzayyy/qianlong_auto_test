@@ -56,12 +56,23 @@ def activate_window(hwnd: int):
 
 
 def switch_to_combination_panel(win):
-    """切换到组合申报面板(使用路径直接定位)。"""
+    """切换到组合申报面板(逐级select展开)。"""
     tree = win.child_window(auto_id="1223", control_type="Tree")
     tree.wait("ready", timeout=10)
+    tree.set_focus()
+    tree.type_keys("{HOME}", with_spaces=False)
+    time.sleep(0.2)
 
-    item = tree.get_item(r"\组合申报\组合申报")
+    # 逐级 select 展开: 组合申报 -> 组合申报
+
+    item = tree.child_window(title="组合申报", control_type="TreeItem", found_index=0)
+    item.wait("visible", timeout=5)
     item.select()
+    time.sleep(0.15)
+    item = tree.child_window(title="组合申报", control_type="TreeItem", found_index=1)
+    item.wait("visible", timeout=5)
+    item.select()
+    time.sleep(0.15)
     print("[OK] 已切换到组合申报面板")
 
 

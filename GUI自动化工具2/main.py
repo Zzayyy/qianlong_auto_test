@@ -620,14 +620,26 @@ class AutomationGUI:
             wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
             ws = wb.active
 
-            # 读取表头
-            headers = []
-            for cell in ws[1]:
-                val = cell.value
-                headers.append(str(val) if val is not None else "")
+            # 使用 iter_rows 安全读取，避免直接访问 ws[1] 导致索引错误
+            rows_iter = ws.iter_rows(values_only=True)
 
-            if not headers or all(h == "" for h in headers):
-                self.preview_info.config(text="文件为空或无表头", foreground="red")
+            # 读取第一行作为表头
+            try:
+                first_row = next(rows_iter)
+            except StopIteration:
+                self.preview_info.config(text="Excel文件无任何数据", foreground="red")
+                wb.close()
+                return
+
+            if not first_row or all(v is None for v in first_row):
+                self.preview_info.config(text="Excel文件无表头或为空", foreground="red")
+                wb.close()
+                return
+
+            headers = [str(v) if v is not None else "" for v in first_row]
+
+            if all(h == "" for h in headers):
+                self.preview_info.config(text="Excel文件无表头或为空", foreground="red")
                 wb.close()
                 return
 
