@@ -200,9 +200,11 @@ SCRIPTS_CONFIG = {
         {"name": "20. 历史行权负债信息", "path": rf"{PROJECT_ROOT}\查询\20.历史行权负债信息.py"},
     ],
     "期权下单": [
-        {"name": "1.期权自动化下单", "path": rf"{PROJECT_ROOT}\期权下单(新)\自动化下单\4.期权下单(新)_自动化下单_Excel驱动版.py"},
-        {"name": "2.期权持仓_平仓/反手自动化", "path": rf"{PROJECT_ROOT}\期权下单(新)\表格\9.Excel驱动_OCR定位_平仓操作.py"},
-        {"name": "3.全选撤单", "path": rf"{PROJECT_ROOT}\撤单\撤单_全选撤单_自动化.py"},
+        {"name": "1.期权下单_自动化下单", "path": rf"{PROJECT_ROOT}\期权下单(新)\自动化下单\4.期权下单(新)_自动化下单_Excel驱动版.py"},
+        #{"name": "2.期权持仓_平仓/反手自动化", "path": rf"{PROJECT_ROOT}\期权下单(新)\表格\9.Excel驱动_OCR定位_平仓操作.py"},
+        {"name": "2.三键下单_自动化下单", "path": rf"{PROJECT_ROOT}\期权下单(新)\自动化下单\4.三键下单_自动化下单_Excel驱动版.py"},
+        {"name": "3.期权持仓_平仓/反手自动化_RapidOCR", "path": rf"{PROJECT_ROOT}\期权下单(新)\表格\10.Excel驱动_OCR_RapidOCR.py"},
+        {"name": "4.全选撤单", "path": rf"{PROJECT_ROOT}\撤单\撤单_全选撤单_自动化.py"},
     ],
     "组合申报": [
         {"name": "1.组合申报_全自动", "path": rf"{PROJECT_ROOT}\组合申报\2.组合申报_全自动.py"},
@@ -497,7 +499,7 @@ class AutomationGUI:
             return
         for w in self.params_frame.winfo_children():
             w.destroy()
-        if script["name"] == "3.全选撤单":
+        if script["name"] == "4.全选撤单":
             ttk.Label(
                 self.params_frame,
                 text="该功能无需参数配置，点击执行即可。",
@@ -704,7 +706,7 @@ class AutomationGUI:
             return
 
         # 期权下单需要检查Excel文件（全选撤单除外）
-        if self.current_category == "期权下单" and script["name"] != "3.全选撤单" and not self.xlsx_file.get():
+        if self.current_category == "期权下单" and script["name"] != "4.全选撤单" and not self.xlsx_file.get():
             messagebox.showwarning("提示", "请先选择Excel配置文件")
             return
 

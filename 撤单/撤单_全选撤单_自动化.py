@@ -26,6 +26,7 @@
 from pywinauto import Application, findwindows
 import time
 import sys
+import ctypes
 
 
 # ====================== 可配置参数 ======================
@@ -83,14 +84,18 @@ def click_button(win, auto_id: str, title: str):
 
 
 def press_enter_to_confirm(
+    main_win=None,
     dialog_patterns: list = None,
     timeout: float = 8,
 ):
     """通过回车键确认弹窗(更稳:不依赖按钮坐标/控件树)。
 
     钱龙所有确认弹窗的默认按钮都是"确定(Y)",回车即触发。
+    通过进程 ID 过滤,避免把回车发送到其它程序窗口
+    (例如打开着的 "平仓.xlsx - Excel" 也会命中关键字)。
 
     Args:
+        main_win: 主窗口对象,用于进程过滤
         dialog_patterns: 弹窗标题需要包含的关键字列表(任一匹配即可)
         timeout: 等待秒数
     Returns:
@@ -98,32 +103,80 @@ def press_enter_to_confirm(
     """
     if dialog_patterns is None:
         # 撤单场景下,可能出现的弹窗标题: "提示"、"撤单"、"期权下单" 等
-        dialog_patterns = ["提示", "撤单", "期权下单", "期权撤单", "警告"]
+        dialog_patterns = ["提示", "确认", "确定", "撤单", "期权下单", "期权撤单", "警告"]
+
+    main_hwnd = None
+    main_pid = None
+    if main_win is not None:
+        try:
+            main_hwnd = main_win.handle
+        except Exception:
+            main_hwnd = None
+        try:
+            main_pid = main_win.process_id()
+        except Exception:
+            if main_hwnd is not None:
+                pid = ctypes.c_ulong(0)
+                ctypes.windll.user32.GetWindowThreadProcessId(
+                    main_hwnd, ctypes.byref(pid))
+                main_pid = pid.value or None
+
+    # 高优先级关键字(明确是弹窗)优先于宽泛关键字(撤单/期权下单)
+    high_priority = ("提示", "确认", "确定", "警告", "委托确认", "风险提示")
 
     end = time.time() + timeout
     while time.time() < end:
-        for elem in findwindows.find_elements(top_level_only=True):
+        try:
+            elems = findwindows.find_elements(top_level_only=True)
+        except Exception:
+            elems = []
+
+        high_candidates = []
+        low_candidates = []
+        for elem in elems:
+            # 1) 进程过滤: 只处理与主窗口同进程的窗口
+            if main_pid is not None:
+                try:
+                    if elem.process_id != main_pid:
+                        continue
+                except Exception:
+                    continue
             hwnd = elem.handle
+            # 2) 跳过主窗口本身
+            if main_hwnd is not None and hwnd == main_hwnd:
+                continue
+            try:
+                title = (elem.name or "").strip()
+            except Exception:
+                title = ""
+            if not any(p in title for p in dialog_patterns):
+                continue
+            if any(p in title for p in high_priority):
+                high_candidates.append((hwnd, title))
+            else:
+                low_candidates.append((hwnd, title))
+
+        for hwnd, title in high_candidates + low_candidates:
             try:
                 dlg_app = Application(backend="uia").connect(handle=hwnd, timeout=0.5)
                 dlg = dlg_app.window(handle=hwnd)
-                title = dlg.window_text() or ""
-                if not any(p in title for p in dialog_patterns):
-                    continue
                 # 弹窗是模态的,先确保焦点在它身上,再按回车
                 dlg.set_focus()
                 time.sleep(0.1)
                 dlg.type_keys("{ENTER}", with_spaces=False)
-                print(f"[OK] 回车确认 (hwnd={hwnd}, title='{title}')")
+                print(f"[OK] 回车确认 (hwnd={hwnd}, title='{title}', pid={main_pid})")
                 return True
-            except Exception:
+            except Exception as e:
+                print(f"[--] 弹窗(hwnd={hwnd}, title='{title}')回车失败: {e}")
                 continue
+
         time.sleep(0.1)
     print(f"[WARN] 等待弹窗超时({timeout}s),匹配: {dialog_patterns}")
     return False
 
 
 def confirm_all_dialogs(
+    main_win=None,
     max_dialogs: int = 5,
     no_dialog_timeout: float = 2.0,
     per_dialog_timeout: float = 4.0,
@@ -131,6 +184,7 @@ def confirm_all_dialogs(
     """自动确认所有弹窗，直到一段时间内没有新弹窗出现。
     
     Args:
+        main_win: 主窗口对象,用于进程过滤,避免误操作其它程序窗口
         max_dialogs: 最大弹窗数量上限（防止死循环）
         no_dialog_timeout: 等待新弹窗的超时时间（秒），超过此时间无新弹窗则认为全部处理完毕
         per_dialog_timeout: 单个弹窗的等待超时时间（秒）
@@ -138,7 +192,7 @@ def confirm_all_dialogs(
     count = 0
     for i in range(1, max_dialogs + 1):
         print(f"[..] 等待第 {i} 个弹窗 (超时{no_dialog_timeout}s无新弹窗则结束)...")
-        ok = press_enter_to_confirm(timeout=per_dialog_timeout)
+        ok = press_enter_to_confirm(main_win=main_win, timeout=per_dialog_timeout)
         if ok:
             count += 1
             print(f"[OK] 已确认第 {count} 个弹窗")
@@ -186,7 +240,7 @@ def main():
 
         # 3) 自动确认所有弹窗(无论1个还是多个)
         if AUTO_CONFIRM:
-            confirm_all_dialogs()
+            confirm_all_dialogs(main_win=win)
 
         print("\n=== 全选撤单操作完成 ===")
 

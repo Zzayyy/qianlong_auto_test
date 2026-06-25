@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-钱龙期权交易 - 下单面板自动化(Excel文件驱动版)
+钱龙期权交易 - 三键下单面板自动化(Excel文件驱动版)
 ==============================================
 功能流程:
     1. 从 Excel 文件读取下单配置(菜单/合约代码/报价方式/委托数量/动作/备兑/自动/FOK)
     2. 查找"钱龙"主窗口
-    3. 激活窗口并切换到"期权下单(新)"面板
+    3. 激活窗口并切换到"三键下单"面板
     4. 按 Excel 每行配置执行下单:
        - 录入合约代码
        - 选择报价方式
@@ -15,7 +15,7 @@
     5. 确认弹窗
 
 Excel 字段说明:
-    菜单     : 面板名称(如"期权下单(新)")
+    菜单     : 面板名称(如"三键下单")
     合约代码 : 期权合约代码
     报价方式 : 对手价/挂盘价/涨停价/跌停价/限价/超价/市价转限/市价FAK/市价FOK
     委托数量 : 纯数字(如"5") / 百分比(如"30%") / "FOK"
@@ -29,7 +29,7 @@ Excel 字段说明:
 
 使用方法:
     1. 打开钱龙旗舰版,登录交易账号
-    2. 准备 Excel 文件,填入下单配置
+    2. 准备 Excel 文件,填入下单配置(菜单列填写"三键下单")
     3. 修改下方 EXCEL_PATH 为你的 Excel 文件路径
     4. 运行本脚本(将鼠标快速移到屏幕左上角可紧急停止)
     5. 倒计时内切换到钱龙窗口
@@ -94,7 +94,7 @@ CHECKBOX_AUTO_IDS = {
 
 
 def read_excel(path: str) -> list:
-    """读取 Excel 文件,返回配置列表(只读取菜单列为"期权下单"或"期权下单(新)"的行)。"""
+    """读取 Excel 文件,返回配置列表(只读取菜单列为"三键下单"的行)。"""
     wb = openpyxl.load_workbook(path)
     ws = wb.active
 
@@ -107,14 +107,14 @@ def read_excel(path: str) -> list:
         if not row or not any(row):
             continue
         item = dict(zip(headers, row))
-        # 只读取菜单列为"期权下单"或"期权下单(新)"的行
+        # 只读取菜单列为"三键下单"的行
         menu_value = str(item.get("菜单", "")).strip()
-        if menu_value not in ("期权下单", "期权下单(新)"):
+        if menu_value != "三键下单":
             continue
         rows.append(item)
 
     wb.close()
-    print(f"[OK] 读取 Excel: {path}, 共 {len(rows)} 条配置(菜单列过滤: 期权下单/期权下单(新))")
+    print(f"[OK] 读取 Excel: {path}, 共 {len(rows)} 条配置(菜单列过滤: 三键下单)")
     return rows
 
 
@@ -142,10 +142,10 @@ def switch_panel(win, tree_item: str):
     tree.type_keys("{HOME}", with_spaces=False)
     time.sleep(0.2)
     # 再点击目标节点
-    #item = win.child_window(title=tree_item, control_type="TreeItem")  # HOME后默认是期权下单，不然有的电脑可有问题，蓝色选中的就识别不到
+    item = win.child_window(title=tree_item, control_type="TreeItem")  # HOME后默认是期权下单，不然有的电脑可有问题，蓝色选中的就识别不到
     #item.wait("visible", timeout=10)
     # item.click_input()
-    # item.select()
+    item.select()
     print(f"[OK] 已切换到面板: {tree_item}")
 
 
@@ -327,7 +327,7 @@ def press_enter_to_confirm(
     (例如打开着的 "平仓.xlsx - Excel" 也会命中 "平仓" 关键字)。
     """
     if dialog_patterns is None:
-        dialog_patterns = ["期权下单", "提示", "确认", "确定"]
+        dialog_patterns = ["三键下单", "提示", "确认", "确定"]
 
     main_hwnd = None
     main_pid = None
@@ -507,9 +507,9 @@ def main():
 
         # 从第一行获取面板名称,未指定则用默认值
         first_config = configs[0]
-        tree_item = first_config.get("菜单", "期权下单(新)")
+        tree_item = first_config.get("菜单", "三键下单")
         if not tree_item:
-            tree_item = "期权下单(新)"
+            tree_item = "三键下单"
 
         print(f"计划执行: {len(configs)} 次下单")
         print(f"面板: {tree_item}")

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Excel驱动 + OCR定位 + 表格平仓操作
+Excel驱动 + RapidOCR定位 + 表格平仓操作
 ============================================================
 功能:
     1. 读取 Excel 表格(字段: 合约代码, 持仓类别, 平33%, 平50%, 平100%, 反手)
@@ -8,15 +8,12 @@ Excel驱动 + OCR定位 + 表格平仓操作
     3. 执行对应的平仓操作(平33%/平50%/平100%/反手 四选一)
 
 依赖安装:
-    pip install openpyxl pandas pywinauto paddlepaddle==2.6.2 paddleocr==2.7.3 opencv-python numpy mss pillow
+    pip install openpyxl pandas pywinauto opencv-python numpy mss pillow rapidocr
 
 使用方法:
     1. 打开钱龙旗舰版,登录交易账号,切到"期权下单(新)"
-    2. 准备好 Excel 文件,格式如下:
-       | 合约代码 | 持仓类别 | 平33% | 平50% | 平100% | 反手 |
-       |----------|----------|-------|-------|--------|------|
-       | 10010971 | 权利仓   | FALSE | FALSE | TRUE   | FALSE |
-    3. 修改下方 EXCEL_PATH 为你的 Excel 文件路径
+    2. 准备好 Excel 文件
+    3. 修改下方 EXCEL_PATH 或通过环境变量 GUI_XLSX_FILE 传入
     4. 运行本脚本
 """
 
@@ -37,24 +34,24 @@ from pywinauto import Application, findwindows
 # ====================== 可配置参数 ======================
 WINDOW_KEY = "钱龙模拟期权宝"
 
-
 TREE_ITEM = "期权下单(新)"
 TABLE_AUTO_ID = "3000"      # 定位表格的 auto_id
 TABLE_OP_AUTO_ID = "1170"    # 操作表格的 auto_id(持仓表格)
 CLICK_COORDS = (0, 100)      # 定位表格内部相对点击坐标
 COUNTDOWN = 3
 
-
-
-
-
-# ---- Excel 路径:必须通过 GUI 传入环境变量 ----
+# ---- Excel 路径 ----
+# 优先使用环境变量(GUI 调用传入);未设置时用默认路径(脚本同目录),方便直接运行
+DEFAULT_EXCEL_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), r"C:\Users\Administrator\Desktop\平仓-反手模板.xlsx"
+)
 _gui_xlsx = os.environ.get("GUI_XLSX_FILE", "").strip()
 if not _gui_xlsx:
-    print("[错误] 未指定 Excel 文件路径,请在 GUI 中选择 Excel 配置文件")
-    sys.exit(1)
+    print(f"[INFO] 未设置 GUI_XLSX_FILE 环境变量,使用默认路径: {DEFAULT_EXCEL_PATH}")
+    _gui_xlsx = DEFAULT_EXCEL_PATH
 if not os.path.exists(_gui_xlsx):
     print(f"[错误] Excel 文件不存在: {_gui_xlsx}")
+    print("请修改 DEFAULT_EXCEL_PATH,或在 GUI 中选择 Excel 配置文件")
     sys.exit(1)
 EXCEL_PATH = _gui_xlsx
 
@@ -72,16 +69,15 @@ BIN_METHOD = "otsu"
 ADAPTIVE_BLOCK = 31
 ADAPTIVE_C = 10
 
-# ---- PaddleOCR 参数 ----
-PADDLEOCR_LANG = "ch"
-PADDLEOCR_USE_ANGLE = True
-PADDLEOCR_USE_GPU = False
-OCR_FUZZY_DIGITS = 1
+# ---- RapidOCR 参数 ----
+# RapidOCR 默认使用 ONNXRuntime CPU + PP-OCRv4 中文模型
+# 如需自定义配置，可生成 default_rapidocr.yaml 并通过 config_path 传入
 OCR_MIN_CONF = 0.30
+OCR_FUZZY_DIGITS = 1
 
 # ---- 输出路径 ----
 DEBUG_IMAGE_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "table_screenshot_paddle.png"
+    os.path.dirname(os.path.abspath(__file__)), "table_screenshot_rapid.png"
 )
 ORIGINAL_IMAGE_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "table_screenshot_original.png"
@@ -113,17 +109,11 @@ def activate_window(hwnd: int):
 
 
 def switch_panel(win, tree_item: str):
-    # 先让 TreeView 滚到顶部,无论滚轮当前在哪
     tree = win.child_window(auto_id="1223", control_type="Tree")
     tree.wait("ready", timeout=10)
     tree.set_focus()
     tree.type_keys("{HOME}", with_spaces=False)
     time.sleep(0.2)
-    # 再点击目标节点
-    #item = win.child_window(title=tree_item, control_type="TreeItem")
-    #item.wait("visible", timeout=10)
-    # item.click_input()
-    # item.select()
     print(f"[OK] 已切换到面板: {tree_item}")
 
 
@@ -225,69 +215,72 @@ def preprocess(img_rgb: np.ndarray) -> np.ndarray:
     return binary
 
 
-# ---------- PaddleOCR ----------
-_paddle_ocr_instance = None
+# ---------- RapidOCR ----------
+_rapid_ocr_instance = None
 
 
-def get_paddle_ocr():
-    global _paddle_ocr_instance
-    if _paddle_ocr_instance is not None:
-        return _paddle_ocr_instance
+def get_rapid_ocr():
+    """初始化 RapidOCR 实例（单例模式）"""
+    global _rapid_ocr_instance
+    if _rapid_ocr_instance is not None:
+        return _rapid_ocr_instance
 
     try:
-        import paddleocr
+        from rapidocr import RapidOCR
     except ImportError as e:
-        import sys
-        if getattr(sys, 'frozen', False):
-            # ⚠️ 关键修改：打包环境下导入失败也必须终止，不能"假装成功"
-            print(f"[致命错误] 打包环境中 paddleocr 导入失败: {e}")
-            print("请检查 PyInstaller 的 hidden-imports 和 collect 配置")
-            sys.exit(1)
-        else:
-            print("[错误] 未安装 paddleocr,请执行: pip install paddlepaddle==2.6.2 paddleocr==2.7.3")
-            sys.exit(1)
-    print(f"[..] 正在初始化 PaddleOCR (lang={PADDLEOCR_LANG}) ...")
-    _paddle_ocr_instance = paddleocr.PaddleOCR(
-        use_angle_cls=PADDLEOCR_USE_ANGLE,
-        lang=PADDLEOCR_LANG,
-        use_gpu=PADDLEOCR_USE_GPU,
-        show_log=False,
-    )
-    print("[OK] PaddleOCR 初始化完成")
-    return _paddle_ocr_instance
+        print(f"[致命错误] rapidocr 导入失败: {e}")
+        print("请执行: pip install rapidocr")
+        sys.exit(1)
 
-    
+    print("[..] 正在初始化 RapidOCR (默认ONNXRuntime CPU + PP-OCRv4)...")
+    # 默认配置即可满足中文表格识别需求
+    # 如需指定本地模型或切换引擎，可通过 config_path 或参数传入
+    _rapid_ocr_instance = RapidOCR()
+    print("[OK] RapidOCR 初始化完成")
+    return _rapid_ocr_instance
 
 
 def ocr_image(img_rgb: np.ndarray):
-    ocr = get_paddle_ocr()
-    result = ocr.ocr(img_rgb, cls=PADDLEOCR_USE_ANGLE)
+    """
+    使用 RapidOCR 识别图像
+    返回格式与原版兼容: [{"text": str, "box": [[x,y]*4], "conf": float}, ...]
+    """
+    ocr = get_rapid_ocr()
+    
+    # RapidOCR 直接接受 numpy array (BGR或RGB均可，内部会处理)
+    # 返回值是 RapidOCROutput dataclass
+    result = ocr(img_rgb)
+    
     out = []
-    if not result or not result[0]:
+    # 根据知识库: result 可能为 None 或空
+    if not result or not result.txts:
         return out
-    for line in result[0]:
-        if not line or len(line) < 2:
+
+    # result.boxes: (N, 4, 2) ndarray
+    # result.txts: Tuple[str]
+    # result.scores: Tuple[float]
+    for i in range(len(result.txts)):
+        text = result.txts[i]
+        score = float(result.scores[i])
+        box = result.boxes[i]  # shape (4, 2)
+
+        if score < OCR_MIN_CONF:
             continue
-        box = line[0]
-        if not box or len(box) < 4:
-            continue
-        text, conf = line[1]
-        try:
-            conf_f = float(conf)
-        except (ValueError, TypeError):
-            conf_f = 0.0
-        if conf_f < OCR_MIN_CONF:
-            continue
+        
         text = (text or "").strip()
         if not text:
             continue
+
+        # 转换为整数坐标列表 [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
         box4 = [
             (int(box[0][0]), int(box[0][1])),
             (int(box[1][0]), int(box[1][1])),
             (int(box[2][0]), int(box[2][1])),
             (int(box[3][0]), int(box[3][1])),
         ]
-        out.append({"text": text, "box": box4, "conf": conf_f})
+        
+        out.append({"text": text, "box": box4, "conf": score})
+    
     return out
 
 
@@ -482,58 +475,100 @@ def click_position_button(win, name: str, auto_id: str):
     return True
 
 
-def press_enter_to_confirm(dialog_patterns=None, timeout: float = 3):
+def press_enter_to_confirm(main_win=None, dialog_patterns=None, timeout: float = 3):
+    """在主窗口所属进程内寻找确认弹窗并回车。
+
+    通过进程 ID 过滤，避免把回车发送到其它程序窗口
+    (例如打开着的 "平仓.xlsx - Excel" 也会命中 "平仓" 关键字)。
+    """
     if dialog_patterns is None:
-        dialog_patterns = ["提示", "确认", "期权下单", "期权下单(新)", "平仓", "反手"]
+        dialog_patterns = ["提示", "确认", "期权下单", "平仓", "反手"]
+
+    # 取主窗口句柄与进程 ID，用于过滤
+    main_hwnd = None
+    main_pid = None
+    if main_win is not None:
+        try:
+            main_hwnd = main_win.handle
+        except Exception:
+            main_hwnd = None
+        try:
+            main_pid = main_win.process_id()
+        except Exception:
+            if main_hwnd is not None:
+                pid = ctypes.c_ulong(0)
+                ctypes.windll.user32.GetWindowThreadProcessId(
+                    main_hwnd, ctypes.byref(pid))
+                main_pid = pid.value or None
+
+    # 高优先级关键字(明确是弹窗)优先于宽泛关键字(平仓/反手)
+    high_priority = ("提示", "确认", "确定", "委托确认", "风险提示")
 
     end = time.time() + timeout
     while time.time() < end:
-        for elem in findwindows.find_elements(top_level_only=True):
+        try:
+            elems = findwindows.find_elements(top_level_only=True)
+        except Exception:
+            elems = []
+
+        high_candidates = []
+        low_candidates = []
+        for elem in elems:
+            # 1) 进程过滤: 只处理与主窗口同进程的窗口
+            if main_pid is not None:
+                try:
+                    if elem.process_id != main_pid:
+                        continue
+                except Exception:
+                    continue
             hwnd = elem.handle
+            # 2) 跳过主窗口本身
+            if main_hwnd is not None and hwnd == main_hwnd:
+                continue
+            try:
+                title = (elem.name or "").strip()
+            except Exception:
+                title = ""
+            if not any(p in title for p in dialog_patterns):
+                continue
+            if any(p in title for p in high_priority):
+                high_candidates.append((hwnd, title))
+            else:
+                low_candidates.append((hwnd, title))
+
+        for hwnd, title in high_candidates + low_candidates:
             try:
                 dlg_app = Application(backend="uia").connect(handle=hwnd, timeout=0.5)
                 dlg = dlg_app.window(handle=hwnd)
-                title = dlg.window_text() or ""
-                if not any(p in title for p in dialog_patterns):
-                    continue
                 dlg.set_focus()
-
-
                 time.sleep(0.3)
-                # dlg.click_input()  # 先点一下弹窗确保置前
-                # time.sleep(0.3)
                 dlg.type_keys("{ENTER}", with_spaces=False)
-                print(f"[OK] 回车确认 (hwnd={hwnd}, title='{title}')")
+                print(f"[OK] 回车确认 (hwnd={hwnd}, title='{title}', pid={main_pid})")
                 return True
-            except Exception:
+            except Exception as e:
+                print(f"[--] 弹窗(hwnd={hwnd}, title='{title}')回车失败: {e}")
                 continue
+
         time.sleep(1)
     print(f"[WARN] 等待弹窗超时({timeout}s)")
     return False
 
 
 def confirm_all_dialogs(
+    main_win=None,
     max_dialogs: int = 5,
     no_dialog_timeout: float = 2.0,
     per_dialog_timeout: float = 4.0,
 ):
-    """自动确认所有弹窗，直到一段时间内没有新弹窗出现。
-    
-    Args:
-        max_dialogs: 最大弹窗数量上限（防止死循环）
-        no_dialog_timeout: 等待新弹窗的超时时间（秒），超过此时间无新弹窗则认为全部处理完毕
-        per_dialog_timeout: 单个弹窗的等待超时时间（秒）
-    """
     count = 0
     for i in range(1, max_dialogs + 1):
         print(f"[..] 等待第 {i} 个弹窗 (超时{no_dialog_timeout}s无新弹窗则结束)...")
-        ok = press_enter_to_confirm(timeout=per_dialog_timeout)
+        ok = press_enter_to_confirm(main_win=main_win, timeout=per_dialog_timeout)
         if ok:
             count += 1
             print(f"[OK] 已确认第 {count} 个弹窗")
-            time.sleep(0.4)  # 弹窗间短暂间隔
+            time.sleep(0.4)
         else:
-            # 超时未出现弹窗，认为全部处理完毕
             print(f"[OK] 无更多弹窗，共确认 {count} 个")
             break
     else:
@@ -546,7 +581,6 @@ def read_excel(filepath: str) -> list:
         raise FileNotFoundError(f"Excel 文件不存在: {filepath}")
 
     df = pd.read_excel(filepath)
-    # 规范化列名(去掉空格)
     df.columns = df.columns.str.strip()
 
     required_cols = ["合约代码", "持仓类别", "平33%", "平50%", "平100%", "反手"]
@@ -555,28 +589,21 @@ def read_excel(filepath: str) -> list:
             raise ValueError(f"Excel 缺少必需列: {col}")
 
     rows = []
-    # 视为 "执行" 的真值集合(兼容多种写法:TRUE/1/是/yes/y/√/x 等)
     truthy = {"TRUE", "1", "YES", "Y", "是", "√", "✓", "X", "T"}
-    # 视为 "不执行" 的假值集合(空/NA 等都算假)
-    falsy = {"", "NAN", "NA", "NONE", "FALSE", "0", "NO", "N", "否", ""}
-
+    
     for idx, row in df.iterrows():
         contract_code = str(row["合约代码"]).strip()
         position_type = str(row["持仓类别"]).strip() if pd.notna(row["持仓类别"]) else ""
 
-        # 判断执行哪个操作 — 空白/否 都视为 F
-        # 
-        # alse
         action = None
         for col in ["平33%", "平50%", "平100%", "反手"]:
             val = row[col]
             if pd.isna(val):
-                continue  # 空白直接跳过
+                continue
             s = str(val).strip().upper()
             if s in truthy:
                 action = col
                 break
-            # 中文"是"在 strip().upper() 后仍是"是",所以要单独判断
             if str(val).strip() in ("是", "√", "✓"):
                 action = col
                 break
@@ -608,10 +635,6 @@ def countdown(s: int):
 # ---------- 单行任务:定位 + 操作 ----------
 def locate_and_click_contract(win, rect, contract_code: str,
                                position_type: str) -> bool:
-    """
-    在表格中翻找合约代码并点击。
-    返回 True 表示成功, False 表示失败。
-    """
     table_cx = (rect.left + rect.right) // 2
     table_cy = (rect.top + rect.bottom) // 2
 
@@ -633,8 +656,8 @@ def locate_and_click_contract(win, rect, contract_code: str,
         processed = preprocess(img_rgb)
         Image.fromarray(processed).save(DEBUG_IMAGE_PATH)
 
-        # 3) OCR
-        print("  [..] 正在 PaddleOCR 识别...")
+        # 3) OCR (RapidOCR)
+        print("  [..] 正在 RapidOCR 识别...")
         tokens = ocr_image(processed)
         print(f"  [OK] 识别出 {len(tokens)} 条 token")
 
@@ -686,7 +709,6 @@ def locate_and_click_contract(win, rect, contract_code: str,
 
 
 def execute_action(win, action_name: str):
-    """执行指定的平仓按钮操作"""
     auto_id = POSITION_BUTTONS.get(action_name)
     if not auto_id:
         print(f"  [错误] 未知的操作: {action_name}")
@@ -694,23 +716,19 @@ def execute_action(win, action_name: str):
 
     print(f"\n  --- 执行操作: {action_name} ---")
 
-    # 直接点击按钮(已通过 OCR 定位到目标合约行,无需再点第一行)
     ok = click_position_button(win, action_name, auto_id)
     if not ok:
         print(f"  [跳过] {action_name} 未执行")
         return False
     time.sleep(0.5)
 
-
-    # 确认弹窗(自动适配数量)
     print(f"  [..] 等待确认弹窗...")
-    confirm_all_dialogs()
+    confirm_all_dialogs(main_win=win)
     return True
 
 
 # ---------- 主流程 ----------
 def main():
-    # 1) 读取 Excel
     print(f"[INFO] 读取 Excel: {EXCEL_PATH}")
     try:
         tasks = read_excel(EXCEL_PATH)
@@ -728,7 +746,6 @@ def main():
         print(f"  {i}. 合约={t['contract_code']}, "
               f"持仓={t['position_type']!r}, 操作={t['action']}")
 
-    # 2) 倒计时并连接窗口
     countdown(COUNTDOWN)
 
     print("\n[INFO] 正在连接钱龙窗口...")
@@ -738,10 +755,8 @@ def main():
     switch_panel(win, TREE_ITEM)
     time.sleep(0.5)
 
-    # 3) 获取定位表格区域
     rect, _ = get_table(win, TABLE_AUTO_ID)
 
-    # 4) 逐个执行任务
     for i, task in enumerate(tasks, 1):
         print(f"\n{'=' * 50}")
         print(f"[任务 {i}/{len(tasks)}] "
@@ -749,7 +764,6 @@ def main():
               f"持仓={task['position_type']!r}, "
               f"操作={task['action']}")
 
-        # 定位并点击合约
         found = locate_and_click_contract(
             win, rect,
             task["contract_code"],
@@ -761,10 +775,7 @@ def main():
             continue
 
         time.sleep(0.5)
-
-        # 执行平仓操作
         execute_action(win, task["action"])
-
         print(f"[OK] 任务 {i} 完成")
         time.sleep(1)
 
