@@ -120,7 +120,7 @@ else:
     CONFIG_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 DEFAULT_OUTPUT_DIR = r"E:\Code\3\output"
-CATEGORIES = ["查询", "期权下单", "组合申报"]
+CATEGORIES = ["查询", "下单", "组合申报"]
 
 
 def load_user_config() -> dict:
@@ -199,11 +199,11 @@ SCRIPTS_CONFIG = {
         {"name": "19. 行权负债信息查询", "path": rf"{PROJECT_ROOT}\查询\19.行权负债信息查询.py"},
         {"name": "20. 历史行权负债信息", "path": rf"{PROJECT_ROOT}\查询\20.历史行权负债信息.py"},
     ],
-    "期权下单": [
-        {"name": "1.期权下单_自动化下单", "path": rf"{PROJECT_ROOT}\期权下单(新)\自动化下单\4.期权下单(新)_自动化下单_Excel驱动版.py"},
-        #{"name": "2.期权持仓_平仓/反手自动化", "path": rf"{PROJECT_ROOT}\期权下单(新)\表格\9.Excel驱动_OCR定位_平仓操作.py"},
-        {"name": "2.三键下单_自动化下单", "path": rf"{PROJECT_ROOT}\期权下单(新)\自动化下单\4.三键下单_自动化下单_Excel驱动版.py"},
-        {"name": "3.期权持仓_平仓/反手自动化_RapidOCR", "path": rf"{PROJECT_ROOT}\期权下单(新)\表格\10.Excel驱动_OCR_RapidOCR.py"},
+    "下单": [
+        {"name": "1.期权下单_自动化下单", "path": rf"{PROJECT_ROOT}\下单\自动化下单\4.期权下单(新)_自动化下单_Excel驱动版.py"},
+        #{"name": "2.期权持仓_平仓/反手自动化", "path": rf"{PROJECT_ROOT}\下单\表格\9.Excel驱动_OCR定位_平仓操作.py"},
+        {"name": "2.三键下单_自动化下单", "path": rf"{PROJECT_ROOT}\下单\自动化下单\4.三键下单_自动化下单_Excel驱动版.py"},
+        {"name": "3.期权持仓_平仓/反手自动化_RapidOCR", "path": rf"{PROJECT_ROOT}\下单\表格\10.Excel驱动_OCR_RapidOCR.py"},
         {"name": "4.全选撤单", "path": rf"{PROJECT_ROOT}\撤单\撤单_全选撤单_自动化.py"},
     ],
     "组合申报": [
@@ -310,7 +310,7 @@ class AutomationGUI:
         # 功能菜单
         func_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="功能", menu=func_menu)
-        func_menu.add_command(label="期权下单", command=lambda: self._switch_category("期权下单"))
+        func_menu.add_command(label="下单", command=lambda: self._switch_category("下单"))
         func_menu.add_command(label="组合申报", command=lambda: self._switch_category("组合申报"))
         func_menu.add_command(label="查询", command=lambda: self._switch_category("查询"))
 
@@ -372,7 +372,7 @@ class AutomationGUI:
         self.params_frame = ttk.LabelFrame(left_frame, text="参数配置", padding="8")
         self.params_frame.pack(fill=tk.X, pady=(0, 10))
 
-        # 数据预览面板（仅期权下单显示）
+        # 数据预览面板（仅下单显示）
         self.preview_frame = ttk.LabelFrame(left_frame, text="数据预览", padding="3")
         # 初始隐藏
 
@@ -426,7 +426,7 @@ class AutomationGUI:
         self.root.after(200, lambda: self._init_sash_position(main_frame))
 
         # 默认显示查询
-        self._switch_category("期权下单")
+        self._switch_category("下单")
 
     def _init_sash_position(self, main_frame):
         """初始化分栏位置"""
@@ -459,8 +459,8 @@ class AutomationGUI:
         # 重建参数面板
         self._rebuild_params()
 
-        # 仅期权下单显示数据预览
-        if self.current_category == "期权下单":
+        # 仅下单显示数据预览
+        if self.current_category == "下单":
             self.preview_frame.pack(fill=tk.X, pady=(0, 10), before=self.btn_frame)
         else:
             self.preview_frame.pack_forget()
@@ -485,14 +485,14 @@ class AutomationGUI:
 
         if self.current_category == "查询":
             self._build_query_params()
-        elif self.current_category == "期权下单":
+        elif self.current_category == "下单":
             self._build_order_params()
         elif self.current_category == "组合申报":
             self._build_combo_params()
 
     def _update_params_for_selected_script(self):
         """根据选中的脚本更新参数面板"""
-        if self.current_category != "期权下单":
+        if self.current_category != "下单":
             return
         script = self._get_selected_script()
         if not script:
@@ -530,7 +530,7 @@ class AutomationGUI:
         self.params_frame.columnconfigure(1, weight=1)
 
     def _build_order_params(self):
-        """期权下单参数"""
+        """下单参数"""
         # 参数行
         param_row = ttk.Frame(self.params_frame)
         param_row.pack(fill=tk.X)
@@ -705,8 +705,8 @@ class AutomationGUI:
             messagebox.showerror("错误", f"脚本文件不存在:\n{script['path']}")
             return
 
-        # 期权下单需要检查Excel文件（全选撤单除外）
-        if self.current_category == "期权下单" and script["name"] != "4.全选撤单" and not self.xlsx_file.get():
+        # 下单需要检查Excel文件（全选撤单除外）
+        if self.current_category == "下单" and script["name"] != "4.全选撤单" and not self.xlsx_file.get():
             messagebox.showwarning("提示", "请先选择Excel配置文件")
             return
 
@@ -733,7 +733,7 @@ class AutomationGUI:
             self._log(f"自动打开: {'是' if self.auto_open.get() else '否'}")
             self._log(f"TXT路径: {self.txt_path.get()}")
             self._log(f"XLS路径: {self.xls_path.get()}")
-        elif self.current_category == "期权下单":
+        elif self.current_category == "下单":
             self._log(f"Excel文件: {self.xlsx_file.get()}")
         elif self.current_category == "组合申报":
             self._log(f"导出格式: {self.export_format.get().upper()}")
