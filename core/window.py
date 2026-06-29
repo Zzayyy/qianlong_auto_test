@@ -85,7 +85,7 @@ def _select_tree_item_by_path(tree, panel_path: str):
     for part in parts:
         item = tree.child_window(title=part, control_type="TreeItem", found_index=0)
         tree.set_focus()        # 必须
-        item.wait("visible", timeout=5)
+        item.wait("visible", timeout=3)
         item.select()
         time.sleep(0.15)
 
@@ -107,6 +107,7 @@ def switch_panel(win, panel_path: str, use_title: bool = False):
     # 先滚到顶部
     tree.type_keys("{HOME}", with_spaces=False)
     time.sleep(0.2)
+    
     # 获取控件的矩形区域
     rect = tree.rectangle()
     print(f"控件位置: left={rect.left}, top={rect.top}, right={rect.right}, bottom={rect.bottom}")
@@ -115,23 +116,34 @@ def switch_panel(win, panel_path: str, use_title: bool = False):
     center_x = (rect.left + rect.right) // 2
     center_y = (rect.top + rect.bottom) // 2
 
-    # 向下滚动
+    # 第一次向下滚动
     mouse.scroll(coords=(center_x, center_y), wheel_dist=-7)
-
-    # if use_title:
-    #     # 历史委托/历史成交使用 title 定位
-    #     panel_name = panel_path.rsplit("\\", 1)[-1]
-    #     item = tree.child_window(title=panel_name, control_type="TreeItem")
-    #     item.wait("visible", timeout=10)
-    #     item.select()
-    #     time.sleep(0.15)
-    # else:
-        # 标准方式: 逐级 select 展开
-    item = _select_tree_item_by_path(tree, panel_path)
+    time.sleep(0.3)
+    
+    # 提取最终面板名称
+    panel_name = panel_path.rsplit("\\", 1)[-1]
+    
+    # 尝试查找目标节点并切换面板
+    try:
+        item = _select_tree_item_by_path(tree, panel_path)
+    except Exception as e:
+        # 如果第一次滚动后找不到，再滚动一次
+        print(f"[WARN] 第一次滚动后未找到目标节点，再滚动一次...")
+        mouse.scroll(coords=(center_x, center_y), wheel_dist=-7)
+        time.sleep(0.3)
+        try:
+            item = _select_tree_item_by_path(tree, panel_path)
+        except Exception as e2:
+            # 如果第二次滚动后还找不到，直接查找最终面板名称
+            print(f"[WARN] 第二次滚动后仍未找到，尝试直接查找面板: {panel_name}")
+            item = tree.child_window(title=panel_name, control_type="TreeItem")
+            item.wait("visible", timeout=5)
+            item.select()
+            time.sleep(0.15)
 
     # 最后 click_input 确保触发点击事件
     # item.click_input()
-    print(f"[OK] 已切换到'{panel_path.rsplit(chr(92), 1)[-1]}'面板")
+    print(f"[OK] 已切换到'{panel_name}'面板")
 
 
 def click_output_button(win, button_auto_id: str = "1159") -> bool:

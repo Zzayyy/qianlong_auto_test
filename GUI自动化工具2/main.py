@@ -203,8 +203,10 @@ SCRIPTS_CONFIG = {
         {"name": "1.期权下单_自动化下单", "path": rf"{PROJECT_ROOT}\下单\自动化下单\4.期权下单(新)_自动化下单_Excel驱动版.py"},
         #{"name": "2.期权持仓_平仓/反手自动化", "path": rf"{PROJECT_ROOT}\下单\表格\9.Excel驱动_OCR定位_平仓操作.py"},
         {"name": "2.三键下单_自动化下单", "path": rf"{PROJECT_ROOT}\下单\自动化下单\4.三键下单_自动化下单_Excel驱动版.py"},
-        {"name": "3.期权持仓_平仓/反手自动化_RapidOCR", "path": rf"{PROJECT_ROOT}\下单\表格\10.Excel驱动_OCR_RapidOCR.py"},
-        {"name": "4.全选撤单", "path": rf"{PROJECT_ROOT}\撤单\撤单_全选撤单_自动化.py"},
+        {"name": "3.四键下单_自动化下单", "path": rf"{PROJECT_ROOT}\下单\自动化下单\4.四键下单_自动化下单_Excel驱动版.py"},
+        {"name": "4.期权持仓_平仓/反手自动化_RapidOCR", "path": rf"{PROJECT_ROOT}\下单\表格\10.Excel驱动_OCR_RapidOCR.py"},
+        {"name": "5.期权下单_一键导出", "path": rf"{PROJECT_ROOT}\下单\自动化导出\期权下单(新)_自动导出.py"},
+        {"name": "6.全选撤单", "path": rf"{PROJECT_ROOT}\撤单\撤单_全选撤单_自动化.py"},
     ],
     "组合申报": [
         {"name": "1.组合申报_全自动", "path": rf"{PROJECT_ROOT}\组合申报\2.组合申报_全自动.py"},
@@ -241,6 +243,11 @@ class AutomationGUI:
         self.order_qty = tk.IntVar(value=1)
         self.countdown_sec = tk.IntVar(value=3)
         self.xlsx_file = tk.StringVar(value="")
+
+        # 期权下单_一键导出 参数
+        self.export_target_position = tk.BooleanVar(value=True)  # 持仓
+        self.export_target_order = tk.BooleanVar(value=True)     # 委托
+        self.export_output_dir = tk.StringVar(value=get_output_dir(self.user_config, "下单"))
 
         # 日志目录：打包后放在exe同级目录
         if IS_FROZEN:
@@ -341,6 +348,16 @@ class AutomationGUI:
         left_frame = ttk.Frame(self.paned)
         self.paned.add(left_frame, weight=1)
 
+        # 操作按钮 - 固定在底部
+        self.btn_frame = ttk.Frame(left_frame)
+        self.btn_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=(5, 0))
+
+        self.execute_btn = ttk.Button(self.btn_frame, text="执行", command=self._execute_script, width=12)
+        self.execute_btn.pack(side=tk.LEFT, padx=5)
+
+        self.stop_btn = ttk.Button(self.btn_frame, text="停止", command=self._stop_script, state=tk.DISABLED, width=10)
+        self.stop_btn.pack(side=tk.LEFT, padx=5)
+
         # 当前分类标签
         self.category_label = ttk.Label(
             left_frame,
@@ -348,10 +365,14 @@ class AutomationGUI:
             font=("Microsoft YaHei UI", 12, "bold"),
             foreground="#0078d4"
         )
-        self.category_label.pack(anchor=tk.W, pady=(0, 5))
+        self.category_label.pack(side=tk.TOP, anchor=tk.W, pady=(0, 5))
+
+        # 中间内容区域 - 占据剩余空间
+        middle_frame = ttk.Frame(left_frame)
+        middle_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, pady=(0, 10))
 
         # 脚本列表
-        list_frame = ttk.LabelFrame(left_frame, text="脚本列表", padding="8")
+        list_frame = ttk.LabelFrame(middle_frame, text="脚本列表", padding="8")
         list_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
 
         self.script_listbox = tk.Listbox(
@@ -369,11 +390,11 @@ class AutomationGUI:
         self.script_listbox.bind('<<ListboxSelect>>', lambda e: (self._update_paths_for_selected_script(), self._update_params_for_selected_script()))
 
         # 参数配置面板
-        self.params_frame = ttk.LabelFrame(left_frame, text="参数配置", padding="8")
+        self.params_frame = ttk.LabelFrame(middle_frame, text="参数配置", padding="8")
         self.params_frame.pack(fill=tk.X, pady=(0, 10))
 
         # 数据预览面板（仅下单显示）
-        self.preview_frame = ttk.LabelFrame(left_frame, text="数据预览", padding="3")
+        self.preview_frame = ttk.LabelFrame(middle_frame, text="数据预览", padding="3")
         # 初始隐藏
 
         # 预览Treeview + 滚动条
@@ -392,16 +413,6 @@ class AutomationGUI:
         # 预览信息标签
         self.preview_info = ttk.Label(self.preview_frame, text="选择Excel文件后显示数据预览", foreground="gray")
         self.preview_info.pack(anchor=tk.W, pady=(3, 0))
-
-        # 操作按钮
-        self.btn_frame = ttk.Frame(left_frame)
-        self.btn_frame.pack(fill=tk.X)
-
-        self.execute_btn = ttk.Button(self.btn_frame, text="执行", command=self._execute_script, width=12)
-        self.execute_btn.pack(side=tk.LEFT, padx=5)
-
-        self.stop_btn = ttk.Button(self.btn_frame, text="停止", command=self._stop_script, state=tk.DISABLED, width=10)
-        self.stop_btn.pack(side=tk.LEFT, padx=5)
 
         # 右侧：日志
         log_frame = ttk.LabelFrame(self.paned, text="运行日志", padding="5")
@@ -461,7 +472,7 @@ class AutomationGUI:
 
         # 仅下单显示数据预览
         if self.current_category == "下单":
-            self.preview_frame.pack(fill=tk.X, pady=(0, 10), before=self.btn_frame)
+            self.preview_frame.pack(fill=tk.X, pady=(0, 10))
         else:
             self.preview_frame.pack_forget()
 
@@ -497,15 +508,32 @@ class AutomationGUI:
         script = self._get_selected_script()
         if not script:
             return
+
+        # 先清空参数配置面板
         for w in self.params_frame.winfo_children():
             w.destroy()
-        if script["name"] == "4.全选撤单":
+
+        # 根据脚本决定是否显示数据预览
+        if script["name"] in ("5.期权下单_一键导出", "6.全选撤单"):
+            # 这两个脚本不需要数据预览
+            self.preview_frame.pack_forget()
+        else:
+            # 其他脚本需要数据预览
+            self.preview_frame.pack(fill=tk.X, pady=(0, 10))
+
+        # 根据脚本更新参数配置面板
+        if script["name"] == "6.全选撤单":
+            # 全选撤单：显示提示信息
             ttk.Label(
                 self.params_frame,
                 text="该功能无需参数配置，点击执行即可。",
                 foreground="gray"
             ).pack(pady=20)
+        elif script["name"] == "5.期权下单_一键导出":
+            # 期权下单_一键导出：显示参数配置
+            self._build_export_params()
         else:
+            # 其他脚本：显示订单参数配置
             self._build_order_params()
 
     def _build_query_params(self):
@@ -569,6 +597,31 @@ class AutomationGUI:
 
         self.params_frame.columnconfigure(1, weight=1)
 
+    def _build_export_params(self):
+        """期权下单_一键导出 参数配置"""
+        # 清空旧内容
+        for widget in self.params_frame.winfo_children():
+            widget.destroy()
+
+        # 导出目标选择
+        ttk.Label(self.params_frame, text="导出目标:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        ttk.Checkbutton(self.params_frame, text="持仓", variable=self.export_target_position).grid(row=0, column=1, sticky=tk.W, padx=5)
+        ttk.Checkbutton(self.params_frame, text="委托", variable=self.export_target_order).grid(row=0, column=2, sticky=tk.W, padx=5)
+
+        # 输出目录配置
+        ttk.Label(self.params_frame, text="输出目录:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        path_entry = ttk.Entry(self.params_frame, textvariable=self.export_output_dir, width=35)
+        path_entry.grid(row=1, column=1, sticky=tk.EW, pady=5)
+        ttk.Button(self.params_frame, text="浏览", command=self._browse_export_dir).grid(row=1, column=2, padx=5)
+
+        # 显示文件名格式说明
+        ttk.Label(self.params_frame, text="文件名格式: 期权下单(新)-持仓-20260629.xls", foreground="gray").grid(row=2, column=0, columnspan=3, sticky=tk.W, pady=5)
+
+        self.params_frame.columnconfigure(1, weight=1)
+
+        # 确保按钮框架可见
+        self.btn_frame.lift()
+
     def _browse_path(self, var, ext):
         """浏览选择文件路径"""
         initial_dir = get_output_dir(self.user_config, self.current_category)
@@ -607,6 +660,16 @@ class AutomationGUI:
             self.xlsx_file.set(path)
             self._log(f"已选择Excel文件: {path}")
             self._preview_excel(path)
+
+    def _browse_export_dir(self):
+        """选择导出目录"""
+        path = filedialog.askdirectory(
+            title="选择导出目录",
+            initialdir=self.export_output_dir.get()
+        )
+        if path:
+            self.export_output_dir.set(path)
+            self._log(f"已设置导出目录: {path}")
 
     def _preview_excel(self, filepath: str):
         """读取Excel并显示到预览表格"""
@@ -705,10 +768,16 @@ class AutomationGUI:
             messagebox.showerror("错误", f"脚本文件不存在:\n{script['path']}")
             return
 
-        # 下单需要检查Excel文件（全选撤单除外）
-        if self.current_category == "下单" and script["name"] != "4.全选撤单" and not self.xlsx_file.get():
+        # 下单需要检查Excel文件（全选撤单和期权下单_一键导出除外）
+        if self.current_category == "下单" and script["name"] not in ("5.期权下单_一键导出", "6.全选撤单") and not self.xlsx_file.get():
             messagebox.showwarning("提示", "请先选择Excel配置文件")
             return
+
+        # 期权下单_一键导出需要检查导出目标
+        if script["name"] == "5.期权下单_一键导出":
+            if not self.export_target_position.get() and not self.export_target_order.get():
+                messagebox.showwarning("提示", "请至少选择一个导出目标（持仓或委托）")
+                return
 
         # 保存当前配置
         self.user_config["export_format"] = self.export_format.get()
@@ -734,7 +803,17 @@ class AutomationGUI:
             self._log(f"TXT路径: {self.txt_path.get()}")
             self._log(f"XLS路径: {self.xls_path.get()}")
         elif self.current_category == "下单":
-            self._log(f"Excel文件: {self.xlsx_file.get()}")
+            if script["name"] == "5.期权下单_一键导出":
+                export_targets = []
+                if self.export_target_position.get():
+                    export_targets.append("持仓")
+                if self.export_target_order.get():
+                    export_targets.append("委托")
+                self._log(f"导出目标: {', '.join(export_targets)}")
+                self._log(f"输出目录: {self.export_output_dir.get()}")
+                self._log(f"文件名格式: 期权下单(新)-持仓-20260629.xls")
+            else:
+                self._log(f"Excel文件: {self.xlsx_file.get()}")
         elif self.current_category == "组合申报":
             self._log(f"导出格式: {self.export_format.get().upper()}")
             self._log(f"自动打开: {'是' if self.auto_open.get() else '否'}")
@@ -765,6 +844,15 @@ class AutomationGUI:
             env["GUI_COUNTDOWN"] = str(self.countdown_sec.get())
             env["GUI_XLSX_FILE"] = self.xlsx_file.get()
             env["GUI_CATEGORY"] = self.current_category
+
+            # 期权下单_一键导出 参数
+            export_targets = []
+            if self.export_target_position.get():
+                export_targets.append("持仓")
+            if self.export_target_order.get():
+                export_targets.append("委托")
+            env["GUI_EXPORT_TARGETS"] = ",".join(export_targets)
+            env["GUI_EXPORT_DIR"] = self.export_output_dir.get()
 
             # 构建命令：打包后用exe自身充当Python解释器，开发环境用系统Python
             if IS_FROZEN:
