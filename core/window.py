@@ -1,5 +1,14 @@
 import os
 import sys
+import win32gui
+import win32con
+from win32gui import (
+    EnumChildWindows,
+    GetWindowText,
+    IsWindowVisible
+)
+from pywinauto import Application,findwindows
+import time
 # -*- coding: utf-8 -*-
 """窗口操作公共模块：查找、激活、倒计时、面板切换"""
 
@@ -30,6 +39,7 @@ if getattr(sys, 'frozen', False):
 
 import time
 import sys
+import ctypes
 from pywinauto import Application, findwindows, mouse
 from pywinauto.timings import Timings
 
@@ -100,6 +110,29 @@ def switch_panel(win, panel_path: str, use_title: bool = False):
         panel_path: 树形面板路径,如 r"\查询\资金持仓" 或 "撤单"
         use_title: 是否用title定位TreeItem(历史委托/历史成交需要)
     """
+    # ── 先激活左侧菜单区域（全局菜单Home功能） ──
+    rect = win.rectangle()
+
+    # 根据屏幕分辨率动态计算水平偏移量
+    screen_width = ctypes.windll.user32.GetSystemMetrics(0)
+    offset_x = int(screen_width * 0.01)
+    if offset_x < 50:
+        offset_x = 50
+    if offset_x > 200:
+        offset_x = 200
+
+    # 菜单位置：窗口最左边 + 偏移量，垂直居中
+    menu_x = rect.left + offset_x 
+    menu_y = rect.top + (rect.bottom - rect.top) // 2
+
+    mouse.move(coords=(menu_x, menu_y))
+    time.sleep(0.3)
+    mouse.click(coords=(menu_x, menu_y))
+    time.sleep(0.5)
+    win.type_keys("{HOME}", with_spaces=False)
+    time.sleep(0.3)
+    # ───────────────────────────────────────────────
+
     tree = win.child_window(auto_id="1223", control_type="Tree")
     tree.wait("ready", timeout=10)
     tree.set_focus()
@@ -107,6 +140,19 @@ def switch_panel(win, panel_path: str, use_title: bool = False):
     # 先滚到顶部
     tree.type_keys("{HOME}", with_spaces=False)
     time.sleep(0.2)
+
+    # 右击树控件，选择"全部展开"
+    tree.set_focus()
+    tree.click_input(button="right")
+    time.sleep(0.5)
+    try:
+        # 用键盘方向键导航到"全部展开"
+        # 菜单顺序：打开 → 刷新数据 → 在线帮助 → (分隔线) → 全部展开
+        win.type_keys("{DOWN}{DOWN}{DOWN}{DOWN}{ENTER}", with_spaces=False, pause=0)
+        print("[OK] 已右击选择'全部展开'")
+        time.sleep(0.5)
+    except Exception as e:
+        print(f"[WARN] 右击展开菜单操作失败，跳过: {e}")
     
     # 获取控件的矩形区域
     rect = tree.rectangle()
@@ -147,12 +193,44 @@ def switch_panel(win, panel_path: str, use_title: bool = False):
 
 
 def click_output_button(win, button_auto_id: str = "1159") -> bool:
-    """点击"输出"按钮。"""
+    """用 win32gui 查找并点击"输出"按钮（参考 win32gui找按钮后点击.py）。"""
     try:
-        output_btn = win.child_window(auto_id=button_auto_id, control_type="Button")
-        output_btn.wait("ready", timeout=5)
-        output_btn.click_input()
-        print(f"[OK] 已点击'输出'按钮(auto_id={button_auto_id})")
+        target_hwnd = win.handle
+        buttons = []
+
+        def _enum_cb(hwnd, _):
+            if GetWindowText(hwnd) == "输出":
+                buttons.append(hwnd)
+
+        EnumChildWindows(target_hwnd, _enum_cb, None)
+
+        if not buttons:
+            print("[WARN] 未找到文字为'输出'的按钮")
+            return False
+
+        # 取第一个可见的按钮
+        btn = next((h for h in buttons if IsWindowVisible(h)), None)
+        if not btn:
+            print("[WARN] 找到'输出'按钮但均不可见")
+            return False
+
+        # 发送 BM_CLICK 消息点击按钮（0x00F5 = BM_CLICK）
+        print(btn)
+        def click_hwnd(hwnd):
+            import win32api
+            import win32con
+            from win32gui import GetWindowRect
+
+            l, t, r, b = GetWindowRect(hwnd)
+
+            x = (l + r) // 2
+            y = (t + b) // 2
+
+            win32api.SetCursorPos((x, y))
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0)
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0)
+        click_hwnd(btn)
+        print(f"[OK] 已用 win32gui 点击'输出'按钮(hwnd={btn})")
         time.sleep(0.5)
         return True
     except Exception as e:

@@ -12,7 +12,7 @@ __pycache__/
 env/
 venv/
 .venv/
-
+*.__pycache__
 # IDE
 .vscode/
 .idea/
@@ -24,3 +24,5 @@ Thumbs.db
 # Logs
 logs/
 *.log
+
+.codebuddy
