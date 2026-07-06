@@ -64,6 +64,17 @@ else:
 WAIT_MENU_SEC   = 3      # 等"导出菜单"弹出的秒数
 WAIT_SAVEAS_SEC = 3     # 等"另存为"窗口弹出的秒数
 INTERVAL        = 1.0    # 两次导出之间的间隔
+
+# 导出菜单项顺序(Win11 找不到 MenuItem 时,用于键盘方向键降级)
+# 第一个是"持仓",第二个是"委托"
+EXPORT_MENU_ORDER = ["持仓", "委托"]
+
+# 键盘降级时每个目标需要按下的 Down 键次数(实测: 持仓按1次, 委托按2次)
+# 说明: 菜单打开后首项并非直接高亮,需先下移相应次数再回车
+EXPORT_MENU_DOWN_COUNT = {
+    "持仓": 1,
+    "委托": 2,
+}
 # ========================================================
 
 
@@ -106,7 +117,7 @@ def click_output_button(win, auto_id: str = OUTPUT_AUTO_ID):
     print("[OK] 已点击'输出'按钮,等待导出菜单弹出...")
 
 
-def select_export_target(target: str, timeout: float = WAIT_MENU_SEC) -> bool:
+def select_export_target(target: str, win=None, timeout: float = WAIT_MENU_SEC) -> bool:
     """在弹出的导出菜单中选择目标项(持仓 / 委托)。
 
     该菜单是动态的,组件树里看不到,只能遍历顶级窗口实时匹配 MenuItem。
@@ -115,7 +126,14 @@ def select_export_target(target: str, timeout: float = WAIT_MENU_SEC) -> bool:
         - 在每个窗口内查找 title==target 的 MenuItem
         - 找到就点击
         - 点击后检查是否有"提示"弹窗(表格无数据),如果有则关闭并返回失败
+
+    Win11 兼容:
+        部分 Win11 环境下,弹出的导出菜单无法被 UI Automation 识别为 MenuItem
+        (find_elements 遍历不到 / child_window 匹配不到),此时降级为键盘方向键:
+        菜单打开后第一个项默认高亮,按 Down 键按索引下移,再回车确认。
+        菜单顺序见 EXPORT_MENU_ORDER(第一个持仓,第二个委托)。
     """
+    # ---- 方案 A: UI Automation 查找 MenuItem 并点击 ----
     end = time.time() + timeout
     while time.time() < end:
         for elem in findwindows.find_elements(top_level_only=True):
@@ -131,19 +149,51 @@ def select_export_target(target: str, timeout: float = WAIT_MENU_SEC) -> bool:
                     item.wait("visible", timeout=1.5)
                     item.click_input()
                     print(f"[OK] 已选择导出项: {target} (hwnd={hwnd})")
-                    
-                    # 检查是否有"提示"弹窗(表格无数据)
-                    time.sleep(0.5)
-                    if _check_and_handle_empty_data_prompt():
-                        print(f"[WARN] {target} 表格无数据,已跳过")
-                        return False
-                    
-                    return True
+                    return _after_select(target)
             except Exception:
                 continue
-        time.sleep(0.15)
-    print(f"[WARN] 等待导出菜单超时({timeout}s): {target}")
-    return False
+        #time.sleep(0.15)
+
+    # ---- 方案 B (Win11 降级): 键盘方向键选择 ----
+    print(f"[WARN] 未找到 '{target}' 的 MenuItem(疑似 Win11 弹出菜单无法识别),"
+          f"改用键盘方向键降级方案...")
+    return _select_export_target_by_keyboard(target, win)
+
+
+def _after_select(target: str) -> bool:
+    """点击菜单项后的公共处理: 检测空数据提示。"""
+    time.sleep(0.5)
+    if _check_and_handle_empty_data_prompt():
+        print(f"[WARN] {target} 表格无数据,已跳过")
+        return False
+    return True
+
+
+def _select_export_target_by_keyboard(target: str, win=None) -> bool:
+    """Win11 降级方案: 用键盘方向键在导出菜单中选择目标项。
+
+    导出菜单打开后,第一项(持仓)默认处于高亮状态;按 Down 键按索引下移到位,
+    再按 Enter 确认。菜单项顺序见 EXPORT_MENU_ORDER。
+    """
+    if win is None:
+        print("[错误] 缺少主窗口句柄,无法使用键盘降级方案")
+        return False
+    try:
+        # 把焦点给回主窗口(菜单已随"输出"点击而弹出并捕获键盘)
+        win.set_focus()
+        time.sleep(0.3)
+
+        # 计算需要按下的 Down 次数(按目标显式配置)
+        down_count = EXPORT_MENU_DOWN_COUNT.get(target, 0)
+        keys = ""
+        if down_count > 0:
+            keys = f"{{DOWN {down_count}}}"
+        win.type_keys(keys + "{ENTER}", with_spaces=False)
+        print(f"[OK] 已用键盘选择导出项: {target} (下移 {down_count} 次)")
+        return _after_select(target)
+    except Exception as e:
+        print(f"[WARN] 键盘降级方案失败: {e}")
+        return False
 
 
 def _check_and_handle_empty_data_prompt(timeout: float = 2) -> bool:
@@ -349,9 +399,9 @@ def main():
             print(f"\n--- [{i}/{len(EXPORT_TARGETS)}] 导出: {target} ---")
             click_output_button(win)
 
-            if not select_export_target(target):
+            if not select_export_target(target, win):
                 print(f"[WARN] 跳过 {target},无法选择导出项")
-                time.sleep(INTERVAL)
+                #time.sleep(INTERVAL)
                 continue
 
             filename = build_filename(target)
@@ -361,7 +411,7 @@ def main():
             else:
                 print(f"[失败] {target}")
 
-            time.sleep(INTERVAL)
+            #time.sleep(INTERVAL)
 
         print(f"\n=== 全部完成 ===")
 
