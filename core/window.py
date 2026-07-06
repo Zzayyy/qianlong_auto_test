@@ -75,7 +75,7 @@ def countdown(seconds: int):
 
 
 def _select_tree_item_by_path(tree, panel_path: str):
-    """逐级 select 展开树节点。
+    """用 get_item 直接定位并选中树节点。
 
     Args:
         tree: Tree 控件
@@ -86,20 +86,12 @@ def _select_tree_item_by_path(tree, panel_path: str):
     if not path.startswith("\\"):
         path = "\\" + path
 
-    # 解析路径,过滤空字符串
-    parts = [p for p in path.split("\\") if p]
-    if not parts:
-        raise ValueError(f"无效的面板路径: {panel_path}")
-
-    # 逐级 select 展开
-    for part in parts:
-        item = tree.child_window(title=part, control_type="TreeItem", found_index=0)
-        tree.set_focus()        # 必须
-        item.wait("visible", timeout=3)
-        item.select()
-        time.sleep(0.15)
-
-    return tree.child_window(title=parts[-1], control_type="TreeItem", found_index=0)
+    # get_item 直接定位到目标节点,无需逐级展开
+    item = tree.get_item(path)
+    tree.set_focus()        # 必须
+    item.select()
+    time.sleep(0.15)
+    return item
 
 
 def switch_panel(win, panel_path: str, use_title: bool = False):
@@ -141,51 +133,11 @@ def switch_panel(win, panel_path: str, use_title: bool = False):
     tree.type_keys("{HOME}", with_spaces=False)
     time.sleep(0.2)
 
-    # 右击树控件，选择"全部展开"
-    tree.set_focus()
-    tree.click_input(button="right")
-    time.sleep(0.5)
-    try:
-        # 用键盘方向键导航到"全部展开"
-        # 菜单顺序：打开 → 刷新数据 → 在线帮助 → (分隔线) → 全部展开
-        win.type_keys("{DOWN}{DOWN}{DOWN}{DOWN}{ENTER}", with_spaces=False, pause=0)
-        print("[OK] 已右击选择'全部展开'")
-        time.sleep(0.5)
-    except Exception as e:
-        print(f"[WARN] 右击展开菜单操作失败，跳过: {e}")
-    
-    # 获取控件的矩形区域
-    rect = tree.rectangle()
-    print(f"控件位置: left={rect.left}, top={rect.top}, right={rect.right}, bottom={rect.bottom}")
-
-    # 在控件中心位置滚动
-    center_x = (rect.left + rect.right) // 2
-    center_y = (rect.top + rect.bottom) // 2
-
-    # 第一次向下滚动
-    mouse.scroll(coords=(center_x, center_y), wheel_dist=-7)
-    time.sleep(0.3)
-    
     # 提取最终面板名称
     panel_name = panel_path.rsplit("\\", 1)[-1]
-    
-    # 尝试查找目标节点并切换面板
-    try:
-        item = _select_tree_item_by_path(tree, panel_path)
-    except Exception as e:
-        # 如果第一次滚动后找不到，再滚动一次
-        print(f"[WARN] 第一次滚动后未找到目标节点，再滚动一次...")
-        mouse.scroll(coords=(center_x, center_y), wheel_dist=-7)
-        time.sleep(0.3)
-        try:
-            item = _select_tree_item_by_path(tree, panel_path)
-        except Exception as e2:
-            # 如果第二次滚动后还找不到，直接查找最终面板名称
-            print(f"[WARN] 第二次滚动后仍未找到，尝试直接查找面板: {panel_name}")
-            item = tree.child_window(title=panel_name, control_type="TreeItem")
-            item.wait("visible", timeout=5)
-            item.select()
-            time.sleep(0.15)
+
+    # get_item 直接定位并切换到目标面板(无需右击全部展开、无需滚动)
+    item = _select_tree_item_by_path(tree, panel_path)
 
     # 最后 click_input 确保触发点击事件
     # item.click_input()

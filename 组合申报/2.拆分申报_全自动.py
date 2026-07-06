@@ -46,20 +46,18 @@ def activate_window(hwnd: int):
 
 
 def switch_to_split_panel(win):
-    """切换到拆分申报面板(逐级select展开)。"""
+    """切换到拆分申报面板(get_item直接定位)。"""
     tree = win.child_window(auto_id="1223", control_type="Tree")
     tree.wait("ready", timeout=10)
     tree.set_focus()
     tree.type_keys("{HOME}", with_spaces=False)
     time.sleep(0.2)
 
-    # 逐级 select 展开: 组合申报 -> 拆分申报
-    for part in ["组合申报", "拆分申报"]:
-        item = tree.child_window(title=part, control_type="TreeItem", found_index=0)
-        item.wait("visible", timeout=5)
-        item.select()
-        time.sleep(0.15)
-
+    # get_item 直接定位到目标节点: 组合申报 -> 拆分申报
+    item = tree.get_item(r"\组合申报\拆分申报")
+    tree.set_focus()
+    item.select()
+    time.sleep(0.15)
     print("[OK] 已切换到拆分申报面板")
 
 
