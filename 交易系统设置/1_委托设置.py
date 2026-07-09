@@ -450,70 +450,28 @@ def _try_keyboard_select(win):
 
 
 def switch_to_settings_panel(dlg, panel_name: str = PANEL_NAME) -> bool:
-    """在设置对话框中切换到指定标签页（左侧导航：Tree/TreeItem 或 List/ListItem）。
+    """在设置对话框中切换到指定标签页（左侧 ListItem 导航菜单）。
 
-    注意：打开对话框后默认选中的未必是目标面板（软件会记住上次打开的页签），
-    因此必须主动切换，而不是假设默认即目标面板。仅在“已确认当前就在目标面板”
-    时才跳过点击；切换失败时返回 False，由调用方决定是否终止。
+    控件结构（来自抓取文档）：
+        ListBox - '' (auto_id="2210", control_type="List")
+           ├── ListItem - '委托设置'
+           ├── ListItem - '期权设置'
+           └── ...
     """
-    # 1. 收集可能的左侧导航容器（兼容不同软件版本/形态）
-    nav_candidates = []
     try:
-        tree = dlg.child_window(control_type="Tree")
-        if tree.exists(timeout=1):
-            nav_candidates.append(tree)
-    except Exception:
-        pass
-    try:
-        lst = dlg.child_window(auto_id="2210", control_type="List")
-        if lst.exists(timeout=1):
-            nav_candidates.append(lst)
-    except Exception:
-        pass
+        nav_list = dlg.child_window(auto_id="2210", control_type="List")
+        nav_list.wait("ready", timeout=5)
+        nav_list.set_focus()
 
-    if not nav_candidates:
-        print(f"[WARN] 未找到左侧导航容器，无法切换到'{panel_name}'面板")
+        item = nav_list.child_window(title=panel_name, control_type="ListItem")
+        item.wait("visible", timeout=3)
+        item.click_input()
+        time.sleep(0.5)
+        print(f"[OK] 已切换到'{panel_name}'面板")
+        return True
+    except Exception as e:
+        print(f"[WARN] 切换到'{panel_name}'面板失败: {e}")
         return False
-
-    # 2. 依次尝试各导航容器，找到目标项并点击切换
-    for nav in nav_candidates:
-        try:
-            nav.wait("ready", timeout=3)
-            nav.set_focus()
-
-            # 目标项可能是 TreeItem 或 ListItem，两种都尝试
-            item = None
-            for ctype in ("TreeItem", "ListItem"):
-                try:
-                    cand = nav.child_window(title=panel_name, control_type=ctype, found_index=0)
-                    if cand.exists(timeout=1):
-                        item = cand
-                        break
-                except Exception:
-                    continue
-            if item is None:
-                continue
-
-            item.wait("visible", timeout=3)
-
-            # 已选中则无需点击
-            try:
-                if item.is_selected():
-                    print(f"[OK] 当前已在'{panel_name}'面板，无需切换")
-                    return True
-            except Exception:
-                pass
-
-            item.click_input()
-            time.sleep(0.6)
-            print(f"[OK] 已切换到'{panel_name}'面板")
-            return True
-        except Exception as e:
-            print(f"  [WARN] 通过导航容器切换'{panel_name}'失败: {e}")
-            continue
-
-    print(f"[WARN] 切换'{panel_name}'面板失败")
-    return False
 
 
 def get_checkbox_state_by_id(dlg, auto_id: str) -> Optional[bool]:
