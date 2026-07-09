@@ -1,0 +1,107 @@
+Control Identifiers:
+
+Dialog - '交易系统设置'    (L3271, T226, R3921, B686)
+['Dialog', '交易系统设置', '交易系统设置Dialog']
+child_window(title="交易系统设置", control_type="Window")
+   | 
+   | Button - '确定'    (L3652, T656, R3715, B679)
+   | ['确定', '确定Button', 'Button', 'Button0', 'Button1']
+   | child_window(title="确定", auto_id="1", control_type="Button")
+   | 
+   | Button - '取消'    (L3718, T656, R3781, B679)
+   | ['Button2', '取消Button', '取消']
+   | child_window(title="取消", auto_id="2", control_type="Button")
+   | 
+   | Button - '应用'    (L3850, T656, R3913, B679)
+   | ['应用Button', 'Button3', '应用']
+   | child_window(title="应用", auto_id="2001", control_type="Button")
+   | 
+   | ListBox - ''    (L3276, T254, R3387, B650)
+   | ['ListBox']
+   | child_window(auto_id="2210", control_type="List")
+   |    | 
+   |    | ListItem - '委托设置'    (L3277, T255, R3386, B275)
+   |    | ['ListItem', '委托设置', '委托设置ListItem', 'ListItem0', 'ListItem1']
+   |    | child_window(title="委托设置", control_type="ListItem")
+   |    | 
+   |    | ListItem - '期权设置'    (L3277, T275, R3386, B295)
+   |    | ['期权设置', 'ListItem2', '期权设置ListItem']
+   |    | child_window(title="期权设置", control_type="ListItem")
+   |    | 
+   |    | ListItem - '自动拆单设置'    (L3277, T295, R3386, B315)
+   |    | ['自动拆单设置ListItem', 'ListItem3', '自动拆单设置']
+   |    | child_window(title="自动拆单设置", control_type="ListItem")
+   |    | 
+   |    | ListItem - '自动追单设置'    (L3277, T315, R3386, B335)
+   |    | ['自动追单设置ListItem', 'ListItem4', '自动追单设置']
+   |    | child_window(title="自动追单设置", control_type="ListItem")
+   |    | 
+   |    | ListItem - '快捷设置'    (L3277, T335, R3386, B355)
+   |    | ['快捷设置', 'ListItem5', '快捷设置ListItem']
+   |    | child_window(title="快捷设置", control_type="ListItem")
+   |    | 
+   |    | ListItem - '键盘下单设置'    (L3277, T355, R3386, B375)
+   |    | ['键盘下单设置ListItem', 'ListItem6', '键盘下单设置']
+   |    | child_window(title="键盘下单设置", control_type="ListItem")
+   |    | 
+   |    | ListItem - '价格提醒设置'    (L3277, T375, R3386, B395)
+   |    | ['ListItem7', '价格提醒设置ListItem', '价格提醒设置']
+   |    | child_window(title="价格提醒设置", control_type="ListItem")
+   | 
+   | Image - ''    (L3390, T275, R3915, B650)
+   | ['Image', '合约委托价格超过限定价格提醒Image', 'Image0', 'Image1', '合约委托价格超过限定价格提醒Image0', '合约委托价格超过限定价格提醒Image1']
+   | child_window(auto_id="2292", control_type="Image")
+   | 
+   | Button - '恢复默认'    (L3784, T656, R3847, B679)
+   | ['恢复默认Button', 'Button4', '恢复默认']
+   | child_window(title="恢复默认", auto_id="2239", control_type="Button")
+   | 
+   | Static - '中国领先的实时金融平台'    (L3283, T663, R3528, B675)
+   | ['中国领先的实时金融平台Static', 'Static', '中国领先的实时金融平台', '中国领先的实时金融平台0', '中国领先的实时金融平台1', 'Static0', 'Static1']
+   | child_window(title="中国领先的实时金融平台", auto_id="2462", control_type="Text")
+   | 
+   | Image - '中国领先的实时金融平台'    (L3391, T254, R3918, B274)
+   | ['Image2', '中国领先的实时金融平台2', '中国领先的实时金融平台Image']
+   | child_window(title="中国领先的实时金融平台", auto_id="2293", control_type="Image")
+   | 
+   | CheckBox - '买开、买平、备平委托价格高于最新价格的'    (L3411, T311, R3657, B326)
+   | ['CheckBox', '买开、买平、备平委托价格高于最新价格的CheckBox', '买开、买平、备平委托价格高于最新价格的', 'CheckBox0', 'CheckBox1']
+   | child_window(title="买开、买平、备平委托价格高于最新价格的", auto_id="2065", control_type="CheckBox")
+   | 
+   | Image - ''    (L3583, T291, R3905, B293)
+   | ['Image3', '合约委托价格超过限定价格提醒Image2']
+   | 
+   | Static - '合约委托价格超过限定价格提醒'    (L3409, T285, R3580, B297)
+   | ['Static2', '合约委托价格超过限定价格提醒Static', '合约委托价格超过限定价格提醒']
+   | child_window(title="合约委托价格超过限定价格提醒", auto_id="2462", control_type="Text")
+   | 
+   | Edit - '合约委托价格超过限定价格提醒'    (L3661, T308, R3709, B329)
+   | ['Edit', '合约委托价格超过限定价格提醒Edit', 'Edit0', 'Edit1', '合约委托价格超过限定价格提醒Edit0', '合约委托价格超过限定价格提醒Edit1']
+   | child_window(title="合约委托价格超过限定价格提醒", auto_id="2150", control_type="Edit")
+   | 
+   | Static - '倍提醒（参数设置大于1）'    (L3714, T312, R3903, B324)
+   | ['Static3', '倍提醒（参数设置大于1）', '倍提醒（参数设置大于1）Static']
+   | child_window(title="倍提醒（参数设置大于1）", auto_id="2313", control_type="Text")
+   | 
+   | CheckBox - '卖开、卖平、备开委托价格低于最新价格的'    (L3411, T341, R3657, B356)
+   | ['CheckBox2', '卖开、卖平、备开委托价格低于最新价格的', '卖开、卖平、备开委托价格低于最新价格的CheckBox']
+   | child_window(title="卖开、卖平、备开委托价格低于最新价格的", auto_id="2068", control_type="CheckBox")
+   | 
+   | Edit - ''    (L3661, T338, R3709, B359)
+   | ['Edit2', '合约委托价格超过限定价格提醒Edit2']
+   | child_window(auto_id="2179", control_type="Edit")
+   | 
+   | Static - '倍提醒（参数设置大于0小于1）'    (L3714, T342, R3903, B354)
+   | ['倍提醒（参数设置大于0小于1）Static', 'Static4', '倍提醒（参数设置大于0小于1）', '倍提醒（参数设置大于0小于1）0', '倍提醒（参数设置大于0小于1）1']
+   | child_window(title="倍提醒（参数设置大于0小于1）", auto_id="2405", control_type="Text")
+   | 
+   | Image - '倍提醒（参数设置大于0小于1）'    (L3399, T291, R3406, B293)
+   | ['Image4', '倍提醒（参数设置大于0小于1）Image', '倍提醒（参数设置大于0小于1）2']
+   | child_window(title="倍提醒（参数设置大于0小于1）", control_type="Image")
+   | 
+   | TitleBar - ''    (L3274, T229, R3918, B252)
+   | ['TitleBar']
+   |    | 
+   |    | Button - '关闭'    (L3885, T227, R3919, B252)
+   |    | ['关闭Button', '关闭', 'Button5']
+   |    | child_window(title="关闭", control_type="Button")

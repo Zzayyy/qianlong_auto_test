@@ -1,0 +1,421 @@
+Control Identifiers:
+
+Dialog - '交易系统设置'    (L3275, T205, R3925, B665)
+['交易系统设置', 'Dialog', '交易系统设置Dialog']
+child_window(title="交易系统设置", control_type="Window")
+   | 
+   | Button - '确定'    (L3656, T635, R3719, B658)
+   | ['确定', 'Button', '确定Button', 'Button0', 'Button1']
+   | child_window(title="确定", auto_id="1", control_type="Button")
+   | 
+   | Button - '取消'    (L3722, T635, R3785, B658)
+   | ['Button2', '取消Button', '取消']
+   | child_window(title="取消", auto_id="2", control_type="Button")
+   | 
+   | Button - '应用'    (L3854, T635, R3917, B658)
+   | ['应用Button', 'Button3', '应用']
+   | child_window(title="应用", auto_id="2001", control_type="Button")
+   | 
+   | ListBox - ''    (L3280, T233, R3391, B629)
+   | ['ListBox']
+   | child_window(auto_id="2210", control_type="List")
+   |    | 
+   |    | ListItem - '委托设置'    (L3281, T234, R3390, B254)
+   |    | ['委托设置ListItem', '委托设置', 'ListItem', 'ListItem0', 'ListItem1']
+   |    | child_window(title="委托设置", control_type="ListItem")
+   |    | 
+   |    | ListItem - '期权设置'    (L3281, T254, R3390, B274)
+   |    | ['期权设置ListItem', 'ListItem2', '期权设置']
+   |    | child_window(title="期权设置", control_type="ListItem")
+   |    | 
+   |    | ListItem - '自动拆单设置'    (L3281, T274, R3390, B294)
+   |    | ['自动拆单设置ListItem', 'ListItem3', '自动拆单设置']
+   |    | child_window(title="自动拆单设置", control_type="ListItem")
+   |    | 
+   |    | ListItem - '自动追单设置'    (L3281, T294, R3390, B314)
+   |    | ['ListItem4', '自动追单设置ListItem', '自动追单设置']
+   |    | child_window(title="自动追单设置", control_type="ListItem")
+   |    | 
+   |    | ListItem - '快捷设置'    (L3281, T314, R3390, B334)
+   |    | ['快捷设置ListItem', 'ListItem5', '快捷设置']
+   |    | child_window(title="快捷设置", control_type="ListItem")
+   |    | 
+   |    | ListItem - '键盘下单设置'    (L3281, T334, R3390, B354)
+   |    | ['键盘下单设置ListItem', '键盘下单设置', 'ListItem6']
+   |    | child_window(title="键盘下单设置", control_type="ListItem")
+   |    | 
+   |    | ListItem - '价格提醒设置'    (L3281, T354, R3390, B374)
+   |    | ['价格提醒设置', '价格提醒设置ListItem', 'ListItem7']
+   |    | child_window(title="价格提醒设置", control_type="ListItem")
+   | 
+   | Image - ''    (L3394, T254, R3919, B629)
+   | ['默认下单条件：Image', 'Image', 'Image0', 'Image1']
+   | child_window(auto_id="2292", control_type="Image")
+   | 
+   | Button - '恢复默认'    (L3788, T635, R3851, B658)
+   | ['恢复默认', 'Button4', '恢复默认Button']
+   | child_window(title="恢复默认", auto_id="2239", control_type="Button")
+   | 
+   | Static - '中国领先的实时金融平台'    (L3287, T642, R3532, B654)
+   | ['Static', '中国领先的实时金融平台', '中国领先的实时金融平台Static', '中国领先的实时金融平台0', '中国领先的实时金融平台1', 'Static0', 'Static1']
+   | child_window(title="中国领先的实时金融平台", auto_id="2462", control_type="Text")
+   | 
+   | Image - '中国领先的实时金融平台'    (L3395, T233, R3922, B253)
+   | ['中国领先的实时金融平台Image', '中国领先的实时金融平台2', 'Image2']
+   | child_window(title="中国领先的实时金融平台", auto_id="2293", control_type="Image")
+   | 
+   | Static - '默认下单条件：'    (L3413, T281, R3499, B293)
+   | ['Static2', '默认下单条件：Static', '默认下单条件：']
+   | child_window(title="默认下单条件：", auto_id="2333", control_type="Text")
+   | 
+   | Static - '上证期权'    (L3505, T260, R3555, B272)
+   | ['Static3', '上证期权Static', '上证期权']
+   | child_window(title="上证期权", auto_id="2334", control_type="Text")
+   | 
+   | Static - '深证期权'    (L3586, T260, R3636, B272)
+   | ['Static4', '深证期权', '深证期权Static']
+   | child_window(title="深证期权", auto_id="2337", control_type="Text")
+   | 
+   | Static - '中金期货'    (L3812, T260, R3862, B272)
+   | ['Static5', '中金期货Static', '中金期货', '中金期货0', '中金期货1', '中金期货Static0', '中金期货Static1']
+   | child_window(title="中金期货", auto_id="2329", control_type="Text")
+   | 
+   | ComboBox - '中金期货'    (L3505, T278, R3577, B298)
+   | ['ComboBox', '中金期货ComboBox', '中金期货2', 'ComboBox0', 'ComboBox1', '中金期货ComboBox0', '中金期货ComboBox1']
+   | child_window(title="中金期货", auto_id="2086", control_type="ComboBox")
+   |    | 
+   |    | Static - '中金期货'    (L6, T6, R104, B34)
+   |    | ['Static6', '中金期货Static2', '中金期货3']
+   |    | child_window(title="中金期货", control_type="Text")
+   |    | 
+   |    | Button - '打开'    (L3558, T280, R3575, B296)
+   |    | ['打开', '打开Button', 'Button5', '打开0', '打开1', '打开Button0', '打开Button1']
+   |    | child_window(title="打开", auto_id="DropDown", control_type="Button")
+   | 
+   | ComboBox - ''    (L3583, T278, R3651, B298)
+   | ['ComboBox钱龙模拟期权宝 \u3000\u3000当前账号 | 期权：20241216003(20241216003)', 'ComboBox委托设置测试', 'ComboBoxpywinauto.txt - 记事本', 'ComboBox委托设置测试报告_20260707_134705.txt - 记事本', 'ComboBox总结', 'ComboBoxQwen Studio - Google Chrome', 'ComboBoxv2rayN - V7.22.5 - X64 - 以管理员身份运行', 'ComboBoxreports', 'ComboBoxWindows Photo Viewer', 'ComboBox任务栏', 'ComboBoxAdministrator', 'ComboBoxProgram Manager', '深证期权ComboBox', 'ComboBox获取组件.py - 学习pywinauto - CodeBuddy CN [管理员]', 'ComboBox2', 'ComboBox交易系统设置', 'ComboBox委托设置_测试.py - 6.GUI模块化 - CodeBuddy CN [管理员]', 'ComboBoxNVIDIA GeForce Overlay', 'ComboBox钱龙模拟期权宝 \u3000\u3000当前账号 | 期权：20241216003(20241216003)0', 'ComboBox钱龙模拟期权宝 \u3000\u3000当前账号 | 期权：20241216003(20241216003)1', 'ComboBox委托设置测试0', 'ComboBox委托设置测试1', 'ComboBoxpywinauto.txt - 记事本0', 'ComboBoxpywinauto.txt - 记事本1', 'ComboBox委托设置测试报告_20260707_134705.txt - 记事本0', 'ComboBox委托设置测试报告_20260707_134705.txt - 记事本1', 'ComboBox总结0', 'ComboBox总结1', 'ComboBoxQwen Studio - Google Chrome0', 'ComboBoxQwen Studio - Google Chrome1', 'ComboBoxv2rayN - V7.22.5 - X64 - 以管理员身份运行0', 'ComboBoxv2rayN - V7.22.5 - X64 - 以管理员身份运行1', 'ComboBoxreports0', 'ComboBoxreports1', 'ComboBoxWindows Photo Viewer0', 'ComboBoxWindows Photo Viewer1', 'ComboBox任务栏0', 'ComboBox任务栏1', 'ComboBoxAdministrator0', 'ComboBoxAdministrator1', 'ComboBoxProgram Manager0', 'ComboBoxProgram Manager1', 'ComboBox获取组件.py - 学习pywinauto - CodeBuddy CN [管理员]0', 'ComboBox获取组件.py - 学习pywinauto - CodeBuddy CN [管理员]1', 'ComboBox交易系统设置0', 'ComboBox交易系统设置1', 'ComboBox委托设置_测试.py - 6.GUI模块化 - CodeBuddy CN [管理员]0', 'ComboBox委托设置_测试.py - 6.GUI模块化 - CodeBuddy CN [管理员]1', 'ComboBoxNVIDIA GeForce Overlay0', 'ComboBoxNVIDIA GeForce Overlay1']
+   | child_window(auto_id="2087", control_type="ComboBox")
+   |    | 
+   |    | Static - ''    (L6, T6, R96, B34)
+   |    | ['Static7']
+   |    | 
+   |    | Button - '打开'    (L3632, T280, R3649, B296)
+   |    | ['打开2', '打开Button2', 'Button6']
+   |    | child_window(title="打开", auto_id="DropDown", control_type="Button")
+   | 
+   | ComboBox - ''    (L3812, T278, R3883, B298)
+   | ['ComboBox钱龙模拟期权宝 \u3000\u3000当前账号 | 期权：20241216003(20241216003)2', 'ComboBox委托设置测试2', 'ComboBoxpywinauto.txt - 记事本2', 'ComboBox委托设置测试报告_20260707_134705.txt - 记事本2', '中金期货ComboBox2', 'ComboBox总结2', 'ComboBoxQwen Studio - Google Chrome2', 'ComboBoxv2rayN - V7.22.5 - X64 - 以管理员身份运行2', 'ComboBoxreports2', 'ComboBoxWindows Photo Viewer2', 'ComboBox任务栏2', 'ComboBoxAdministrator2', 'ComboBoxProgram Manager2', 'ComboBox获取组件.py - 学习pywinauto - CodeBuddy CN [管理员]2', 'ComboBox3', 'ComboBox交易系统设置2', 'ComboBox委托设置_测试.py - 6.GUI模块化 - CodeBuddy CN [管理员]2', 'ComboBoxNVIDIA GeForce Overlay2']
+   | child_window(auto_id="2083", control_type="ComboBox")
+   |    | 
+   |    | Static - ''    (L6, T6, R102, B34)
+   |    | ['Static8']
+   |    | 
+   |    | Button - '打开'    (L3864, T280, R3881, B296)
+   |    | ['打开3', '打开Button3', 'Button7']
+   |    | child_window(title="打开", auto_id="DropDown", control_type="Button")
+   | 
+   | Static - '回报信息提示：'    (L3413, T308, R3499, B320)
+   | ['Static9', '回报信息提示：', '回报信息提示：Static', '回报信息提示：0', '回报信息提示：1', '回报信息提示：Static0', '回报信息提示：Static1']
+   | child_window(title="回报信息提示：", auto_id="2397", control_type="Text")
+   | 
+   | ComboBox - '回报信息提示：'    (L3505, T305, R3604, B325)
+   | ['ComboBox4', '回报信息提示：ComboBox', '回报信息提示：2']
+   | child_window(title="回报信息提示：", auto_id="2102", control_type="ComboBox")
+   |    | 
+   |    | Static - '回报信息提示：'    (L6, T6, R158, B34)
+   |    | ['Static10', '回报信息提示：3', '回报信息提示：Static2']
+   |    | child_window(title="回报信息提示：", control_type="Text")
+   |    | 
+   |    | Button - '打开'    (L3585, T307, R3602, B323)
+   |    | ['打开4', '打开Button4', 'Button8']
+   |    | child_window(title="打开", auto_id="DropDown", control_type="Button")
+   | 
+   | Static - '虚实度阀值：'    (L3413, T335, R3499, B347)
+   | ['Static11', '虚实度阀值：Static', '虚实度阀值：']
+   | child_window(title="虚实度阀值：", auto_id="2477", control_type="Text")
+   | 
+   | Edit - '虚实度阀值：'    (L3505, T332, R3588, B350)
+   | ['虚实度阀值：Edit', 'Edit', 'Edit0', 'Edit1']
+   | child_window(title="虚实度阀值：", auto_id="2206", control_type="Edit")
+   | 
+   | UpDown - 'Spin1'    (L3586, T332, R3604, B350)
+   | ['Spin1', 'Spin1UpDown', 'UpDown', 'UpDown0', 'UpDown1']
+   | child_window(title="Spin1", auto_id="2283", control_type="Spinner")
+   |    | 
+   |    | Button - '多'    (L3586, T332, R3604, B341)
+   |    | ['多Button', 'Button9', '多', '多Button0', '多Button1', '多0', '多1']
+   |    | child_window(title="多", auto_id="MoreButton", control_type="Button")
+   |    | 
+   |    | Button - '少'    (L3586, T341, R3604, B350)
+   |    | ['少', '少Button', 'Button10', '少0', '少1', '少Button0', '少Button1']
+   |    | child_window(title="少", auto_id="LessButton", control_type="Button")
+   | 
+   | Static - '%'    (L3608, T333, R3620, B345)
+   | ['Static12', '%', '%Static']
+   | child_window(title="%", auto_id="2478", control_type="Text")
+   | 
+   | Static - '默认平仓顺序：'    (L3724, T335, R3808, B347)
+   | ['Static13', '默认平仓顺序：Static', '默认平仓顺序：', '默认平仓顺序：0', '默认平仓顺序：1', '默认平仓顺序：Static0', '默认平仓顺序：Static1']
+   | child_window(title="默认平仓顺序：", auto_id="2330", control_type="Text")
+   | 
+   | ComboBox - '默认平仓顺序：'    (L3815, T332, R3914, B352)
+   | ['ComboBox5', '默认平仓顺序：ComboBox', '默认平仓顺序：2']
+   | child_window(title="默认平仓顺序：", auto_id="2082", control_type="ComboBox")
+   |    | 
+   |    | Static - '默认平仓顺序：'    (L6, T6, R158, B34)
+   |    | ['Static14', '默认平仓顺序：Static2', '默认平仓顺序：3']
+   |    | child_window(title="默认平仓顺序：", control_type="Text")
+   |    | 
+   |    | Button - '打开'    (L3895, T334, R3912, B350)
+   |    | ['打开5', '打开Button5', 'Button11']
+   |    | child_window(title="打开", auto_id="DropDown", control_type="Button")
+   | 
+   | Static - '持仓过滤设置：'    (L3413, T360, R3499, B372)
+   | ['Static15', '持仓过滤设置：', '持仓过滤设置：Static', '持仓过滤设置：0', '持仓过滤设置：1', '持仓过滤设置：Static0', '持仓过滤设置：Static1']
+   | child_window(title="持仓过滤设置：", auto_id="2384", control_type="Text")
+   | 
+   | ComboBox - '持仓过滤设置：'    (L3505, T357, R3661, B377)
+   | ['ComboBox6', '持仓过滤设置：2', '持仓过滤设置：ComboBox']
+   | child_window(title="持仓过滤设置：", auto_id="2097", control_type="ComboBox")
+   |    | 
+   |    | Static - '持仓过滤设置：'    (L6, T6, R272, B34)
+   |    | ['Static16', '持仓过滤设置：3', '持仓过滤设置：Static2']
+   |    | child_window(title="持仓过滤设置：", control_type="Text")
+   |    | 
+   |    | Button - '打开'    (L3642, T359, R3659, B375)
+   |    | ['打开6', '打开Button6', 'Button12']
+   |    | child_window(title="打开", auto_id="DropDown", control_type="Button")
+   | 
+   | CheckBox - '记录上一次标的/月份过滤状态'    (L3724, T359, R3910, B374)
+   | ['记录上一次标的/月份过滤状态', 'CheckBox', '记录上一次标的/月份过滤状态CheckBox', 'CheckBox0', 'CheckBox1']
+   | child_window(title="记录上一次标的/月份过滤状态", auto_id="2048", control_type="CheckBox")
+   | 
+   | Static - '（收到回报时是否显示浮动提示信息）'    (L3610, T309, R3814, B321)
+   | ['Static17', '（收到回报时是否显示浮动提示信息）Static', '（收到回报时是否显示浮动提示信息）']
+   | child_window(title="（收到回报时是否显示浮动提示信息）", auto_id="2398", control_type="Text")
+   | 
+   | CheckBox - '启用费用扣减'    (L3413, T515, R3509, B530)
+   | ['CheckBox2', '启用费用扣减CheckBox', '启用费用扣减']
+   | child_window(title="启用费用扣减", auto_id="2031", control_type="CheckBox")
+   | 
+   | Static - '此费用为预估费用，实际费用请参考对账单中的费用'    (L3529, T515, R3807, B527)
+   | ['Static18', '此费用为预估费用，实际费用请参考对账单中的费用Static', '此费用为预估费用，实际费用请参考对账单中的费用']
+   | child_window(title="此费用为预估费用，实际费用请参考对账单中的费用", auto_id="2366", control_type="Text")
+   | 
+   | Static - '开仓费用：'    (L3430, T542, R3492, B554)
+   | ['Static19', '开仓费用：', '开仓费用：Static']
+   | child_window(title="开仓费用：", auto_id="2379", control_type="Text")
+   | 
+   | Edit - '开仓费用：'    (L3491, T537, R3551, B561)
+   | ['开仓费用：Edit', 'Edit2']
+   | child_window(title="开仓费用：", auto_id="2168", control_type="Edit")
+   | 
+   | Static - '元/张'    (L3554, T542, R3586, B554)
+   | ['Static20', '元/张', '元/张Static', '元/张0', '元/张1', '元/张Static0', '元/张Static1']
+   | child_window(title="元/张", auto_id="2362", control_type="Text")
+   | 
+   | Static - '平仓费用：'    (L3592, T542, R3654, B554)
+   | ['Static21', '平仓费用：Static', '平仓费用：']
+   | child_window(title="平仓费用：", auto_id="2319", control_type="Text")
+   | 
+   | Edit - '平仓费用：'    (L3653, T537, R3713, B561)
+   | ['平仓费用：Edit', 'Edit3']
+   | child_window(title="平仓费用：", auto_id="2155", control_type="Edit")
+   | 
+   | Static - '元/张'    (L3716, T542, R3748, B554)
+   | ['Static22', '元/张2', '元/张Static2']
+   | child_window(title="元/张", auto_id="2363", control_type="Text")
+   | 
+   | Static - '行权费用：'    (L3754, T542, R3816, B554)
+   | ['Static23', '行权费用：', '行权费用：Static']
+   | child_window(title="行权费用：", auto_id="2346", control_type="Text")
+   | 
+   | Edit - '行权费用：'    (L3815, T537, R3875, B561)
+   | ['行权费用：Edit', 'Edit4']
+   | child_window(title="行权费用：", auto_id="2162", control_type="Edit")
+   | 
+   | Static - '元/张'    (L3881, T542, R3913, B554)
+   | ['Static24', '元/张3', '元/张Static3']
+   | child_window(title="元/张", auto_id="2365", control_type="Text")
+   | 
+   | CheckBox - '卖出开仓不收取'    (L3430, T566, R3538, B581)
+   | ['CheckBox3', '卖出开仓不收取', '卖出开仓不收取CheckBox']
+   | child_window(title="卖出开仓不收取", auto_id="2054", control_type="CheckBox")
+   | 
+   | RadioButton - '智能收取'    (L3433, T606, R3501, B621)
+   | ['智能收取', 'RadioButton', '智能收取RadioButton', 'RadioButton0', 'RadioButton1']
+   | child_window(title="智能收取", auto_id="2220", control_type="RadioButton")
+   | 
+   | RadioButton - '开仓+行权收取'    (L3569, T606, R3667, B621)
+   | ['开仓+行权收取RadioButton', 'RadioButton2', '开仓+行权收取']
+   | child_window(title="开仓+行权收取", auto_id="2221", control_type="RadioButton")
+   | 
+   | RadioButton - '开平仓双向收取'    (L3713, T606, R3820, B621)
+   | ['RadioButton3', '开平仓双向收取', '开平仓双向收取RadioButton']
+   | child_window(title="开平仓双向收取", auto_id="2222", control_type="RadioButton")
+   | 
+   | Static - '(说明)'    (L3500, T606, R3538, B621)
+   | ['Static25', '(说明)', '(说明)Static', '(说明)0', '(说明)1']
+   | child_window(title="(说明)", auto_id="2347", control_type="Text")
+   | 
+   | Image - '(说明)'    (L3430, T594, R3458, B596)
+   | ['(说明)2', 'Image3', '(说明)Image']
+   | child_window(title="(说明)", control_type="Image")
+   | 
+   | Static - '扣减方式'    (L3464, T588, R3514, B600)
+   | ['Static26', '扣减方式Static', '扣减方式', '扣减方式0', '扣减方式1']
+   | child_window(title="扣减方式", auto_id="2348", control_type="Text")
+   | 
+   | Image - '扣减方式'    (L3515, T594, R3905, B596)
+   | ['Image4', '扣减方式2', '扣减方式Image']
+   | child_window(title="扣减方式", control_type="Image")
+   | 
+   | Image - ''    (L3395, T506, R3917, B508)
+   | ['反手指令设置Image', 'Image5']
+   | 
+   | Static - '止盈止损单默认有效期：'    (L3413, T386, R3548, B398)
+   | ['Static27', '止盈止损单默认有效期：Static', '止盈止损单默认有效期：', '止盈止损单默认有效期：0', '止盈止损单默认有效期：1', '止盈止损单默认有效期：Static0', '止盈止损单默认有效期：Static1']
+   | child_window(title="止盈止损单默认有效期：", auto_id="2455", control_type="Text")
+   | 
+   | ComboBox - '止盈止损单默认有效期：'    (L3545, T383, R3637, B403)
+   | ['ComboBox7', '止盈止损单默认有效期：ComboBox', '止盈止损单默认有效期：2']
+   | child_window(title="止盈止损单默认有效期：", auto_id="2121", control_type="ComboBox")
+   |    | 
+   |    | Static - '止盈止损单默认有效期：'    (L6, T6, R144, B34)
+   |    | ['Static28', '止盈止损单默认有效期：Static2', '止盈止损单默认有效期：3']
+   |    | child_window(title="止盈止损单默认有效期：", control_type="Text")
+   |    | 
+   |    | Button - '打开'    (L3618, T385, R3635, B401)
+   |    | ['打开7', '打开Button7', 'Button13']
+   |    | child_window(title="打开", auto_id="DropDown", control_type="Button")
+   | 
+   | Static - '止盈止损按照'    (L3664, T387, R3736, B399)
+   | ['Static29', '止盈止损按照Static', '止盈止损按照', '止盈止损按照0', '止盈止损按照1', '止盈止损按照Static0', '止盈止损按照Static1']
+   | child_window(title="止盈止损按照", auto_id="2387", control_type="Text")
+   | 
+   | ComboBox - '止盈止损按照'    (L3740, T384, R3824, B404)
+   | ['ComboBox8', '止盈止损按照ComboBox', '止盈止损按照2']
+   | child_window(title="止盈止损按照", auto_id="2099", control_type="ComboBox")
+   |    | 
+   |    | Static - '止盈止损按照'    (L6, T6, R128, B34)
+   |    | ['Static30', '止盈止损按照Static2', '止盈止损按照3']
+   |    | child_window(title="止盈止损按照", control_type="Text")
+   |    | 
+   |    | Button - '打开'    (L3805, T386, R3822, B402)
+   |    | ['打开8', '打开Button8', 'Button14']
+   |    | child_window(title="打开", auto_id="DropDown", control_type="Button")
+   | 
+   | Static - '发出委托'    (L3866, T389, R3916, B401)
+   | ['Static31', '发出委托Static', '发出委托']
+   | child_window(title="发出委托", auto_id="2388", control_type="Text")
+   | 
+   | CheckBox - 'FOK'    (L3827, T386, R3866, B404)
+   | ['CheckBox4', 'FOKCheckBox', 'FOK']
+   | child_window(title="FOK", auto_id="2033", control_type="CheckBox")
+   | 
+   | Static - '反手指令设置'    (L3413, T486, R3487, B498)
+   | ['Static32', '反手指令设置', '反手指令设置Static']
+   | child_window(title="反手指令设置", auto_id="2480", control_type="Text")
+   | 
+   | RadioButton - '按权利/义务'    (L3503, T485, R3593, B500)
+   | ['按权利/义务', 'RadioButton4', '按权利/义务RadioButton']
+   | child_window(title="按权利/义务", auto_id="2237", control_type="RadioButton")
+   | 
+   | RadioButton - '按认购/认沽'    (L3587, T485, R3674, B500)
+   | ['按认购/认沽', '按认购/认沽RadioButton', 'RadioButton5']
+   | child_window(title="按认购/认沽", auto_id="2235", control_type="RadioButton")
+   | 
+   | Static - '商品/股指期权'    (L3658, T260, R3744, B272)
+   | ['Static33', '商品/股指期权', '商品/股指期权Static', '商品/股指期权0', '商品/股指期权1', '商品/股指期权Static0', '商品/股指期权Static1']
+   | child_window(title="商品/股指期权", auto_id="2332", control_type="Text")
+   | 
+   | ComboBox - '商品/股指期权'    (L3658, T278, R3730, B298)
+   | ['ComboBox9', '商品/股指期权ComboBox', '商品/股指期权2']
+   | child_window(title="商品/股指期权", auto_id="2085", control_type="ComboBox")
+   |    | 
+   |    | Static - '商品/股指期权'    (L6, T6, R104, B34)
+   |    | ['Static34', '商品/股指期权3', '商品/股指期权Static2']
+   |    | child_window(title="商品/股指期权", control_type="Text")
+   |    | 
+   |    | Button - '打开'    (L3711, T280, R3728, B296)
+   |    | ['打开9', '打开Button9', 'Button15']
+   |    | child_window(title="打开", auto_id="DropDown", control_type="Button")
+   | 
+   | Static - '商品期货'    (L3739, T260, R3789, B272)
+   | ['Static35', '商品期货Static', '商品期货', '商品期货0', '商品期货1', '商品期货Static0', '商品期货Static1']
+   | child_window(title="商品期货", auto_id="2331", control_type="Text")
+   | 
+   | ComboBox - '商品期货'    (L3736, T278, R3808, B298)
+   | ['ComboBox10', '商品期货2', '商品期货ComboBox']
+   | child_window(title="商品期货", auto_id="2084", control_type="ComboBox")
+   |    | 
+   |    | Static - '商品期货'    (L6, T6, R104, B34)
+   |    | ['Static36', '商品期货Static2', '商品期货3']
+   |    | child_window(title="商品期货", control_type="Text")
+   |    | 
+   |    | Button - '打开'    (L3789, T280, R3806, B296)
+   |    | ['打开10', '打开Button10', 'Button16']
+   |    | child_window(title="打开", auto_id="DropDown", control_type="Button")
+   | 
+   | Button - '超价参数'    (L3829, T306, R3907, B329)
+   | ['Button17', '超价参数Button', '超价参数']
+   | child_window(title="超价参数", auto_id="2007", control_type="Button")
+   | 
+   | Static - '自成交检查'    (L3413, T462, R3475, B474)
+   | ['Static37', '自成交检查', '自成交检查Static']
+   | child_window(title="自成交检查", auto_id="2318", control_type="Text")
+   | 
+   | RadioButton - '关闭'    (L3503, T462, R3551, B477)
+   | ['关闭', 'RadioButton6', '关闭RadioButton', '关闭0', '关闭1', '关闭RadioButton0', '关闭RadioButton1']
+   | child_window(title="关闭", auto_id="2230", control_type="RadioButton")
+   | 
+   | RadioButton - '开启'    (L3587, T462, R3635, B477)
+   | ['开启', 'RadioButton7', '开启RadioButton', '开启0', '开启1', '开启RadioButton0', '开启RadioButton1']
+   | child_window(title="开启", auto_id="2228", control_type="RadioButton")
+   | 
+   | Static - '委托定时查询'    (L3709, T462, R3783, B474)
+   | ['Static38', '委托定时查询', '委托定时查询Static']
+   | child_window(title="委托定时查询", auto_id="2466", control_type="Text")
+   | 
+   | RadioButton - '关闭'    (L3790, T461, R3838, B476)
+   | ['关闭2', 'RadioButton8', '关闭RadioButton2']
+   | child_window(title="关闭", auto_id="2231", control_type="RadioButton")
+   | 
+   | RadioButton - '开启'    (L3865, T461, R3913, B476)
+   | ['开启2', 'RadioButton9', '开启RadioButton2']
+   | child_window(title="开启", auto_id="2236", control_type="RadioButton")
+   | 
+   | CheckBox - '合约'    (L3413, T413, R3458, B428)
+   | ['合约CheckBox', 'CheckBox5', '合约']
+   | child_window(title="合约", auto_id="2482", control_type="CheckBox")
+   | 
+   | Edit - ''    (L3461, T410, R3495, B431)
+   | ['止盈止损单默认有效期：Edit', 'Edit5']
+   | child_window(auto_id="2483", control_type="Edit")
+   | 
+   | UpDown - ''    (L3493, T410, R3511, B431)
+   | ['持仓过滤设置：UpDown', 'UpDown2']
+   | child_window(auto_id="2241", control_type="Spinner")
+   |    | 
+   |    | Button - '多'    (L3493, T410, R3511, B420)
+   |    | ['多Button2', 'Button18', '多2']
+   |    | child_window(title="多", auto_id="MoreButton", control_type="Button")
+   |    | 
+   |    | Button - '少'    (L3493, T420, R3511, B431)
+   |    | ['少2', '少Button2', 'Button19']
+   |    | child_window(title="少", auto_id="LessButton", control_type="Button")
+   | 
+   | Static - '日内到期提醒'    (L3517, T414, R3613, B426)
+   | ['Static39', '日内到期提醒', '日内到期提醒Static']
+   | child_window(title="日内到期提醒", auto_id="2485", control_type="Text")
+   | 
+   | CheckBox - '卖出平仓所得无法覆盖成本时提醒'    (L3413, T437, R3647, B452)
+   | ['CheckBox6', '卖出平仓所得无法覆盖成本时提醒', '卖出平仓所得无法覆盖成本时提醒CheckBox']
+   | child_window(title="卖出平仓所得无法覆盖成本时提醒", auto_id="2484", control_type="CheckBox")
+   | 
+   | TitleBar - ''    (L3278, T208, R3922, B231)
+   | ['TitleBar']
+   |    | 
+   |    | Button - '关闭'    (L3889, T206, R3923, B231)
+   |    | ['关闭3', 'Button20', '关闭Button']
+   |    | child_window(title="关闭", control_type="Button")

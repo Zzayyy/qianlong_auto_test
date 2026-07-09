@@ -1,0 +1,414 @@
+Control Identifiers:
+
+Dialog - '交易系统设置'    (L3265, T204, R3915, B664)
+['Dialog', '交易系统设置Dialog', '交易系统设置']
+child_window(title="交易系统设置", control_type="Window")
+   | 
+   | Button - '确定'    (L3646, T634, R3709, B657)
+   | ['确定', '确定Button', 'Button', 'Button0', 'Button1']
+   | child_window(title="确定", auto_id="1", control_type="Button")
+   | 
+   | Button - '取消'    (L3712, T634, R3775, B657)
+   | ['取消', '取消Button', 'Button2']
+   | child_window(title="取消", auto_id="2", control_type="Button")
+   | 
+   | Button - '应用'    (L3844, T634, R3907, B657)
+   | ['应用Button', '应用', 'Button3']
+   | child_window(title="应用", auto_id="2001", control_type="Button")
+   | 
+   | ListBox - ''    (L3270, T232, R3381, B628)
+   | ['ListBox']
+   | child_window(auto_id="2210", control_type="List")
+   |    | 
+   |    | ListItem - '委托设置'    (L3271, T233, R3380, B253)
+   |    | ['ListItem', '委托设置ListItem', '委托设置', 'ListItem0', 'ListItem1']
+   |    | child_window(title="委托设置", control_type="ListItem")
+   |    | 
+   |    | ListItem - '期权设置'    (L3271, T253, R3380, B273)
+   |    | ['ListItem2', '期权设置', '期权设置ListItem']
+   |    | child_window(title="期权设置", control_type="ListItem")
+   |    | 
+   |    | ListItem - '自动拆单设置'    (L3271, T273, R3380, B293)
+   |    | ['ListItem3', '自动拆单设置ListItem', '自动拆单设置']
+   |    | child_window(title="自动拆单设置", control_type="ListItem")
+   |    | 
+   |    | ListItem - '自动追单设置'    (L3271, T293, R3380, B313)
+   |    | ['ListItem4', '自动追单设置ListItem', '自动追单设置']
+   |    | child_window(title="自动追单设置", control_type="ListItem")
+   |    | 
+   |    | ListItem - '快捷设置'    (L3271, T313, R3380, B333)
+   |    | ['ListItem5', '快捷设置', '快捷设置ListItem']
+   |    | child_window(title="快捷设置", control_type="ListItem")
+   |    | 
+   |    | ListItem - '键盘下单设置'    (L3271, T333, R3380, B353)
+   |    | ['ListItem6', '键盘下单设置', '键盘下单设置ListItem']
+   |    | child_window(title="键盘下单设置", control_type="ListItem")
+   |    | 
+   |    | ListItem - '价格提醒设置'    (L3271, T353, R3380, B373)
+   |    | ['ListItem7', '价格提醒设置ListItem', '价格提醒设置']
+   |    | child_window(title="价格提醒设置", control_type="ListItem")
+   | 
+   | Image - ''    (L3384, T253, R3909, B628)
+   | ['限价：Image', 'Image', 'Image0', 'Image1']
+   | child_window(auto_id="2292", control_type="Image")
+   | 
+   | Button - '恢复默认'    (L3778, T634, R3841, B657)
+   | ['恢复默认Button', '恢复默认', 'Button4']
+   | child_window(title="恢复默认", auto_id="2239", control_type="Button")
+   | 
+   | Static - '中国领先的实时金融平台'    (L3277, T641, R3522, B653)
+   | ['中国领先的实时金融平台Static', '中国领先的实时金融平台', 'Static', '中国领先的实时金融平台0', '中国领先的实时金融平台1', 'Static0', 'Static1']
+   | child_window(title="中国领先的实时金融平台", auto_id="2462", control_type="Text")
+   | 
+   | Image - '中国领先的实时金融平台'    (L3385, T232, R3912, B252)
+   | ['中国领先的实时金融平台Image', '中国领先的实时金融平台2', 'Image2']
+   | child_window(title="中国领先的实时金融平台", auto_id="2293", control_type="Image")
+   | 
+   | Image - ''    (L3396, T262, R3928, B264)
+   | ['Image3']
+   | 
+   | Image - ''    (L3396, T436, R3924, B438)
+   | ['Image4', '市价：Image']
+   | 
+   | CheckBox - '随机拆单'    (L3399, T275, R3471, B290)
+   | ['随机拆单CheckBox', 'CheckBox', '随机拆单', 'CheckBox0', 'CheckBox1']
+   | child_window(title="随机拆单", auto_id="2046", control_type="CheckBox")
+   | 
+   | CheckBox - '固定拆单'    (L3399, T451, R3471, B466)
+   | ['CheckBox2', '固定拆单', '固定拆单CheckBox']
+   | child_window(title="固定拆单", auto_id="2032", control_type="CheckBox")
+   | 
+   | Static - '限价：'    (L3399, T304, R3437, B316)
+   | ['限价：', '限价：Static', 'Static2', '限价：0', '限价：1', '限价：Static0', '限价：Static1']
+   | child_window(title="限价：", auto_id="2300", control_type="Text")
+   | 
+   | Static - '市价：'    (L3399, T370, R3437, B382)
+   | ['市价：Static', '市价：', 'Static3', '市价：Static0', '市价：Static1', '市价：0', '市价：1']
+   | child_window(title="市价：", auto_id="2311", control_type="Text")
+   | 
+   | Static - '限价：'    (L3399, T478, R3437, B490)
+   | ['限价：2', '限价：Static2', 'Static4']
+   | child_window(title="限价：", auto_id="2316", control_type="Text")
+   | 
+   | Static - '市价：'    (L3399, T541, R3437, B553)
+   | ['市价：Static2', '市价：2', 'Static5']
+   | child_window(title="市价：", auto_id="2322", control_type="Text")
+   | 
+   | Static - '如果下单张数大于'    (L3436, T304, R3534, B316)
+   | ['Static6', '如果下单张数大于Static', '如果下单张数大于', '如果下单张数大于Static0', '如果下单张数大于Static1', '如果下单张数大于0', '如果下单张数大于1']
+   | child_window(title="如果下单张数大于", auto_id="2422", control_type="Text")
+   | 
+   | Edit - '如果下单张数大于'    (L3535, T299, R3592, B320)
+   | ['Edit', '如果下单张数大于Edit', 'Edit0', 'Edit1', '如果下单张数大于Edit0', '如果下单张数大于Edit1']
+   | child_window(title="如果下单张数大于", auto_id="2199", control_type="Edit")
+   | 
+   | UpDown - ''    (L3589, T299, R3606, B320)
+   | ['如果下单张数大于UpDown', 'UpDown', 'UpDown0', 'UpDown1', '如果下单张数大于UpDown0', '如果下单张数大于UpDown1']
+   | child_window(auto_id="2279", control_type="Spinner")
+   |    | 
+   |    | Button - '多'    (L3589, T299, R3606, B309)
+   |    | ['多Button', 'Button5', '多', '多Button0', '多Button1', '多0', '多1']
+   |    | child_window(title="多", auto_id="MoreButton", control_type="Button")
+   |    | 
+   |    | Button - '少'    (L3589, T309, R3606, B320)
+   |    | ['少', '少Button', 'Button6', '少0', '少1', '少Button0', '少Button1']
+   |    | child_window(title="少", auto_id="LessButton", control_type="Button")
+   | 
+   | Static - '张时，以最少'    (L3610, T304, R3684, B316)
+   | ['Static7', '张时，以最少Static', '张时，以最少', '张时，以最少Static0', '张时，以最少Static1', '张时，以最少0', '张时，以最少1']
+   | child_window(title="张时，以最少", auto_id="2423", control_type="Text")
+   | 
+   | Edit - '张时，以最少'    (L3684, T299, R3738, B320)
+   | ['Edit2', '张时，以最少Edit', '张时，以最少Edit0', '张时，以最少Edit1']
+   | child_window(title="张时，以最少", auto_id="2189", control_type="Edit")
+   | 
+   | UpDown - ''    (L3736, T299, R3753, B320)
+   | ['张时，以最少UpDown', 'UpDown2', '张时，以最少UpDown0', '张时，以最少UpDown1']
+   | child_window(auto_id="2267", control_type="Spinner")
+   |    | 
+   |    | Button - '多'    (L3736, T299, R3753, B309)
+   |    | ['多Button2', 'Button7', '多2']
+   |    | child_window(title="多", auto_id="MoreButton", control_type="Button")
+   |    | 
+   |    | Button - '少'    (L3736, T309, R3753, B320)
+   |    | ['少2', '少Button2', 'Button8']
+   |    | child_window(title="少", auto_id="LessButton", control_type="Button")
+   | 
+   | Static - '张，最多'    (L3756, T304, R3806, B316)
+   | ['张，最多', '张，最多Static', 'Static8', '张，最多0', '张，最多1', '张，最多Static0', '张，最多Static1']
+   | child_window(title="张，最多", auto_id="2424", control_type="Text")
+   | 
+   | Edit - '张，最多'    (L3814, T299, R3874, B320)
+   | ['Edit3', '张，最多Edit', '张，最多Edit0', '张，最多Edit1']
+   | child_window(title="张，最多", auto_id="2185", control_type="Edit")
+   | 
+   | UpDown - ''    (L3873, T299, R3890, B320)
+   | ['张，最多UpDown', 'UpDown3', '张，最多UpDown0', '张，最多UpDown1']
+   | child_window(auto_id="2263", control_type="Spinner")
+   |    | 
+   |    | Button - '多'    (L3873, T299, R3890, B309)
+   |    | ['多Button3', 'Button9', '多3']
+   |    | child_window(title="多", auto_id="MoreButton", control_type="Button")
+   |    | 
+   |    | Button - '少'    (L3873, T309, R3890, B320)
+   |    | ['少3', '少Button3', 'Button10']
+   |    | child_window(title="少", auto_id="LessButton", control_type="Button")
+   | 
+   | Static - '张'    (L3892, T304, R3918, B316)
+   | ['张', '张Static', 'Static9', '张0', '张1', '张Static0', '张Static1']
+   | child_window(title="张", auto_id="2425", control_type="Text")
+   | 
+   | Static - '随机拆分，并以间隔'    (L3436, T335, R3552, B347)
+   | ['随机拆分，并以间隔', '随机拆分，并以间隔Static', 'Static10', '随机拆分，并以间隔0', '随机拆分，并以间隔1', '随机拆分，并以间隔Static0', '随机拆分，并以间隔Static1']
+   | child_window(title="随机拆分，并以间隔", auto_id="2426", control_type="Text")
+   | 
+   | Edit - '随机拆分，并以间隔'    (L3552, T331, R3609, B352)
+   | ['Edit4', '随机拆分，并以间隔Edit', '随机拆分，并以间隔Edit0', '随机拆分，并以间隔Edit1']
+   | child_window(title="随机拆分，并以间隔", auto_id="2194", control_type="Edit")
+   | 
+   | UpDown - ''    (L3607, T331, R3624, B352)
+   | ['张时，以最少UpDown2', 'UpDown4']
+   | child_window(auto_id="2272", control_type="Spinner")
+   |    | 
+   |    | Button - '多'    (L3607, T331, R3624, B341)
+   |    | ['多Button4', 'Button11', '多4']
+   |    | child_window(title="多", auto_id="MoreButton", control_type="Button")
+   |    | 
+   |    | Button - '少'    (L3607, T341, R3624, B352)
+   |    | ['少4', '少Button4', 'Button12']
+   |    | child_window(title="少", auto_id="LessButton", control_type="Button")
+   | 
+   | Static - '毫秒发出指令。'    (L3630, T335, R3722, B347)
+   | ['毫秒发出指令。', '毫秒发出指令。Static', 'Static11', '毫秒发出指令。0', '毫秒发出指令。1', '毫秒发出指令。Static0', '毫秒发出指令。Static1']
+   | child_window(title="毫秒发出指令。", auto_id="2427", control_type="Text")
+   | 
+   | Static - '如果下单张数大于'    (L3436, T370, R3534, B382)
+   | ['Static12', '如果下单张数大于Static2', '如果下单张数大于2']
+   | child_window(title="如果下单张数大于", auto_id="2428", control_type="Text")
+   | 
+   | Edit - '如果下单张数大于'    (L3535, T364, R3592, B385)
+   | ['Edit5', '如果下单张数大于Edit2']
+   | child_window(title="如果下单张数大于", auto_id="2200", control_type="Edit")
+   | 
+   | UpDown - ''    (L3589, T364, R3606, B385)
+   | ['如果下单张数大于UpDown2', 'UpDown5']
+   | child_window(auto_id="2280", control_type="Spinner")
+   |    | 
+   |    | Button - '多'    (L3589, T364, R3606, B374)
+   |    | ['多Button5', 'Button13', '多5']
+   |    | child_window(title="多", auto_id="MoreButton", control_type="Button")
+   |    | 
+   |    | Button - '少'    (L3589, T374, R3606, B385)
+   |    | ['少5', '少Button5', 'Button14']
+   |    | child_window(title="少", auto_id="LessButton", control_type="Button")
+   | 
+   | Static - '张时，以最少'    (L3610, T370, R3684, B382)
+   | ['Static13', '张时，以最少Static2', '张时，以最少2']
+   | child_window(title="张时，以最少", auto_id="2429", control_type="Text")
+   | 
+   | Edit - '张时，以最少'    (L3685, T364, R3739, B385)
+   | ['Edit6', '张时，以最少Edit2']
+   | child_window(title="张时，以最少", auto_id="2190", control_type="Edit")
+   | 
+   | UpDown - ''    (L3736, T364, R3753, B385)
+   | ['UpDown6', '毫秒发出指令。UpDown', '毫秒发出指令。UpDown0', '毫秒发出指令。UpDown1']
+   | child_window(auto_id="2268", control_type="Spinner")
+   |    | 
+   |    | Button - '多'    (L3736, T364, R3753, B374)
+   |    | ['多Button6', 'Button15', '多6']
+   |    | child_window(title="多", auto_id="MoreButton", control_type="Button")
+   |    | 
+   |    | Button - '少'    (L3736, T374, R3753, B385)
+   |    | ['少6', '少Button6', 'Button16']
+   |    | child_window(title="少", auto_id="LessButton", control_type="Button")
+   | 
+   | Static - '张，最多'    (L3757, T370, R3807, B382)
+   | ['张，最多2', '张，最多Static2', 'Static14']
+   | child_window(title="张，最多", auto_id="2430", control_type="Text")
+   | 
+   | Edit - '张，最多'    (L3814, T364, R3874, B385)
+   | ['Edit7', '张，最多Edit2']
+   | child_window(title="张，最多", auto_id="2186", control_type="Edit")
+   | 
+   | UpDown - ''    (L3874, T364, R3891, B385)
+   | ['张，最多UpDown2', 'UpDown7']
+   | child_window(auto_id="2264", control_type="Spinner")
+   |    | 
+   |    | Button - '多'    (L3874, T364, R3891, B374)
+   |    | ['多Button7', 'Button17', '多7']
+   |    | child_window(title="多", auto_id="MoreButton", control_type="Button")
+   |    | 
+   |    | Button - '少'    (L3874, T374, R3891, B385)
+   |    | ['少7', '少Button7', 'Button18']
+   |    | child_window(title="少", auto_id="LessButton", control_type="Button")
+   | 
+   | Static - '张'    (L3892, T370, R3918, B382)
+   | ['张2', '张Static2', 'Static15']
+   | child_window(title="张", auto_id="2431", control_type="Text")
+   | 
+   | Static - '随机拆分，并以间隔'    (L3436, T400, R3552, B412)
+   | ['随机拆分，并以间隔2', '随机拆分，并以间隔Static2', 'Static16']
+   | child_window(title="随机拆分，并以间隔", auto_id="2432", control_type="Text")
+   | 
+   | Edit - '随机拆分，并以间隔'    (L3553, T397, R3610, B418)
+   | ['Edit8', '随机拆分，并以间隔Edit2']
+   | child_window(title="随机拆分，并以间隔", auto_id="2195", control_type="Edit")
+   | 
+   | UpDown - ''    (L3607, T397, R3624, B418)
+   | ['张时，以最少UpDown3', 'UpDown8']
+   | child_window(auto_id="2273", control_type="Spinner")
+   |    | 
+   |    | Button - '多'    (L3607, T397, R3624, B407)
+   |    | ['多Button8', 'Button19', '多8']
+   |    | child_window(title="多", auto_id="MoreButton", control_type="Button")
+   |    | 
+   |    | Button - '少'    (L3607, T407, R3624, B418)
+   |    | ['少8', '少Button8', 'Button20']
+   |    | child_window(title="少", auto_id="LessButton", control_type="Button")
+   | 
+   | Static - '毫秒发出指令。'    (L3631, T400, R3735, B412)
+   | ['毫秒发出指令。2', '毫秒发出指令。Static2', 'Static17']
+   | child_window(title="毫秒发出指令。", auto_id="2433", control_type="Text")
+   | 
+   | Static - '如果下单张数大于'    (L3438, T479, R3536, B491)
+   | ['Static18', '如果下单张数大于Static3', '如果下单张数大于3']
+   | child_window(title="如果下单张数大于", auto_id="2434", control_type="Text")
+   | 
+   | Edit - '如果下单张数大于'    (L3537, T473, R3594, B494)
+   | ['Edit9', '如果下单张数大于Edit3']
+   | child_window(title="如果下单张数大于", auto_id="2201", control_type="Edit")
+   | 
+   | UpDown - ''    (L3594, T473, R3611, B494)
+   | ['如果下单张数大于UpDown3', 'UpDown9']
+   | child_window(auto_id="2281", control_type="Spinner")
+   |    | 
+   |    | Button - '多'    (L3594, T473, R3611, B483)
+   |    | ['多Button9', 'Button21', '多9']
+   |    | child_window(title="多", auto_id="MoreButton", control_type="Button")
+   |    | 
+   |    | Button - '少'    (L3594, T483, R3611, B494)
+   |    | ['少9', '少Button9', 'Button22']
+   |    | child_window(title="少", auto_id="LessButton", control_type="Button")
+   | 
+   | Static - '张时，以每次'    (L3612, T479, R3686, B491)
+   | ['张时，以每次Static', 'Static19', '张时，以每次', '张时，以每次Static0', '张时，以每次Static1', '张时，以每次0', '张时，以每次1']
+   | child_window(title="张时，以每次", auto_id="2435", control_type="Text")
+   | 
+   | Edit - '张时，以每次'    (L3691, T473, R3751, B494)
+   | ['Edit10', '张时，以每次Edit', '张时，以每次Edit0', '张时，以每次Edit1']
+   | child_window(title="张时，以每次", auto_id="2187", control_type="Edit")
+   | 
+   | UpDown - ''    (L3751, T473, R3768, B494)
+   | ['张时，以每次UpDown', 'UpDown10', '张时，以每次UpDown0', '张时，以每次UpDown1']
+   | child_window(auto_id="2265", control_type="Spinner")
+   |    | 
+   |    | Button - '多'    (L3751, T473, R3768, B483)
+   |    | ['多Button10', 'Button23', '多10']
+   |    | child_window(title="多", auto_id="MoreButton", control_type="Button")
+   |    | 
+   |    | Button - '少'    (L3751, T483, R3768, B494)
+   |    | ['少10', '少Button10', 'Button24']
+   |    | child_window(title="少", auto_id="LessButton", control_type="Button")
+   | 
+   | Static - '张'    (L3769, T479, R3798, B491)
+   | ['张3', '张Static3', 'Static20']
+   | child_window(title="张", auto_id="2436", control_type="Text")
+   | 
+   | Static - '间隔'    (L3438, T509, R3470, B521)
+   | ['间隔', '间隔Static', 'Static21', '间隔0', '间隔1', '间隔Static0', '间隔Static1']
+   | child_window(title="间隔", auto_id="2437", control_type="Text")
+   | 
+   | Edit - '间隔'    (L3474, T506, R3531, B527)
+   | ['Edit11', '间隔Edit', '间隔Edit0', '间隔Edit1']
+   | child_window(title="间隔", auto_id="2196", control_type="Edit")
+   | 
+   | UpDown - ''    (L3528, T506, R3545, B527)
+   | ['如果下单张数大于UpDown4', 'UpDown11']
+   | child_window(auto_id="2274", control_type="Spinner")
+   |    | 
+   |    | Button - '多'    (L3528, T506, R3545, B516)
+   |    | ['多Button11', 'Button25', '多11']
+   |    | child_window(title="多", auto_id="MoreButton", control_type="Button")
+   |    | 
+   |    | Button - '少'    (L3528, T516, R3545, B527)
+   |    | ['少11', '少Button11', 'Button26']
+   |    | child_window(title="少", auto_id="LessButton", control_type="Button")
+   | 
+   | Static - '毫秒发出指令。'    (L3552, T509, R3644, B521)
+   | ['毫秒发出指令。3', '毫秒发出指令。Static3', 'Static22']
+   | child_window(title="毫秒发出指令。", auto_id="2438", control_type="Text")
+   | 
+   | Static - '如果下单张数大于'    (L3439, T542, R3537, B554)
+   | ['Static23', '如果下单张数大于Static4', '如果下单张数大于4']
+   | child_window(title="如果下单张数大于", auto_id="2439", control_type="Text")
+   | 
+   | Edit - '如果下单张数大于'    (L3538, T538, R3595, B559)
+   | ['Edit12', '如果下单张数大于Edit4']
+   | child_window(title="如果下单张数大于", auto_id="2202", control_type="Edit")
+   | 
+   | UpDown - ''    (L3592, T538, R3609, B559)
+   | ['UpDown12', '毫秒发出指令。UpDown2']
+   | child_window(auto_id="2282", control_type="Spinner")
+   |    | 
+   |    | Button - '多'    (L3592, T538, R3609, B548)
+   |    | ['多Button12', 'Button27', '多12']
+   |    | child_window(title="多", auto_id="MoreButton", control_type="Button")
+   |    | 
+   |    | Button - '少'    (L3592, T548, R3609, B559)
+   |    | ['少12', '少Button12', 'Button28']
+   |    | child_window(title="少", auto_id="LessButton", control_type="Button")
+   | 
+   | Static - '张时，以每次'    (L3613, T542, R3687, B554)
+   | ['张时，以每次Static2', 'Static24', '张时，以每次2']
+   | child_window(title="张时，以每次", auto_id="2440", control_type="Text")
+   | 
+   | Edit - '张时，以每次'    (L3691, T538, R3751, B559)
+   | ['Edit13', '张时，以每次Edit2']
+   | child_window(title="张时，以每次", auto_id="2188", control_type="Edit")
+   | 
+   | UpDown - ''    (L3750, T538, R3767, B559)
+   | ['张时，以每次UpDown2', 'UpDown13']
+   | child_window(auto_id="2266", control_type="Spinner")
+   |    | 
+   |    | Button - '多'    (L3750, T538, R3767, B548)
+   |    | ['多Button13', 'Button29', '多13']
+   |    | child_window(title="多", auto_id="MoreButton", control_type="Button")
+   |    | 
+   |    | Button - '少'    (L3750, T548, R3767, B559)
+   |    | ['少13', '少Button13', 'Button30']
+   |    | child_window(title="少", auto_id="LessButton", control_type="Button")
+   | 
+   | Static - '张'    (L3769, T542, R3795, B554)
+   | ['张4', '张Static4', 'Static25']
+   | child_window(title="张", auto_id="2442", control_type="Text")
+   | 
+   | Static - '间隔'    (L3439, T574, R3468, B586)
+   | ['间隔2', '间隔Static2', 'Static26']
+   | child_window(title="间隔", auto_id="2443", control_type="Text")
+   | 
+   | Edit - '间隔'    (L3472, T569, R3529, B590)
+   | ['Edit14', '间隔Edit2']
+   | child_window(title="间隔", auto_id="2197", control_type="Edit")
+   | 
+   | UpDown - ''    (L3528, T569, R3545, B590)
+   | ['如果下单张数大于UpDown5', 'UpDown14']
+   | child_window(auto_id="2275", control_type="Spinner")
+   |    | 
+   |    | Button - '多'    (L3528, T569, R3545, B579)
+   |    | ['多Button14', 'Button31', '多14']
+   |    | child_window(title="多", auto_id="MoreButton", control_type="Button")
+   |    | 
+   |    | Button - '少'    (L3528, T579, R3545, B590)
+   |    | ['少14', '少Button14', 'Button32']
+   |    | child_window(title="少", auto_id="LessButton", control_type="Button")
+   | 
+   | Static - '毫秒发出指令。'    (L3552, T574, R3660, B586)
+   | ['毫秒发出指令。4', '毫秒发出指令。Static4', 'Static27']
+   | child_window(title="毫秒发出指令。", auto_id="2444", control_type="Text")
+   | 
+   | TitleBar - ''    (L3268, T207, R3912, B230)
+   | ['TitleBar']
+   |    | 
+   |    | Button - '关闭'    (L3879, T205, R3913, B230)
+   |    | ['关闭', '关闭Button', 'Button33']
+   |    | child_window(title="关闭", control_type="Button")

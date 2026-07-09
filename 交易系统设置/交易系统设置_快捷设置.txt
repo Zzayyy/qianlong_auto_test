@@ -1,0 +1,148 @@
+Control Identifiers:
+
+Dialog - '交易系统设置'    (L3265, T204, R3915, B664)
+['Dialog', '交易系统设置Dialog', '交易系统设置']
+child_window(title="交易系统设置", control_type="Window")
+   | 
+   | Button - '确定'    (L3646, T634, R3709, B657)
+   | ['确定', 'Button', '确定Button', 'Button0', 'Button1']
+   | child_window(title="确定", auto_id="1", control_type="Button")
+   | 
+   | Button - '取消'    (L3712, T634, R3775, B657)
+   | ['Button2', '取消', '取消Button']
+   | child_window(title="取消", auto_id="2", control_type="Button")
+   | 
+   | Button - '应用'    (L3844, T634, R3907, B657)
+   | ['Button3', '应用', '应用Button']
+   | child_window(title="应用", auto_id="2001", control_type="Button")
+   | 
+   | ListBox - ''    (L3270, T232, R3381, B628)
+   | ['ListBox']
+   | child_window(auto_id="2210", control_type="List")
+   |    | 
+   |    | ListItem - '委托设置'    (L3271, T233, R3380, B253)
+   |    | ['委托设置', '委托设置ListItem', 'ListItem', 'ListItem0', 'ListItem1']
+   |    | child_window(title="委托设置", control_type="ListItem")
+   |    | 
+   |    | ListItem - '期权设置'    (L3271, T253, R3380, B273)
+   |    | ['期权设置', '期权设置ListItem', 'ListItem2']
+   |    | child_window(title="期权设置", control_type="ListItem")
+   |    | 
+   |    | ListItem - '自动拆单设置'    (L3271, T273, R3380, B293)
+   |    | ['自动拆单设置ListItem', '自动拆单设置', 'ListItem3']
+   |    | child_window(title="自动拆单设置", control_type="ListItem")
+   |    | 
+   |    | ListItem - '自动追单设置'    (L3271, T293, R3380, B313)
+   |    | ['ListItem4', '自动追单设置', '自动追单设置ListItem']
+   |    | child_window(title="自动追单设置", control_type="ListItem")
+   |    | 
+   |    | ListItem - '快捷设置'    (L3271, T313, R3380, B333)
+   |    | ['快捷设置', '快捷设置ListItem', 'ListItem5']
+   |    | child_window(title="快捷设置", control_type="ListItem")
+   |    | 
+   |    | ListItem - '键盘下单设置'    (L3271, T333, R3380, B353)
+   |    | ['键盘下单设置', '键盘下单设置ListItem', 'ListItem6']
+   |    | child_window(title="键盘下单设置", control_type="ListItem")
+   |    | 
+   |    | ListItem - '价格提醒设置'    (L3271, T353, R3380, B373)
+   |    | ['价格提醒设置', '价格提醒设置ListItem', 'ListItem7']
+   |    | child_window(title="价格提醒设置", control_type="ListItem")
+   | 
+   | Image - ''    (L3384, T253, R3909, B628)
+   | ['Image', '数量Image', 'Image0', 'Image1']
+   | child_window(auto_id="2292", control_type="Image")
+   | 
+   | Button - '恢复默认'    (L3778, T634, R3841, B657)
+   | ['恢复默认Button', 'Button4', '恢复默认']
+   | child_window(title="恢复默认", auto_id="2239", control_type="Button")
+   | 
+   | Static - '中国领先的实时金融平台'    (L3277, T641, R3522, B653)
+   | ['Static', '中国领先的实时金融平台Static', '中国领先的实时金融平台', '中国领先的实时金融平台0', '中国领先的实时金融平台1', 'Static0', 'Static1']
+   | child_window(title="中国领先的实时金融平台", auto_id="2462", control_type="Text")
+   | 
+   | Image - '中国领先的实时金融平台'    (L3385, T232, R3912, B252)
+   | ['Image2', '中国领先的实时金融平台2', '中国领先的实时金融平台Image']
+   | child_window(title="中国领先的实时金融平台", auto_id="2293", control_type="Image")
+   | 
+   | Edit - ''    (L3565, T278, R3613, B296)
+   | ['数量Edit', 'Edit', '数量Edit0', '数量Edit1', 'Edit0', 'Edit1']
+   | child_window(auto_id="2133", control_type="Edit")
+   | 
+   | CheckBox - '鼠标快捷输入'    (L3396, T281, R3492, B296)
+   | ['鼠标快捷输入CheckBox', '鼠标快捷输入', 'CheckBox', 'CheckBox0', 'CheckBox1']
+   | child_window(title="鼠标快捷输入", auto_id="2067", control_type="CheckBox")
+   | 
+   | GroupBox - '合约'    (L3390, T259, R3869, B369)
+   | ['合约', 'GroupBox', '合约GroupBox']
+   | child_window(title="合约", auto_id="2284", control_type="Group")
+   | 
+   | Edit - '合约'    (L3625, T278, R3673, B296)
+   | ['数量Edit2', 'Edit2']
+   | child_window(title="合约", auto_id="2135", control_type="Edit")
+   | 
+   | Edit - ''    (L3684, T278, R3732, B296)
+   | ['数量Edit3', 'Edit3']
+   | child_window(auto_id="2136", control_type="Edit")
+   | 
+   | Edit - ''    (L3742, T278, R3790, B296)
+   | ['数量Edit4', 'Edit4']
+   | child_window(auto_id="2137", control_type="Edit")
+   | 
+   | Edit - ''    (L3802, T278, R3850, B296)
+   | ['数量Edit5', 'Edit5']
+   | child_window(auto_id="2138", control_type="Edit")
+   | 
+   | Edit - ''    (L3565, T308, R3613, B326)
+   | ['Edit6', '百分比%Edit', '百分比%Edit0', '百分比%Edit1']
+   | child_window(auto_id="2139", control_type="Edit")
+   | 
+   | Edit - ''    (L3625, T308, R3673, B326)
+   | ['Edit7', '百分比%Edit2']
+   | child_window(auto_id="2140", control_type="Edit")
+   | 
+   | Edit - ''    (L3684, T308, R3732, B326)
+   | ['Edit8', '百分比%Edit3']
+   | child_window(auto_id="2141", control_type="Edit")
+   | 
+   | Edit - ''    (L3742, T308, R3790, B326)
+   | ['Edit9', '百分比%Edit4']
+   | child_window(auto_id="2142", control_type="Edit")
+   | 
+   | Edit - ''    (L3802, T308, R3850, B326)
+   | ['Edit10', '百分比%Edit5']
+   | child_window(auto_id="2134", control_type="Edit")
+   | 
+   | CheckBox - '委托数量最小跳动'    (L3396, T343, R3516, B358)
+   | ['委托数量最小跳动', '委托数量最小跳动CheckBox', 'CheckBox2']
+   | child_window(title="委托数量最小跳动", auto_id="2066", control_type="CheckBox")
+   | 
+   | Edit - ''    (L3564, T338, R3602, B358)
+   | ['Edit11', '百分比%Edit6']
+   | child_window(auto_id="2161", control_type="Edit")
+   | 
+   | UpDown - ''    (L3600, T338, R3618, B358)
+   | ['UpDown', '百分比%UpDown']
+   | child_window(auto_id="2254", control_type="Spinner")
+   |    | 
+   |    | Button - '多'    (L3600, T338, R3618, B348)
+   |    | ['Button5', '多', '多Button']
+   |    | child_window(title="多", auto_id="MoreButton", control_type="Button")
+   |    | 
+   |    | Button - '少'    (L3600, T348, R3618, B358)
+   |    | ['少', 'Button6', '少Button']
+   |    | child_window(title="少", auto_id="LessButton", control_type="Button")
+   | 
+   | Static - '数量'    (L3531, T281, R3557, B293)
+   | ['Static2', '数量Static', '数量']
+   | child_window(title="数量", auto_id="2308", control_type="Text")
+   | 
+   | Static - '百分比%'    (L3513, T311, R3557, B323)
+   | ['Static3', '百分比%', '百分比%Static']
+   | child_window(title="百分比%", auto_id="2381", control_type="Text")
+   | 
+   | TitleBar - ''    (L3268, T207, R3912, B230)
+   | ['TitleBar']
+   |    | 
+   |    | Button - '关闭'    (L3879, T205, R3913, B230)
+   |    | ['关闭', 'Button7', '关闭Button']
+   |    | child_window(title="关闭", control_type="Button")

@@ -25,4 +25,6 @@ Thumbs.db
 logs/
 *.log
 
-.codebuddy
+.codebuddy/
+
+交易系统设置_测试结果/
