@@ -445,29 +445,8 @@ class AutomationGUI:
         # 配置日志颜色标签
         self._setup_log_tags()
 
-        # 延迟设置分栏比例，确保窗口渲染完成
-        self.root.after(200, lambda: self._init_sash_position(main_frame))
-
-        # 默认显示查询
+        # 默认显示下单（PanedWindow 用 weight=1 均分，无需手动设 sashpos）
         self._switch_category("下单")
-
-    def _init_sash_position(self, main_frame):
-        """初始化分栏位置"""
-        try:
-            total_width = main_frame.winfo_width()
-            if total_width > 0:
-                self.paned.sashpos(0, int(total_width * 0.55))
-        except Exception:
-            pass
-
-    def _reset_sash(self):
-        """重置分栏位置"""
-        try:
-            total_width = self.paned.winfo_width()
-            if total_width > 0:
-                self.paned.sashpos(0, int(total_width * 0.55))
-        except Exception:
-            pass
 
     def _switch_category(self, category):
         """切换分类"""
@@ -753,7 +732,7 @@ class AutomationGUI:
             self.preview_tree["columns"] = headers
             for h in headers:
                 self.preview_tree.heading(h, text=h)
-                self.preview_tree.column(h, width=60, minwidth=30, stretch=False)
+                self.preview_tree.column(h, width=64, minwidth=30, stretch=False)
 
             # 读取数据行（最多显示50行）
             row_count = 0
@@ -774,9 +753,6 @@ class AutomationGUI:
             self.preview_info.config(text=f"字段: {len(headers)} 个 | 数据: {show_note}", foreground="green")
 
             wb.close()
-
-            # 数据加载后重置分栏位置，防止挤掉日志
-            self.root.after(50, self._reset_sash)
 
         except Exception as e:
             self.preview_info.config(text=f"读取失败: {e}", foreground="red")
