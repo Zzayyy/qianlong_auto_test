@@ -139,7 +139,8 @@ def load_user_config() -> dict:
     return {
         "output_dirs": {cat: DEFAULT_OUTPUT_DIR for cat in CATEGORIES},
         "auto_open": False,
-        "export_format": "txt"
+        "export_format": "txt",
+        "log_level": "详细"
     }
 
 
@@ -240,12 +241,17 @@ class AutomationGUI:
         self.is_running = False
         self.current_category = "查询"
 
+        # 状态栏状态
+        self._status_running = False
+        self.task_start_time = 0.0
+
         # 加载用户配置
         self.user_config = load_user_config()
 
         # 参数变量（使用配置中的默认值）
         self.export_format = tk.StringVar(value=self.user_config.get("export_format", "txt"))
         self.auto_open = tk.BooleanVar(value=self.user_config.get("auto_open", False))
+        self.log_level = tk.StringVar(value=self.user_config.get("log_level", "详细"))
         self.txt_path = tk.StringVar(value="")
         self.xls_path = tk.StringVar(value="")
         self.order_qty = tk.IntVar(value=1)
@@ -340,6 +346,24 @@ class AutomationGUI:
         tool_menu.add_command(label="打开日志目录", command=self._open_log_dir)
         tool_menu.add_separator()
         tool_menu.add_command(label="退出", command=self.root.quit)
+
+        # 设置菜单
+        settings_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="设置", menu=settings_menu)
+        settings_menu.add_radiobutton(
+            label="详细日志",
+            variable=self.log_level,
+            value="详细",
+            command=self._on_log_level_change
+        )
+        settings_menu.add_radiobutton(
+            label="简洁日志",
+            variable=self.log_level,
+            value="简洁",
+            command=self._on_log_level_change
+        )
+        settings_menu.add_separator()
+        settings_menu.add_command(label="日志级别说明", command=self._show_log_level_help)
 
         # 主框架
         main_frame = ttk.Frame(self.root, padding="10")
@@ -438,12 +462,33 @@ class AutomationGUI:
             bg="#1e1e1e",
             fg="#d4d4d4",
             insertbackground="#d4d4d4",
-            width=50
+            width=30
         )
         self.log_text.pack(fill=tk.BOTH, expand=True)
 
         # 配置日志颜色标签
         self._setup_log_tags()
+
+        # 状态栏
+        status_frame = ttk.Frame(self.root)
+        status_frame.pack(side=tk.BOTTOM, fill=tk.X)
+        ttk.Separator(self.root, orient=tk.HORIZONTAL).pack(side=tk.BOTTOM, fill=tk.X)
+
+        self.status_label = ttk.Label(
+            status_frame, text="就绪", anchor=tk.W, relief=tk.SUNKEN, padding=(6, 3)
+        )
+        self.status_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        self.level_label = ttk.Label(
+            status_frame, text=f"日志: {self.log_level.get()}", anchor=tk.CENTER,
+            relief=tk.SUNKEN, width=12, padding=(6, 3)
+        )
+        self.level_label.pack(side=tk.LEFT, padx=(2, 0))
+
+        self.time_label = ttk.Label(
+            status_frame, text="", anchor=tk.E, relief=tk.SUNKEN, width=18, padding=(6, 3)
+        )
+        self.time_label.pack(side=tk.LEFT, padx=(2, 0))
 
         # 默认显示下单（PanedWindow 用 weight=1 均分，无需手动设 sashpos）
         self._switch_category("下单")
@@ -469,6 +514,10 @@ class AutomationGUI:
 
         self._log(f"切换分类: {category}")
         self.logger.info(f"切换分类: {category}")
+
+        # 空闲时同步状态栏（运行中不覆盖）
+        if not self.is_running:
+            self._set_status(f"就绪 - 当前功能: {category}")
 
     def _update_paths_for_selected_script(self):
         """根据当前选中的脚本更新路径显示"""
@@ -811,6 +860,8 @@ class AutomationGUI:
         self.execute_btn.config(state=tk.DISABLED)
         self.stop_btn.config(state=tk.NORMAL)
 
+        self._set_status(f"正在运行: {script['name']}", running=True)
+
         self._log(f"\n{'='*60}")
         self._log(f"开始执行: {script['name']}")
         self._log(f"脚本路径: {script['path']}")
@@ -905,21 +956,27 @@ class AutomationGUI:
             for line in self.current_process.stdout:
                 line = line.rstrip()
                 if line:
-                    self._log(line)
+                    # 简洁模式下不显示子脚本自身的 print 输出，但继续读取管道避免子进程阻塞
+                    if self.log_level.get() == "详细":
+                        self._log(line)
                     self.logger.debug(line)
 
             return_code = self.current_process.wait()
 
+            elapsed = time.time() - self.task_start_time
             if return_code == 0:
                 self._log(f"\n[成功] {script['name']} 执行完成")
                 self.logger.info(f"执行成功: {script['name']}")
+                self._set_status(f"完成: {script['name']} (用时 {elapsed:.1f}s)")
             else:
                 self._log(f"\n[错误] {script['name']} 执行失败，退出码: {return_code}")
                 self.logger.error(f"执行失败: {script['name']}, 退出码: {return_code}")
+                self._set_status(f"失败: {script['name']} (用时 {elapsed:.1f}s)")
 
         except Exception as e:
             self._log(f"\n[异常] 执行出错: {e}")
             self.logger.error(f"执行异常: {e}")
+            self._set_status(f"异常: {script['name']}")
 
         finally:
             self.is_running = False
@@ -932,6 +989,7 @@ class AutomationGUI:
         if self.current_process and self.current_process.poll() is None:
             self._log("\n[停止] 用户手动停止...")
             self.logger.info("用户手动停止")
+            self._set_status("已停止（用户手动）")
             try:
                 self.current_process.terminate()
                 self.current_process.wait(timeout=3)
@@ -950,6 +1008,48 @@ class AutomationGUI:
     def _open_log_dir(self):
         """打开日志目录"""
         os.startfile(self.log_dir)
+
+    # ====================== 状态栏 ======================
+    def _set_status(self, text, running=False):
+        """设置状态栏（线程安全，可在子线程调用）"""
+        self.root.after(0, self._apply_status, text, running)
+
+    def _apply_status(self, text, running):
+        """在主线程更新状态栏"""
+        self.status_label.config(text=text)
+        if running:
+            self._status_running = True
+            self.task_start_time = time.time()
+            self._tick_timer()
+        else:
+            self._status_running = False
+            self.time_label.config(text="")
+
+    def _tick_timer(self):
+        """定时刷新运行时间"""
+        if not self._status_running:
+            return
+        elapsed = time.time() - self.task_start_time
+        self.time_label.config(text=f"运行时间: {elapsed:.1f}s")
+        self.root.after(200, self._tick_timer)
+
+    def _on_log_level_change(self):
+        """切换日志级别并持久化"""
+        self.user_config["log_level"] = self.log_level.get()
+        save_user_config(self.user_config)
+        self.level_label.config(text=f"日志: {self.log_level.get()}")
+        self._log(f"日志级别已切换为: {self.log_level.get()}")
+        self.logger.info(f"日志级别切换为: {self.log_level.get()}")
+
+    def _show_log_level_help(self):
+        """日志级别说明"""
+        messagebox.showinfo(
+            "日志级别说明",
+            "详细日志：显示窗口/GUI 操作信息以及子脚本的 print 输出。\n\n"
+            "简洁日志：仅显示窗口/GUI 的关键信息（开始、完成、错误等），"
+            "不显示子脚本内部的 print 输出，界面更清爽，适合普通用户。\n\n"
+            "当前级别可通过「设置」菜单随时切换，默认「详细日志」。"
+        )
 
     def _log(self, message):
         """输出日志（带颜色区分）"""
