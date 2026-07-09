@@ -120,7 +120,7 @@ else:
     CONFIG_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 DEFAULT_OUTPUT_DIR = r"E:\Code\3\output"
-CATEGORIES = ["查询", "下单", "组合申报"]
+CATEGORIES = ["查询", "下单", "组合申报", "交易系统设置"]
 
 
 def load_user_config() -> dict:
@@ -216,6 +216,14 @@ SCRIPTS_CONFIG = {
         {"name": "5.组合委托流水查询", "path": rf"{PROJECT_ROOT}\组合申报\查询\3.组合委托流水查询.py"},
         {"name": "6.历史组合委托流水", "path": rf"{PROJECT_ROOT}\组合申报\查询\4.历史组合委托流水.py"},
     ],
+    "交易系统设置": [
+        {"name": "1.委托设置", "path": rf"{PROJECT_ROOT}\交易系统设置\1_委托设置.py"},
+        {"name": "2.期权设置", "path": rf"{PROJECT_ROOT}\交易系统设置\2_期权设置.py"},
+        {"name": "3.自动拆单设置", "path": rf"{PROJECT_ROOT}\交易系统设置\3_自动拆单设置.py"},
+        {"name": "4.自动追单设置", "path": rf"{PROJECT_ROOT}\交易系统设置\4_自动追单设置.py"},
+        {"name": "5.快捷设置", "path": rf"{PROJECT_ROOT}\交易系统设置\5_快捷设置.py"},
+        {"name": "6.价格提醒设置", "path": rf"{PROJECT_ROOT}\交易系统设置\6_价格提醒设置.py"},
+    ],
 }
 
 
@@ -248,6 +256,9 @@ class AutomationGUI:
         self.export_target_position = tk.BooleanVar(value=True)  # 持仓
         self.export_target_order = tk.BooleanVar(value=True)     # 委托
         self.export_output_dir = tk.StringVar(value=get_output_dir(self.user_config, "下单"))
+
+        # 交易系统设置 参数（输出路径可自定义）
+        self.settings_output_dir = tk.StringVar(value=get_output_dir(self.user_config, "交易系统设置"))
 
         # 日志目录：打包后放在exe同级目录
         if IS_FROZEN:
@@ -320,6 +331,7 @@ class AutomationGUI:
         func_menu.add_command(label="下单", command=lambda: self._switch_category("下单"))
         func_menu.add_command(label="组合申报", command=lambda: self._switch_category("组合申报"))
         func_menu.add_command(label="查询", command=lambda: self._switch_category("查询"))
+        func_menu.add_command(label="交易系统设置", command=lambda: self._switch_category("交易系统设置"))
 
         # 工具菜单
         tool_menu = tk.Menu(menubar, tearoff=0)
@@ -500,6 +512,8 @@ class AutomationGUI:
             self._build_order_params()
         elif self.current_category == "组合申报":
             self._build_combo_params()
+        elif self.current_category == "交易系统设置":
+            self._build_settings_params()
 
     def _update_params_for_selected_script(self):
         """根据选中的脚本更新参数面板"""
@@ -597,6 +611,21 @@ class AutomationGUI:
 
         self.params_frame.columnconfigure(1, weight=1)
 
+    def _build_settings_params(self):
+        """交易系统设置参数 - 输出路径可自定义"""
+        ttk.Label(self.params_frame, text="输出路径:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        path_entry = ttk.Entry(self.params_frame, textvariable=self.settings_output_dir, width=35)
+        path_entry.grid(row=0, column=1, sticky=tk.EW, pady=5)
+        ttk.Button(self.params_frame, text="浏览", command=self._browse_settings_dir).grid(row=0, column=2, padx=5)
+
+        ttk.Label(
+            self.params_frame,
+            text="测试报告与截图将保存到该目录下（reports / screenshots 子目录）",
+            foreground="gray"
+        ).grid(row=1, column=0, columnspan=3, sticky=tk.W, pady=5)
+
+        self.params_frame.columnconfigure(1, weight=1)
+
     def _build_export_params(self):
         """期权下单_一键导出 参数配置"""
         # 清空旧内容
@@ -670,6 +699,18 @@ class AutomationGUI:
         if path:
             self.export_output_dir.set(path)
             self._log(f"已设置导出目录: {path}")
+
+    def _browse_settings_dir(self):
+        """选择交易系统设置输出目录"""
+        path = filedialog.askdirectory(
+            title="选择输出目录",
+            initialdir=self.settings_output_dir.get()
+        )
+        if path:
+            self.settings_output_dir.set(path)
+            set_output_dir(self.user_config, "交易系统设置", path)
+            save_user_config(self.user_config)
+            self._log(f"[配置] 已更新交易系统设置输出目录: {path}")
 
     def _preview_excel(self, filepath: str):
         """读取Excel并显示到预览表格"""
@@ -782,6 +823,8 @@ class AutomationGUI:
         # 保存当前配置
         self.user_config["export_format"] = self.export_format.get()
         self.user_config["auto_open"] = self.auto_open.get()
+        if self.current_category == "交易系统设置":
+            set_output_dir(self.user_config, "交易系统设置", self.settings_output_dir.get())
         save_user_config(self.user_config)
 
         # 确保路径已设置
@@ -819,6 +862,8 @@ class AutomationGUI:
             self._log(f"自动打开: {'是' if self.auto_open.get() else '否'}")
             self._log(f"TXT路径: {self.txt_path.get()}")
             self._log(f"XLS路径: {self.xls_path.get()}")
+        elif self.current_category == "交易系统设置":
+            self._log(f"输出路径: {self.settings_output_dir.get()}")
 
         self._log(f"{'='*60}")
         self.logger.info(f"开始执行: {script['name']}")
@@ -853,6 +898,10 @@ class AutomationGUI:
                 export_targets.append("委托")
             env["GUI_EXPORT_TARGETS"] = ",".join(export_targets)
             env["GUI_EXPORT_DIR"] = self.export_output_dir.get()
+
+            # 交易系统设置 输出路径
+            if self.current_category == "交易系统设置":
+                env["GUI_OUTPUT_DIR"] = self.settings_output_dir.get()
 
             # 构建命令：打包后用exe自身充当Python解释器，开发环境用系统Python
             if IS_FROZEN:

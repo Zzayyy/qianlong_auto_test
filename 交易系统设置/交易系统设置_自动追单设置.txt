@@ -1,0 +1,160 @@
+Control Identifiers:
+
+Dialog - '交易系统设置'    (L3265, T204, R3915, B664)
+['交易系统设置', 'Dialog', '交易系统设置Dialog']
+child_window(title="交易系统设置", control_type="Window")
+   | 
+   | Button - '确定'    (L3646, T634, R3709, B657)
+   | ['确定Button', 'Button', '确定', 'Button0', 'Button1']
+   | child_window(title="确定", auto_id="1", control_type="Button")
+   | 
+   | Button - '取消'    (L3712, T634, R3775, B657)
+   | ['取消Button', '取消', 'Button2']
+   | child_window(title="取消", auto_id="2", control_type="Button")
+   | 
+   | Button - '应用'    (L3844, T634, R3907, B657)
+   | ['应用', '应用Button', 'Button3']
+   | child_window(title="应用", auto_id="2001", control_type="Button")
+   | 
+   | ListBox - ''    (L3270, T232, R3381, B628)
+   | ['ListBox']
+   | child_window(auto_id="2210", control_type="List")
+   |    | 
+   |    | ListItem - '委托设置'    (L3271, T233, R3380, B253)
+   |    | ['委托设置', 'ListItem', '委托设置ListItem', 'ListItem0', 'ListItem1']
+   |    | child_window(title="委托设置", control_type="ListItem")
+   |    | 
+   |    | ListItem - '期权设置'    (L3271, T253, R3380, B273)
+   |    | ['ListItem2', '期权设置ListItem', '期权设置']
+   |    | child_window(title="期权设置", control_type="ListItem")
+   |    | 
+   |    | ListItem - '自动拆单设置'    (L3271, T273, R3380, B293)
+   |    | ['自动拆单设置', 'ListItem3', '自动拆单设置ListItem']
+   |    | child_window(title="自动拆单设置", control_type="ListItem")
+   |    | 
+   |    | ListItem - '自动追单设置'    (L3271, T293, R3380, B313)
+   |    | ['ListItem4', '自动追单设置', '自动追单设置ListItem']
+   |    | child_window(title="自动追单设置", control_type="ListItem")
+   |    | 
+   |    | ListItem - '快捷设置'    (L3271, T313, R3380, B333)
+   |    | ['快捷设置', '快捷设置ListItem', 'ListItem5']
+   |    | child_window(title="快捷设置", control_type="ListItem")
+   |    | 
+   |    | ListItem - '键盘下单设置'    (L3271, T333, R3380, B353)
+   |    | ['键盘下单设置ListItem', '键盘下单设置', 'ListItem6']
+   |    | child_window(title="键盘下单设置", control_type="ListItem")
+   |    | 
+   |    | ListItem - '价格提醒设置'    (L3271, T353, R3380, B373)
+   |    | ['价格提醒设置', 'ListItem7', '价格提醒设置ListItem']
+   |    | child_window(title="价格提醒设置", control_type="ListItem")
+   | 
+   | Image - ''    (L3384, T253, R3909, B628)
+   | ['使用Image', 'Image', 'Image0', 'Image1']
+   | child_window(auto_id="2292", control_type="Image")
+   | 
+   | Button - '恢复默认'    (L3778, T634, R3841, B657)
+   | ['恢复默认Button', '恢复默认', 'Button4']
+   | child_window(title="恢复默认", auto_id="2239", control_type="Button")
+   | 
+   | Static - '中国领先的实时金融平台'    (L3277, T641, R3522, B653)
+   | ['中国领先的实时金融平台Static', '中国领先的实时金融平台', 'Static', '中国领先的实时金融平台0', '中国领先的实时金融平台1', 'Static0', 'Static1']
+   | child_window(title="中国领先的实时金融平台", auto_id="2462", control_type="Text")
+   | 
+   | Image - '中国领先的实时金融平台'    (L3385, T232, R3912, B252)
+   | ['中国领先的实时金融平台2', 'Image2', '中国领先的实时金融平台Image']
+   | child_window(title="中国领先的实时金融平台", auto_id="2293", control_type="Image")
+   | 
+   | CheckBox - '启用自动追单'    (L3408, T268, R3504, B283)
+   | ['启用自动追单', '启用自动追单CheckBox', 'CheckBox', 'CheckBox0', 'CheckBox1']
+   | child_window(title="启用自动追单", auto_id="2024", control_type="CheckBox")
+   | 
+   | Static - '使用'    (L3418, T295, R3444, B307)
+   | ['使用', '使用Static', 'Static2', '使用0', '使用1', '使用Static0', '使用Static1']
+   | child_window(title="使用", auto_id="2284", control_type="Text")
+   | 
+   | ComboBox - '使用'    (L3445, T292, R3544, B312)
+   | ['使用2', 'ComboBox', '使用ComboBox', 'ComboBox0', 'ComboBox1']
+   | child_window(title="使用", auto_id="2098", control_type="ComboBox")
+   |    | 
+   |    | Static - '使用'    (L6, T6, R158, B34)
+   |    | ['使用3', '使用Static2', 'Static3']
+   |    | child_window(title="使用", control_type="Text")
+   |    | 
+   |    | Button - '打开'    (L3525, T294, R3542, B310)
+   |    | ['打开Button', '打开', 'Button5', '打开Button0', '打开Button1', '打开0', '打开1']
+   |    | child_window(title="打开", auto_id="DropDown", control_type="Button")
+   | 
+   | Static - '追价，调整'    (L3549, T295, R3611, B307)
+   | ['追价，调整Static', 'Static4', '追价，调整', '追价，调整0', '追价，调整1', '追价，调整Static0', '追价，调整Static1']
+   | child_window(title="追价，调整", auto_id="2285", control_type="Text")
+   | 
+   | ComboBox - '追价，调整'    (L3616, T292, R3682, B312)
+   | ['ComboBox2', '追价，调整2', '追价，调整ComboBox']
+   | child_window(title="追价，调整", auto_id="2124", control_type="ComboBox")
+   |    | 
+   |    | Static - '追价，调整'    (L6, T6, R92, B34)
+   |    | ['追价，调整Static2', 'Static5', '追价，调整3']
+   |    | child_window(title="追价，调整", control_type="Text")
+   |    | 
+   |    | Button - '打开'    (L3663, T294, R3680, B310)
+   |    | ['打开Button2', '打开2', 'Button6']
+   |    | child_window(title="打开", auto_id="DropDown", control_type="Button")
+   | 
+   | Static - '个最小变动单位下单。'    (L3685, T295, R3807, B307)
+   | ['个最小变动单位下单。', 'Static6', '个最小变动单位下单。Static']
+   | child_window(title="个最小变动单位下单。", auto_id="2286", control_type="Text")
+   | 
+   | Static - '自动追单时间间隔'    (L3418, T325, R3516, B337)
+   | ['Static7', '自动追单时间间隔Static', '自动追单时间间隔', '自动追单时间间隔0', '自动追单时间间隔1', '自动追单时间间隔Static0', '自动追单时间间隔Static1']
+   | child_window(title="自动追单时间间隔", auto_id="2287", control_type="Text")
+   | 
+   | ComboBox - '自动追单时间间隔'    (L3516, T322, R3578, B342)
+   | ['ComboBox3', '自动追单时间间隔ComboBox', '自动追单时间间隔2']
+   | child_window(title="自动追单时间间隔", auto_id="2104", control_type="ComboBox")
+   |    | 
+   |    | Static - '自动追单时间间隔'    (L6, T6, R84, B34)
+   |    | ['Static8', '自动追单时间间隔Static2', '自动追单时间间隔3']
+   |    | child_window(title="自动追单时间间隔", control_type="Text")
+   |    | 
+   |    | Button - '打开'    (L3559, T324, R3576, B340)
+   |    | ['打开Button3', '打开3', 'Button7']
+   |    | child_window(title="打开", auto_id="DropDown", control_type="Button")
+   | 
+   | Static - '秒，最多重复'    (L3582, T325, R3656, B337)
+   | ['秒，最多重复Static', '秒，最多重复', 'Static9']
+   | child_window(title="秒，最多重复", auto_id="2288", control_type="Text")
+   | 
+   | Edit - '秒，最多重复'    (L3655, T320, R3699, B341)
+   | ['Edit', '秒，最多重复Edit']
+   | child_window(title="秒，最多重复", auto_id="2205", control_type="Edit")
+   | 
+   | Static - '次。'    (L3718, T325, R3744, B337)
+   | ['次。Static', '次。', 'Static10']
+   | child_window(title="次。", auto_id="2289", control_type="Text")
+   | 
+   | CheckBox - '未完成则自动撤单。'    (L3418, T355, R3550, B370)
+   | ['CheckBox2', '未完成则自动撤单。', '未完成则自动撤单。CheckBox']
+   | child_window(title="未完成则自动撤单。", auto_id="2064", control_type="CheckBox")
+   | 
+   | UpDown - '0'    (L3697, T320, R3715, B341)
+   | ['UpDown', '0', '0UpDown']
+   | child_window(title="0", auto_id="2278", control_type="Spinner")
+   |    | 
+   |    | Button - '多'    (L3697, T320, R3715, B330)
+   |    | ['多Button', '多', 'Button8']
+   |    | child_window(title="多", auto_id="MoreButton", control_type="Button")
+   |    | 
+   |    | Button - '少'    (L3697, T330, R3715, B341)
+   |    | ['少', 'Button9', '少Button']
+   |    | child_window(title="少", auto_id="LessButton", control_type="Button")
+   | 
+   | Static - '注：当委托界面选择市价方式下单时不支持自动追单'    (L3418, T385, R3696, B397)
+   | ['注：当委托界面选择市价方式下单时不支持自动追单', '注：当委托界面选择市价方式下单时不支持自动追单Static', 'Static11']
+   | child_window(title="注：当委托界面选择市价方式下单时不支持自动追单", auto_id="2291", control_type="Text")
+   | 
+   | TitleBar - ''    (L3268, T207, R3912, B230)
+   | ['TitleBar']
+   |    | 
+   |    | Button - '关闭'    (L3879, T205, R3913, B230)
+   |    | ['关闭Button', '关闭', 'Button10']
+   |    | child_window(title="关闭", control_type="Button")
