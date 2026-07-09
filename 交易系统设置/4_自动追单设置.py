@@ -619,8 +619,8 @@ def main():
         time.sleep(0.5)
 
         # 5. 控件探索（首次运行时有用，可注释掉）
-        print("\n正在进行控件探索...")
-        explore_dialog_controls(dlg)
+        #print("\n正在进行控件探索...")
+        #explore_dialog_controls(dlg)
 
         # 6. 执行测试
         test_auto_order_followup(dlg, result)

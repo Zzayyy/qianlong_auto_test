@@ -450,26 +450,70 @@ def _try_keyboard_select(win):
 
 
 def switch_to_settings_panel(dlg, panel_name: str = PANEL_NAME) -> bool:
-    """在设置对话框中切换到指定标签页（左侧TreeItem）。
+    """在设置对话框中切换到指定标签页（左侧导航：Tree/TreeItem 或 List/ListItem）。
 
-    注意：打开对话框后默认选中的就是"委托设置"，因此即使切换失败
-    也不影响后续读取（best-effort，不致命）。
+    注意：打开对话框后默认选中的未必是目标面板（软件会记住上次打开的页签），
+    因此必须主动切换，而不是假设默认即目标面板。仅在“已确认当前就在目标面板”
+    时才跳过点击；切换失败时返回 False，由调用方决定是否终止。
     """
+    # 1. 收集可能的左侧导航容器（兼容不同软件版本/形态）
+    nav_candidates = []
     try:
         tree = dlg.child_window(control_type="Tree")
-        tree.wait("ready", timeout=5)
-        tree.set_focus()
+        if tree.exists(timeout=1):
+            nav_candidates.append(tree)
+    except Exception:
+        pass
+    try:
+        lst = dlg.child_window(auto_id="2210", control_type="List")
+        if lst.exists(timeout=1):
+            nav_candidates.append(lst)
+    except Exception:
+        pass
 
-        # 查找目标面板项
-        item = tree.child_window(title=panel_name, control_type="TreeItem", found_index=0)
-        item.wait("visible", timeout=3)
-        item.click_input()
-        time.sleep(0.5)
-        print(f"[OK] 已切换到'{panel_name}'面板")
-        return True
-    except Exception as e:
-        print(f"[INFO] 无需手动切换面板（默认即'{panel_name}'）: {e}")
-        return True
+    if not nav_candidates:
+        print(f"[WARN] 未找到左侧导航容器，无法切换到'{panel_name}'面板")
+        return False
+
+    # 2. 依次尝试各导航容器，找到目标项并点击切换
+    for nav in nav_candidates:
+        try:
+            nav.wait("ready", timeout=3)
+            nav.set_focus()
+
+            # 目标项可能是 TreeItem 或 ListItem，两种都尝试
+            item = None
+            for ctype in ("TreeItem", "ListItem"):
+                try:
+                    cand = nav.child_window(title=panel_name, control_type=ctype, found_index=0)
+                    if cand.exists(timeout=1):
+                        item = cand
+                        break
+                except Exception:
+                    continue
+            if item is None:
+                continue
+
+            item.wait("visible", timeout=3)
+
+            # 已选中则无需点击
+            try:
+                if item.is_selected():
+                    print(f"[OK] 当前已在'{panel_name}'面板，无需切换")
+                    return True
+            except Exception:
+                pass
+
+            item.click_input()
+            time.sleep(0.6)
+            print(f"[OK] 已切换到'{panel_name}'面板")
+            return True
+        except Exception as e:
+            print(f"  [WARN] 通过导航容器切换'{panel_name}'失败: {e}")
+            continue
+
+    print(f"[WARN] 切换'{panel_name}'面板失败")
+    return False
 
 
 def get_checkbox_state_by_id(dlg, auto_id: str) -> Optional[bool]:
@@ -646,6 +690,12 @@ def get_edit_value_by_id(dlg, auto_id: str) -> Optional[int]:
 def get_radiobutton_state_by_id(dlg, auto_id: str) -> Optional[bool]:
     """通过 auto_id 获取 RadioButton 的选中状态。
 
+    多策略检测，兼容不同控件实现：
+        1. UIA TogglePattern (get_toggle_state)
+        2. SelectionItemPattern (is_selected / element_info.selection_item_is_selected)
+        3. LegacyAccessible State 文本含 "checked"
+    任一策略命中即返回；全部失败返回 None。
+
     Returns:
         True=已选中, False=未选中, None=找不到
     """
@@ -658,10 +708,33 @@ def get_radiobutton_state_by_id(dlg, auto_id: str) -> Optional[bool]:
                 rb.wait("ready", timeout=2)
             except Exception:
                 pass
+
+            # 策略1: UIA TogglePattern
             try:
                 return bool(rb.get_toggle_state())
             except Exception:
-                time.sleep(0.5)
+                pass
+
+            # 策略2: SelectionItemPattern (is_selected)
+            try:
+                return bool(rb.is_selected())
+            except Exception:
+                pass
+
+            # 策略3: 直接读取 element_info 选中属性
+            try:
+                return bool(rb.element_info.selection_item_is_selected)
+            except Exception:
+                pass
+
+            # 策略4: LegacyAccessible State 文本
+            try:
+                state = rb.legacy_properties().get("State", "") or ""
+                return "checked" in state.lower()
+            except Exception:
+                pass
+
+            time.sleep(0.5)
         return None
     except Exception as e:
         print(f"  [WARN] 获取RadioButton(auto_id={auto_id})失败: {e}")
@@ -747,103 +820,174 @@ def test_price_tracking_settings(dlg, result: SettingsTestResult):
         result.add_not_enabled("卖出缺省价_下拉_选项列表")
 
 
+def _check_split_item(dlg, result: SettingsTestResult, checkbox_key: str,
+                      checkbox_id: str, value_id: str) -> None:
+    """对一项"拆单"开关执行：
+
+        检测初始状态 → (未启用则先启用) → 检测下方数值 → (检测后恢复为未启用)
+
+    开关本身的初始/恢复状态写入报告，下方数值始终检测。
+    """
+    # 1. 检测开关初始状态
+    initial = get_checkbox_state_by_id(dlg, checkbox_id)
+    result.add_result(f"{checkbox_key}_初始状态", initial,
+                      STANDARD_VALUES[checkbox_key + "_勾选"])
+
+    # 2. 若未启用，先点击启用以暴露下方数值
+    need_restore = False
+    if not initial:
+        print(f"  [INFO] '{checkbox_key}'未勾选，点击启用以暴露下方数值...")
+        set_checkbox_by_id(dlg, checkbox_id, True)
+        need_restore = True
+        time.sleep(0.6)
+        now_enabled = get_checkbox_state_by_id(dlg, checkbox_id)
+        result.add_result(f"{checkbox_key}_启用后", now_enabled, True)
+    else:
+        print(f"  [INFO] '{checkbox_key}'已勾选，直接检查下方数值")
+
+    # 3. 检测下方数值（启用状态下）
+    split_val = get_edit_value_by_id(dlg, value_id)
+    result.add_result(f"{checkbox_key}_数值", split_val if split_val is not None else 0,
+                      STANDARD_VALUES[checkbox_key + "_数值"])
+
+    # 4. 若之前未启用，检测完成后恢复为未启用状态
+    if need_restore:
+        print(f"  [INFO] 检查完成，恢复'{checkbox_key}'为未启用状态...")
+        set_checkbox_by_id(dlg, checkbox_id, False)
+        time.sleep(0.4)
+        restored = get_checkbox_state_by_id(dlg, checkbox_id)
+        result.add_result(f"{checkbox_key}_恢复后", restored,
+                          STANDARD_VALUES[checkbox_key + "_勾选"])
+
+
 def test_auto_split_settings(dlg, result: SettingsTestResult):
-    """测试二、大单自动分单设置"""
+    """测试二、大单自动分单设置
+
+    股票拆单默认启用，基金会拆单默认未启用。为能验证默认参数，对未启用的
+    项采取与委托数量设置类似的策略：先启用以暴露下方数值，检测完后再恢复。
+    """
     print("\n--- [2/4] 大单自动分单设置 ---")
 
-    # 股票拆单
-    stock_split_checked = get_checkbox_state_by_id(dlg, AUTO_ID["股票拆单"])
-    result.add_result("股票拆单_勾选", stock_split_checked, STANDARD_VALUES["股票拆单_勾选"])
+    # 股票拆单（默认启用）
+    _check_split_item(
+        dlg, result,
+        checkbox_key="股票拆单",
+        checkbox_id=AUTO_ID["股票拆单"],
+        value_id=AUTO_ID["股票拆单_数值"],
+    )
 
-    if stock_split_checked:
-        stock_split_val = get_edit_value_by_id(dlg, AUTO_ID["股票拆单_数值"])
-        result.add_result("股票拆单_数值", stock_split_val if stock_split_val is not None else 0,
-                          STANDARD_VALUES["股票拆单_数值"])
+    # 基金拆单（默认未启用）
+    _check_split_item(
+        dlg, result,
+        checkbox_key="基金拆单",
+        checkbox_id=AUTO_ID["基金拆单"],
+        value_id=AUTO_ID["基金拆单_数值"],
+    )
+
+
+def _check_qty_item(dlg, result: SettingsTestResult, checkbox_key: str,
+                    checkbox_id: str, check_sub) -> None:
+    """对一项"自动填入数量"开关执行：
+
+        检测初始状态 → (未启用则先启用) → 检测下方参数 → (检测后恢复为未启用)
+
+    各子参数检测逻辑由 check_sub 回调提供；开关本身的初始/恢复状态写入报告。
+    """
+    # 1. 检测开关初始状态
+    initial = get_checkbox_state_by_id(dlg, checkbox_id)
+    result.add_result(f"{checkbox_key}_初始状态", initial,
+                      STANDARD_VALUES[checkbox_key + "_勾选"])
+
+    # 2. 若未启用，先点击启用以暴露下方参数
+    need_restore = False
+    if not initial:
+        print(f"  [INFO] '{checkbox_key}'未勾选，点击启用以暴露下方参数...")
+        set_checkbox_by_id(dlg, checkbox_id, True)
+        need_restore = True
+        time.sleep(0.6)
+        now_enabled = get_checkbox_state_by_id(dlg, checkbox_id)
+        result.add_result(f"{checkbox_key}_启用后", now_enabled, True)
     else:
-        result.add_not_enabled("股票拆单_数值")
+        print(f"  [INFO] '{checkbox_key}'已勾选，直接检查下方参数")
 
-    # 基金拆单
-    fund_split_checked = get_checkbox_state_by_id(dlg, AUTO_ID["基金拆单"])
-    result.add_result("基金拆单_勾选", fund_split_checked, STANDARD_VALUES["基金拆单_勾选"])
+    # 3. 检测下方参数（启用状态下）
+    check_sub()
 
-    if fund_split_checked:
-        fund_split_val = get_edit_value_by_id(dlg, AUTO_ID["基金拆单_数值"])
-        result.add_result("基金拆单_数值", fund_split_val if fund_split_val is not None else 0,
-                          STANDARD_VALUES["基金拆单_数值"])
-    else:
-        result.add_not_enabled("基金拆单_数值")
+    # 4. 若之前未启用，检测完成后恢复为未启用状态
+    if need_restore:
+        print(f"  [INFO] 检查完成，恢复'{checkbox_key}'为未启用状态...")
+        set_checkbox_by_id(dlg, checkbox_id, False)
+        time.sleep(0.4)
+        restored = get_checkbox_state_by_id(dlg, checkbox_id)
+        result.add_result(f"{checkbox_key}_恢复后", restored,
+                          STANDARD_VALUES[checkbox_key + "_勾选"])
+
+
+def _buy_sell_qty_sub(dlg, result: SettingsTestResult, prefix: str):
+    """股票买入/卖出自动填入数量 的下方参数检测（RadioButton + 数值）。"""
+    option = None
+    for rid in (AUTO_ID[f"{prefix}_确定数量"], AUTO_ID[f"{prefix}_全部数量"],
+                AUTO_ID[f"{prefix}_上一次交易数量"]):
+        if get_radiobutton_state_by_id(dlg, rid):
+            option = RADIO_NAMES.get(rid)
+            break
+    result.add_result(f"{prefix}_选项", option or "(无选中)", STANDARD_VALUES[f"{prefix}_选项"])
+
+    qty_val = get_edit_value_by_id(dlg, AUTO_ID[f"{prefix}_数值"])
+    result.add_result(f"{prefix}_数值", qty_val if qty_val is not None else 0,
+                      STANDARD_VALUES[f"{prefix}_数值"])
+
+
+def _trade_qty_sub(dlg, result: SettingsTestResult, prefix: str):
+    """期权/期货交易自动填入数量 的下方参数检测（仅数值）。"""
+    qty_val = get_edit_value_by_id(dlg, AUTO_ID[f"{prefix}_数值"])
+    result.add_result(f"{prefix}_数值", qty_val if qty_val is not None else 0,
+                      STANDARD_VALUES[f"{prefix}_数值"])
 
 
 def test_quantity_settings(dlg, result: SettingsTestResult):
-    """测试三、委托数量设置"""
+    """测试三、委托数量设置
+
+    本组四项（股票买入/卖出自动填入数量、期权交易/期货交易自动填入数量）
+    默认均为未启用，其下方参数（RadioButton、数值）也随之不可检测（检测到则记为
+    “○ 未启用”）。为能验证默认参数，采取与自动追单类似的策略：
+        1. 检测开关初始状态
+        2. 若未启用 → 先点击启用以暴露下方参数，检测完后再恢复为未启用
+        3. 在启用状态下逐项检测下方参数
+    """
     print("\n--- [3/4] 委托数量设置 ---")
 
-    # 股票买入自动填入数量
-    buy_qty_checked = get_checkbox_state_by_id(dlg, AUTO_ID["股票买入自动填入数量"])
-    result.add_result("股票买入自动填入数量_勾选", buy_qty_checked,
-                      STANDARD_VALUES["股票买入自动填入数量_勾选"])
+    # 股票买入自动填入数量（RadioButton + 数值）
+    _check_qty_item(
+        dlg, result,
+        checkbox_key="股票买入自动填入数量",
+        checkbox_id=AUTO_ID["股票买入自动填入数量"],
+        check_sub=lambda: _buy_sell_qty_sub(dlg, result, "股票买入"),
+    )
 
-    if buy_qty_checked:
-        # 检查 RadioButton 选项（确定数量/全部数量/上一次交易数量）
-        buy_option = None
-        for rid in (AUTO_ID["股票买入_确定数量"], AUTO_ID["股票买入_全部数量"],
-                    AUTO_ID["股票买入_上一次交易数量"]):
-            if get_radiobutton_state_by_id(dlg, rid):
-                buy_option = RADIO_NAMES.get(rid)
-                break
-        result.add_result("股票买入_选项", buy_option or "(无选中)", STANDARD_VALUES["股票买入_选项"])
+    # 股票卖出自动填入数量（RadioButton + 数值）
+    _check_qty_item(
+        dlg, result,
+        checkbox_key="股票卖出自动填入数量",
+        checkbox_id=AUTO_ID["股票卖出自动填入数量"],
+        check_sub=lambda: _buy_sell_qty_sub(dlg, result, "股票卖出"),
+    )
 
-        buy_qty_val = get_edit_value_by_id(dlg, AUTO_ID["股票买入_数值"])
-        result.add_result("股票买入_数值", buy_qty_val if buy_qty_val is not None else 0,
-                          STANDARD_VALUES["股票买入_数值"])
-    else:
-        result.add_not_enabled("股票买入_选项")
-        result.add_not_enabled("股票买入_数值")
+    # 期权交易自动填入数量（仅数值）
+    _check_qty_item(
+        dlg, result,
+        checkbox_key="期权交易自动填入数量",
+        checkbox_id=AUTO_ID["期权交易自动填入数量"],
+        check_sub=lambda: _trade_qty_sub(dlg, result, "期权交易"),
+    )
 
-    # 股票卖出自动填入数量
-    sell_qty_checked = get_checkbox_state_by_id(dlg, AUTO_ID["股票卖出自动填入数量"])
-    result.add_result("股票卖出自动填入数量_勾选", sell_qty_checked,
-                      STANDARD_VALUES["股票卖出自动填入数量_勾选"])
-
-    if sell_qty_checked:
-        sell_option = None
-        for rid in (AUTO_ID["股票卖出_确定数量"], AUTO_ID["股票卖出_全部数量"],
-                    AUTO_ID["股票卖出_上一次交易数量"]):
-            if get_radiobutton_state_by_id(dlg, rid):
-                sell_option = RADIO_NAMES.get(rid)
-                break
-        result.add_result("股票卖出_选项", sell_option or "(无选中)", STANDARD_VALUES["股票卖出_选项"])
-
-        sell_qty_val = get_edit_value_by_id(dlg, AUTO_ID["股票卖出_数值"])
-        result.add_result("股票卖出_数值", sell_qty_val if sell_qty_val is not None else 0,
-                          STANDARD_VALUES["股票卖出_数值"])
-    else:
-        result.add_not_enabled("股票卖出_选项")
-        result.add_not_enabled("股票卖出_数值")
-
-    # 期权交易自动填入数量
-    option_qty_checked = get_checkbox_state_by_id(dlg, AUTO_ID["期权交易自动填入数量"])
-    result.add_result("期权交易自动填入数量_勾选", option_qty_checked,
-                      STANDARD_VALUES["期权交易自动填入数量_勾选"])
-
-    if option_qty_checked:
-        option_qty_val = get_edit_value_by_id(dlg, AUTO_ID["期权交易_数值"])
-        result.add_result("期权交易_数值", option_qty_val if option_qty_val is not None else 0,
-                          STANDARD_VALUES["期权交易_数值"])
-    else:
-        result.add_not_enabled("期权交易_数值")
-
-    # 期货交易自动填入数量
-    future_qty_checked = get_checkbox_state_by_id(dlg, AUTO_ID["期货交易自动填入数量"])
-    result.add_result("期货交易自动填入数量_勾选", future_qty_checked,
-                      STANDARD_VALUES["期货交易自动填入数量_勾选"])
-
-    if future_qty_checked:
-        future_qty_val = get_edit_value_by_id(dlg, AUTO_ID["期货交易_数值"])
-        result.add_result("期货交易_数值", future_qty_val if future_qty_val is not None else 0,
-                          STANDARD_VALUES["期货交易_数值"])
-    else:
-        result.add_not_enabled("期货交易_数值")
+    # 期货交易自动填入数量（仅数值）
+    _check_qty_item(
+        dlg, result,
+        checkbox_key="期货交易自动填入数量",
+        checkbox_id=AUTO_ID["期货交易自动填入数量"],
+        check_sub=lambda: _trade_qty_sub(dlg, result, "期货交易"),
+    )
 
 
 def test_bottom_checkboxes(dlg, result: SettingsTestResult):
@@ -935,8 +1079,8 @@ def main():
         time.sleep(0.5)
 
         # 5. 控件探索（首次运行时有用，可注释掉）
-        print("\n正在进行控件探索...")
-        explore_dialog_controls(dlg)
+        #print("\n正在进行控件探索...")
+        #explore_dialog_controls(dlg)
 
         # 6. 执行各项测试
         test_price_tracking_settings(dlg, result)

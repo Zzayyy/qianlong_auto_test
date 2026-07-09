@@ -515,6 +515,17 @@ def get_checkbox_state_by_id(dlg, auto_id: str) -> Optional[bool]:
         return None
 
 
+def click_checkbox_by_id(dlg, auto_id: str):
+    """通过 auto_id 点击复选框（切换其勾选状态）。"""
+    try:
+        cb = dlg.child_window(auto_id=auto_id, control_type="CheckBox")
+        cb.wait("ready", timeout=3)
+        cb.click_input()
+        print(f"[OK] 已点击复选框(auto_id={auto_id})")
+    except Exception as e:
+        print(f"  [WARN] 点击复选框(auto_id={auto_id})失败: {e}")
+
+
 def get_combobox_selection_by_id(dlg, auto_id: str) -> Optional[str]:
     """通过 auto_id 获取下拉框当前选择的文本。"""
     try:
@@ -852,41 +863,65 @@ def test_expiration_reminder(dlg, result: SettingsTestResult):
 
 
 def test_fee_deduction(dlg, result: SettingsTestResult):
-    """测试七、费用扣减"""
+    """测试七、费用扣减
+
+    流程：
+        1. 检测"启用费用扣减"初始状态（默认未启用）
+        2. 若未启用 → 点击启用以暴露下方参数，检查完后再点击关闭恢复
+        3. 在启用状态下逐项检查下方参数（开仓费用/平仓费用/行权费用/卖出开仓不收取/扣减方式）
+    """
     print("\n--- [7/8] 费用扣减 ---")
 
-    enabled = get_checkbox_state_by_id(dlg, AUTO_ID["启用费用扣减"])
-    result.add_result("启用费用扣减", enabled, STANDARD_VALUES["启用费用扣减"])
+    # 1. 检测"启用费用扣减"初始状态
+    initial_enabled = get_checkbox_state_by_id(dlg, AUTO_ID["启用费用扣减"])
+    result.add_result("启用费用扣减_初始状态", initial_enabled,
+                      STANDARD_VALUES["启用费用扣减"])
 
-    if enabled:
-        open_fee = get_edit_value_by_id(dlg, AUTO_ID["开仓费用"])
-        result.add_result("开仓费用", open_fee if open_fee is not None else 0.0,
-                          STANDARD_VALUES["开仓费用"])
+    # 2. 若未启用，点击启用以暴露下方参数
+    need_restore = False
+    if not initial_enabled:
+        print("  [INFO] '启用费用扣减'未勾选，点击启用以暴露下方参数...")
+        click_checkbox_by_id(dlg, AUTO_ID["启用费用扣减"])
+        need_restore = True
+        time.sleep(0.6)
 
-        close_fee = get_edit_value_by_id(dlg, AUTO_ID["平仓费用"])
-        result.add_result("平仓费用", close_fee if close_fee is not None else 0.0,
-                          STANDARD_VALUES["平仓费用"])
-
-        exercise_fee = get_edit_value_by_id(dlg, AUTO_ID["行权费用"])
-        result.add_result("行权费用", exercise_fee if exercise_fee is not None else 0.0,
-                          STANDARD_VALUES["行权费用"])
-
-        sell_open_free = get_checkbox_state_by_id(dlg, AUTO_ID["卖出开仓不收取"])
-        result.add_result("卖出开仓不收取", sell_open_free,
-                          STANDARD_VALUES["卖出开仓不收取"])
-
-        deduction = get_selected_radiobutton(dlg, [
-            AUTO_ID["扣减方式_智能收取"],
-            AUTO_ID["扣减方式_开仓行权收取"],
-            AUTO_ID["扣减方式_开平仓双向收取"],
-        ])
-        result.add_result("扣减方式", deduction or "(无选中)", STANDARD_VALUES["扣减方式"])
+        now_enabled = get_checkbox_state_by_id(dlg, AUTO_ID["启用费用扣减"])
+        result.add_result("启用费用扣减_启用后", now_enabled, True)
     else:
-        result.add_not_enabled("开仓费用")
-        result.add_not_enabled("平仓费用")
-        result.add_not_enabled("行权费用")
-        result.add_not_enabled("卖出开仓不收取")
-        result.add_not_enabled("扣减方式")
+        print("  [INFO] '启用费用扣减'已勾选，直接检查下方参数")
+
+    # 3. 检查下方参数（启用状态下）
+    open_fee = get_edit_value_by_id(dlg, AUTO_ID["开仓费用"])
+    result.add_result("开仓费用", open_fee if open_fee is not None else 0.0,
+                      STANDARD_VALUES["开仓费用"])
+
+    close_fee = get_edit_value_by_id(dlg, AUTO_ID["平仓费用"])
+    result.add_result("平仓费用", close_fee if close_fee is not None else 0.0,
+                      STANDARD_VALUES["平仓费用"])
+
+    exercise_fee = get_edit_value_by_id(dlg, AUTO_ID["行权费用"])
+    result.add_result("行权费用", exercise_fee if exercise_fee is not None else 0.0,
+                      STANDARD_VALUES["行权费用"])
+
+    sell_open_free = get_checkbox_state_by_id(dlg, AUTO_ID["卖出开仓不收取"])
+    result.add_result("卖出开仓不收取", sell_open_free,
+                      STANDARD_VALUES["卖出开仓不收取"])
+
+    deduction = get_selected_radiobutton(dlg, [
+        AUTO_ID["扣减方式_智能收取"],
+        AUTO_ID["扣减方式_开仓行权收取"],
+        AUTO_ID["扣减方式_开平仓双向收取"],
+    ])
+    result.add_result("扣减方式", deduction or "(无选中)", STANDARD_VALUES["扣减方式"])
+
+    # 4. 若之前未启用，检查完成后恢复关闭状态
+    if need_restore:
+        print("  [INFO] 检查完成，恢复'启用费用扣减'为关闭状态...")
+        click_checkbox_by_id(dlg, AUTO_ID["启用费用扣减"])
+        time.sleep(0.4)
+        restored = get_checkbox_state_by_id(dlg, AUTO_ID["启用费用扣减"])
+        result.add_result("启用费用扣减_恢复后", restored,
+                          STANDARD_VALUES["启用费用扣减"])
 
 
 def test_reverse_instruction(dlg, result: SettingsTestResult):
@@ -1514,8 +1549,8 @@ def main():
         time.sleep(0.5)
 
         # 5. 控件探索（首次运行时有用，可注释掉）
-        print("\n正在进行控件探索...")
-        explore_dialog_controls(dlg)
+        #print("\n正在进行控件探索...")
+        #explore_dialog_controls(dlg)
 
         # 6. 执行各项测试
         test_default_order_conditions(dlg, result)
