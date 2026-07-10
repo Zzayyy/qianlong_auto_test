@@ -85,6 +85,11 @@ class ScriptRunner:
 
             return_code = self._process.wait()
             elapsed = time.time() - start
+
+            # 在回调之前复位运行状态，确保顺序执行下一个任务时 run() 不会被 _running 阻挡
+            self._running = False
+            self._process = None
+
             self.on_finish(return_code, elapsed, task)
 
         except Exception as e:

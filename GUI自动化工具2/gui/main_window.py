@@ -27,6 +27,7 @@ from config import (
 from engine.runner import ScriptRunner
 from engine.task import Task
 from gui.widgets import ColoredLogText
+from gui.task_center import TaskCenter
 from gui.history import (
     HistoryManager,
     STATUS_SUCCESS,
@@ -48,6 +49,12 @@ class AutomationGUI:
 
         self.is_running = False
         self.current_category = "查询"
+
+        # 自身引用（供任务中心等子模块访问主窗口能力）
+        self.gui = self
+        # 任务中心顺序执行模式开关
+        self._task_mode = False
+        self.task_center = None
 
         # 状态栏状态
         self._status_running = False
@@ -269,6 +276,11 @@ class AutomationGUI:
         self.right_notebook.add(history_frame, text="任务历史")
         self._build_history_panel(history_frame)
 
+        # —— 任务中心标签页 ——
+        task_frame = ttk.Frame(self.right_notebook, padding="5")
+        self.right_notebook.add(task_frame, text="任务中心")
+        self.task_center = TaskCenter(task_frame, self)
+
         # 状态栏
         status_frame = ttk.Frame(self.root)
         status_frame.pack(side=tk.BOTTOM, fill=tk.X)
@@ -290,8 +302,32 @@ class AutomationGUI:
         )
         self.time_label.pack(side=tk.LEFT, padx=(2, 0))
 
-        # 默认显示下单（PanedWindow 用 weight=1 均分，无需手动设 sashpos）
+        # 默认显示下单
         self._switch_category("下单")
+
+        # 左右分栏比例：sash 位置占整体宽度的比例
+        #   0.5 = 五五分 | 0.6 = 左6右4 | 0.8 = 左8右2（改这里即可调默认比例）
+        self.pane_ratio = 0.5
+        # 必须等窗口真正显示（<Map>）后再设置 sash，否则 winfo_width 为 1 -> 比例失效
+        self.root.bind("<Map>", self._on_first_map)
+        # 窗口缩放时按比例保持
+        self.paned.bind("<Configure>", lambda e: self._apply_pane_ratio())
+
+    def _on_first_map(self, event):
+        """窗口首次显示后应用一次分栏比例，随后解绑"""
+        self.root.unbind("<Map>")
+        self._apply_pane_ratio()
+
+    def _apply_pane_ratio(self):
+        """按固定比例设置左右分隔条位置（不受右侧标签页数量影响）"""
+        w = self.paned.winfo_width()
+        if w <= 1:
+            return  # 窗口尚未绘制，宽度无效，跳过
+        target = int(w * self.pane_ratio)
+        if getattr(self, "_last_sash", None) == target:
+            return  # 位置未变则跳过，避免与拖动/自身触发形成死循环
+        self._last_sash = target
+        self.paned.sashpos(0, target)
 
     def _switch_category(self, category):
         """切换分类"""
@@ -731,6 +767,9 @@ class AutomationGUI:
         if self.is_running:
             messagebox.showwarning("提示", "有脚本正在运行中，请先停止")
             return
+        if self._task_mode:
+            messagebox.showwarning("提示", "任务中心正在顺序执行中，请先停止")
+            return
 
         script = self._get_selected_script()
         if not script:
@@ -769,18 +808,7 @@ class AutomationGUI:
             self._update_paths_for_selected_script()
 
         # 收集运行时参数，构造任务
-        params = {
-            "export_format": self.export_format.get(),
-            "auto_open": self.auto_open.get(),
-            "txt_path": self.txt_path.get(),
-            "xls_path": self.xls_path.get(),
-            "order_qty": self.order_qty.get(),
-            "countdown_sec": self.countdown_sec.get(),
-            "xlsx_file": self.xlsx_file.get(),
-            "export_targets": export_targets,
-            "export_output_dir": self.export_output_dir.get(),
-            "settings_output_dir": self.settings_output_dir.get(),
-        }
+        params = self.collect_params(export_targets)
         task = Task(script, self.current_category, params)
 
         self.is_running = True
@@ -822,6 +850,50 @@ class AutomationGUI:
         self._refresh_history()
         self.runner.run(task)
 
+    def collect_params(self, export_targets=None):
+        """收集当前界面参数，返回 dict（供执行/任务中心使用）"""
+        return {
+            "export_format": self.export_format.get(),
+            "auto_open": self.auto_open.get(),
+            "txt_path": self.txt_path.get(),
+            "xls_path": self.xls_path.get(),
+            "order_qty": self.order_qty.get(),
+            "countdown_sec": self.countdown_sec.get(),
+            "xlsx_file": self.xlsx_file.get(),
+            "export_targets": export_targets or [],
+            "export_output_dir": self.export_output_dir.get(),
+            "settings_output_dir": self.settings_output_dir.get(),
+        }
+
+    # ====================== 任务中心：顺序执行驱动 ======================
+    def run_task_center(self, task_center):
+        """由任务中心调用：进入顺序执行模式并启动首个任务"""
+        self._task_mode = True
+        self.task_center = task_center
+        # 禁用主窗口执行/停止按钮，避免与任务中心冲突
+        self.execute_btn.config(state=tk.DISABLED)
+        self.stop_btn.config(state=tk.DISABLED)
+        task_center.run_next()
+
+    def stop_task_center(self):
+        """由任务中心调用：停止当前正在执行的子进程"""
+        if self.runner.is_running:
+            self._log("\n[任务中心] 正在终止当前子进程...")
+            self.logger.info("任务中心 - 用户手动停止")
+            self.runner.stop()
+        # 子进程结束后会触发回调，task_center 据此进入停止收尾流程
+
+    def execute_task_item(self, item, record_id):
+        """由任务中心调用：执行队列中的单个任务项（带参数快照）"""
+        script = {"name": item["script_name"], "path": item["script_path"]}
+        task = Task(script, item["category"], item["params"])
+        self.runner.run(task)
+
+    def _reset_running_state_if_idle(self):
+        """任务中心收尾时复位主窗口运行状态（若非普通执行占用）"""
+        self._task_mode = False
+        self._reset_running_state()
+
     def _stop_script(self):
         """停止脚本"""
         if self.runner.is_running:
@@ -848,6 +920,13 @@ class AutomationGUI:
 
     # ====================== 执行结果回调（运行在 runner 线程，统一切回主线程更新 UI） ======================
     def _on_run_finish(self, return_code, elapsed, task):
+        # 任务中心顺序执行模式：回调转交任务中心处理
+        if self._task_mode:
+            def _tc_finish():
+                self.task_center.on_finish(return_code, elapsed, task)
+            self.root.after(0, _tc_finish)
+            return
+
         def _apply():
             if return_code == 0:
                 status = STATUS_SUCCESS
@@ -871,6 +950,13 @@ class AutomationGUI:
         self.root.after(0, _apply)
 
     def _on_run_error(self, exc, task):
+        # 任务中心顺序执行模式：回调转交任务中心处理
+        if self._task_mode:
+            def _tc_error():
+                self.task_center.on_error(exc, task)
+            self.root.after(0, _tc_error)
+            return
+
         def _apply():
             self._log(f"\n[异常] 执行出错: {exc}")
             self.logger.error(f"执行异常: {exc}")
