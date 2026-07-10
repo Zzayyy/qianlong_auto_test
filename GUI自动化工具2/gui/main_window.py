@@ -27,6 +27,14 @@ from config import (
 from engine.runner import ScriptRunner
 from engine.task import Task
 from gui.widgets import ColoredLogText
+from gui.history import (
+    HistoryManager,
+    STATUS_SUCCESS,
+    STATUS_FAILED,
+    STATUS_ERROR,
+    STATUS_STOPPED,
+    STATUS_RUNNING,
+)
 
 
 class AutomationGUI:
@@ -75,6 +83,11 @@ class AutomationGUI:
 
         self._setup_logging()
         self._setup_runner()
+
+        # 任务历史管理器（持久化到日志目录）
+        self.history = HistoryManager(self.log_dir)
+        self._current_record_id = None  # 当前正在运行的记录 id
+
         self._build_ui()
         self.logger.info("GUI自动化工具启动")
 
@@ -123,6 +136,8 @@ class AutomationGUI:
         menubar.add_cascade(label="工具", menu=tool_menu)
         tool_menu.add_command(label="清空日志", command=self._clear_log)
         tool_menu.add_command(label="打开日志目录", command=self._open_log_dir)
+        tool_menu.add_separator()
+        tool_menu.add_command(label="清空任务历史", command=self._clear_history)
         tool_menu.add_separator()
         tool_menu.add_command(label="退出", command=self.root.quit)
 
@@ -229,9 +244,13 @@ class AutomationGUI:
         self.preview_info = ttk.Label(self.preview_frame, text="选择Excel文件后显示数据预览", foreground="gray")
         self.preview_info.pack(anchor=tk.W, pady=(3, 0))
 
-        # 右侧：日志
-        log_frame = ttk.LabelFrame(self.paned, text="运行日志", padding="5")
-        self.paned.add(log_frame, weight=1)
+        # 右侧：使用 Notebook 容纳「运行日志」与「任务历史」
+        self.right_notebook = ttk.Notebook(self.paned)
+        self.paned.add(self.right_notebook, weight=1)
+
+        # —— 运行日志标签页 ——
+        log_frame = ttk.Frame(self.right_notebook, padding="5")
+        self.right_notebook.add(log_frame, text="运行日志")
 
         self.log_text = ColoredLogText(
             log_frame,
@@ -244,6 +263,11 @@ class AutomationGUI:
             width=30
         )
         self.log_text.pack(fill=tk.BOTH, expand=True)
+
+        # —— 任务历史标签页 ——
+        history_frame = ttk.Frame(self.right_notebook, padding="5")
+        self.right_notebook.add(history_frame, text="任务历史")
+        self._build_history_panel(history_frame)
 
         # 状态栏
         status_frame = ttk.Frame(self.root)
@@ -294,6 +318,113 @@ class AutomationGUI:
         # 空闲时同步状态栏（运行中不覆盖）
         if not self.is_running:
             self._set_status(f"就绪 - 当前功能: {category}")
+
+    def _build_history_panel(self, parent):
+        """构建任务历史标签页：工具条 + Treeview（时间/任务/分类/状态/耗时）"""
+        # 工具条
+        tool_frame = ttk.Frame(parent)
+        tool_frame.pack(side=tk.TOP, fill=tk.X, pady=(0, 5))
+
+        self.history_count_label = ttk.Label(tool_frame, text="", foreground="gray")
+        self.history_count_label.pack(side=tk.LEFT)
+
+        ttk.Button(
+            tool_frame, text="清空记录", command=self._clear_history, width=10
+        ).pack(side=tk.RIGHT, padx=(2, 0))
+
+        # 列表
+        columns = ("time", "task", "category", "status", "elapsed")
+        self.history_tree = ttk.Treeview(
+            parent, columns=columns, show="headings", height=15, selectmode=tk.BROWSE
+        )
+        self.history_tree.heading("time", text="时间")
+        self.history_tree.heading("task", text="任务")
+        self.history_tree.heading("category", text="分类")
+        self.history_tree.heading("status", text="状态")
+        self.history_tree.heading("elapsed", text="耗时")
+        self.history_tree.column("time", width=130, stretch=False)
+        self.history_tree.column("task", width=100, stretch=False)
+        self.history_tree.column("category", width=80, stretch=False)
+        self.history_tree.column("status", width=50, stretch=False)
+        self.history_tree.column("elapsed", width=50, stretch=False)
+
+        # 状态配色
+        self.history_tree.tag_configure("success", foreground="#008000")
+        self.history_tree.tag_configure("failed", foreground="#f44747")
+        self.history_tree.tag_configure("error", foreground="#f44747")
+        self.history_tree.tag_configure("stopped", foreground="#BDB76B")
+        self.history_tree.tag_configure("running", foreground="#0000FF")
+
+        v_scroll = ttk.Scrollbar(parent, orient=tk.VERTICAL, command=self.history_tree.yview)
+        self.history_tree.configure(yscrollcommand=v_scroll.set)
+        self.history_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        v_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # 双击查看详情
+        self.history_tree.bind('<Double-Button-1>', self._show_history_detail)
+
+        self._refresh_history()
+
+    def _refresh_history(self):
+        """刷新任务历史列表（线程安全：仅主线程调用）"""
+        tree = self.history_tree
+        tree.delete(*tree.get_children())
+
+        status_tag = {
+            STATUS_SUCCESS: "success",
+            STATUS_FAILED: "failed",
+            STATUS_ERROR: "error",
+            STATUS_STOPPED: "stopped",
+            STATUS_RUNNING: "running",
+        }
+        for rec in self.history.records:
+            status = rec.get("status", "")
+            tag = status_tag.get(status, "")
+            elapsed = self.history.format_elapsed(rec.get("elapsed", 0))
+            tree.insert(
+                "", tk.END,
+                iid=str(rec["id"]),
+                values=(
+                    rec.get("time", ""),
+                    rec.get("task", ""),
+                    rec.get("category", ""),
+                    status,
+                    elapsed,
+                ),
+                tags=(tag,) if tag else (),
+            )
+
+        self.history_count_label.config(text=f"共 {len(self.history.records)} 条")
+
+    def _clear_history(self):
+        """清空任务历史"""
+        if not self.history.records:
+            return
+        if messagebox.askyesno("确认", "确定清空所有任务历史记录？"):
+            self.history.clear()
+            self._refresh_history()
+            self._log("[历史] 已清空任务历史记录")
+
+    def _show_history_detail(self, event):
+        """双击查看任务详情"""
+        sel = self.history_tree.selection()
+        if not sel:
+            return
+        rec_id = int(sel[0])
+        rec = next((r for r in self.history.records if r["id"] == rec_id), None)
+        if not rec:
+            return
+        detail = rec.get("detail", "")
+        msg = (
+            f"时间: {rec.get('time', '')}\n"
+            f"任务: {rec.get('task', '')}\n"
+            f"分类: {rec.get('category', '')}\n"
+            f"状态: {rec.get('status', '')}\n"
+            f"耗时: {self.history.format_elapsed(rec.get('elapsed', 0))}"
+        )
+        if detail:
+            msg += f"\n\n详情: {detail}"
+        messagebox.showinfo("任务详情", msg)
 
     def _update_paths_for_selected_script(self):
         """根据当前选中的脚本更新路径显示"""
@@ -687,6 +818,8 @@ class AutomationGUI:
         self.logger.info(f"开始执行: {script['name']}")
 
         # 交给执行引擎在后台线程运行
+        self._current_record_id = self.history.add_record(script["name"], self.current_category)
+        self._refresh_history()
         self.runner.run(task)
 
     def _stop_script(self):
@@ -695,6 +828,12 @@ class AutomationGUI:
             self._log("\n[停止] 用户手动停止...")
             self.logger.info("用户手动停止")
             self._set_status("已停止（用户手动）")
+
+            if self._current_record_id is not None:
+                self.history.update_record(self._current_record_id, STATUS_STOPPED)
+                self._current_record_id = None
+                self._refresh_history()
+
             self.runner.stop()
 
     def _clear_log(self):
@@ -711,13 +850,23 @@ class AutomationGUI:
     def _on_run_finish(self, return_code, elapsed, task):
         def _apply():
             if return_code == 0:
+                status = STATUS_SUCCESS
+                detail = ""
                 self._log(f"\n[成功] {task.name} 执行完成")
                 self.logger.info(f"执行成功: {task.name}")
                 self._set_status(f"完成: {task.name} (用时 {elapsed:.1f}s)")
             else:
+                status = STATUS_FAILED
+                detail = f"退出码: {return_code}"
                 self._log(f"\n[错误] {task.name} 执行失败，退出码: {return_code}")
                 self.logger.error(f"执行失败: {task.name}, 退出码: {return_code}")
                 self._set_status(f"失败: {task.name} (用时 {elapsed:.1f}s)")
+
+            if self._current_record_id is not None:
+                self.history.update_record(self._current_record_id, status, elapsed, detail)
+                self._current_record_id = None
+                self._refresh_history()
+
             self._reset_running_state()
         self.root.after(0, _apply)
 
@@ -726,6 +875,12 @@ class AutomationGUI:
             self._log(f"\n[异常] 执行出错: {exc}")
             self.logger.error(f"执行异常: {exc}")
             self._set_status(f"异常: {task.name}")
+
+            if self._current_record_id is not None:
+                self.history.update_record(self._current_record_id, STATUS_ERROR, detail=str(exc))
+                self._current_record_id = None
+                self._refresh_history()
+
             self._reset_running_state()
         self.root.after(0, _apply)
 
