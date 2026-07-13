@@ -2,6 +2,7 @@
 """GUI自动化主窗口：界面构建、参数配置、日志展示与执行编排"""
 
 import os
+import sys
 import time
 import logging
 from datetime import datetime
@@ -55,6 +56,11 @@ class AutomationGUI:
         # 任务中心顺序执行模式开关
         self._task_mode = False
         self.task_center = None
+
+        # 脚本列表 -> 任务队列 的拖拽状态
+        self._drag_script = None
+        self._drag_active = False
+        self._drag_start_y = 0
 
         # 状态栏状态
         self._status_running = False
@@ -225,6 +231,10 @@ class AutomationGUI:
         self.script_listbox.config(yscrollcommand=scrollbar.set)
         self.script_listbox.bind('<Double-Button-1>', lambda e: self._execute_script())
         self.script_listbox.bind('<<ListboxSelect>>', lambda e: (self._update_paths_for_selected_script(), self._update_params_for_selected_script()))
+        # 从脚本列表拖入任务队列
+        self.script_listbox.bind('<ButtonPress-1>', self._on_list_drag_start)
+        self.script_listbox.bind('<B1-Motion>', self._on_list_drag_motion)
+        self.script_listbox.bind('<ButtonRelease-1>', self._on_list_drag_end)
 
         # 参数配置面板
         self.params_frame = ttk.LabelFrame(middle_frame, text="参数配置", padding="8")
@@ -310,6 +320,8 @@ class AutomationGUI:
         self.pane_ratio = 0.5
         # 必须等窗口真正显示（<Map>）后再设置 sash，否则 winfo_width 为 1 -> 比例失效
         self.root.bind("<Map>", self._on_first_map)
+        # 全局捕获鼠标释放，用于「从脚本列表拖入任务队列」的落点判定
+        self.root.bind("<ButtonRelease-1>", self._on_global_drop)
         # 窗口缩放时按比例保持
         self.paned.bind("<Configure>", lambda e: self._apply_pane_ratio())
 
@@ -388,7 +400,7 @@ class AutomationGUI:
         self.history_tree.tag_configure("success", foreground="#008000")
         self.history_tree.tag_configure("failed", foreground="#f44747")
         self.history_tree.tag_configure("error", foreground="#f44747")
-        self.history_tree.tag_configure("stopped", foreground="#BDB76B")
+        self.history_tree.tag_configure("stopped", foreground="#FF8C00")
         self.history_tree.tag_configure("running", foreground="#0000FF")
 
         v_scroll = ttk.Scrollbar(parent, orient=tk.VERTICAL, command=self.history_tree.yview)
@@ -761,6 +773,85 @@ class AutomationGUI:
                 if s["name"] == script_name:
                     return s
         return None
+
+    # ====================== 脚本列表 -> 任务队列 拖拽 ======================
+    def _on_list_drag_start(self, event):
+        """从脚本列表开始拖拽（记录待拖出的脚本）"""
+        if self.task_center is None or self.task_center.is_running:
+            self._drag_script = None
+            return
+        idx = self.script_listbox.nearest(event.y)
+        if idx < 0:
+            self._drag_script = None
+            return
+        name = self.script_listbox.get(idx)
+        script = None
+        category = None
+        for cat, scripts in SCRIPTS_CONFIG.items():
+            for s in scripts:
+                if s["name"] == name:
+                    script, category = s, cat
+                    break
+            if script:
+                break
+        if script is None:
+            self._drag_script = None
+            return
+        self._drag_script = dict(script)
+        self._drag_script["category"] = category
+        self._drag_active = False
+        self._drag_start_y = event.y
+
+    def _on_list_drag_motion(self, event):
+        """拖动过程中：超过阈值视为拖拽，并在悬停于队列时显示落点"""
+        if self._drag_script is None:
+            return
+        if abs(event.y - self._drag_start_y) < 6:
+            return
+        self._drag_active = True
+        tc = self.task_center
+        if tc is None:
+            return
+        tree = tc.tree
+        rx, ry = tree.winfo_rootx(), tree.winfo_rooty()
+        if rx <= event.x_root <= rx + tree.winfo_width() and ry <= event.y_root <= ry + tree.winfo_height():
+            tc._update_drop_indicator(event.y_root - ry)
+        else:
+            tc._hide_drop_indicator()
+
+    def _on_list_drag_end(self, event):
+        """列表框内释放：若不在队列上方则取消拖拽状态"""
+        tc = self.task_center
+        over_tree = False
+        if tc is not None:
+            tree = tc.tree
+            rx, ry = tree.winfo_rootx(), tree.winfo_rooty()
+            over_tree = (rx <= event.x_root <= rx + tree.winfo_width()
+                         and ry <= event.y_root <= ry + tree.winfo_height())
+        if not over_tree:
+            self._drag_script = None
+            self._drag_active = False
+            if tc is not None:
+                tc._hide_drop_indicator()
+        # 在队列上方释放时保留状态，交由 _on_global_drop 处理落点与清理
+
+    def _on_global_drop(self, event):
+        """全局捕获释放：处理从脚本列表拖入队列的落点"""
+        script = self._drag_script
+        active = self._drag_active
+        self._drag_script = None
+        self._drag_active = False
+        tc = self.task_center
+        if tc is not None:
+            tc._hide_drop_indicator()
+        if not active or script is None or tc is None:
+            return
+        if tc.is_running:
+            return
+        tree = tc.tree
+        rx, ry = tree.winfo_rootx(), tree.winfo_rooty()
+        if rx <= event.x_root <= rx + tree.winfo_width() and ry <= event.y_root <= ry + tree.winfo_height():
+            tc.add_script_from_drop(script, event.y_root - ry)
 
     def _execute_script(self):
         """执行脚本"""
