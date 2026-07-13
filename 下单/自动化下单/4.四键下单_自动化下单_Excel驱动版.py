@@ -36,6 +36,7 @@ Excel 字段说明:
 """
 
 from pywinauto import Application, findwindows
+from core.window import switch_panel
 import os
 import time
 import sys
@@ -119,17 +120,6 @@ def activate_window(hwnd: int):
     win = app.window(handle=hwnd)
     win.set_focus()
     return win
-
-
-def switch_panel(win, tree_item: str):
-    tree = win.child_window(auto_id="1223", control_type="Tree")
-    tree.wait("ready", timeout=10)
-    tree.set_focus()
-    tree.type_keys("{HOME}", with_spaces=False)
-    time.sleep(0.2)
-    item = win.child_window(title=tree_item, control_type="TreeItem")
-    item.select()
-    print(f"[OK] 已切换到面板: {tree_item}")
 
 
 def fill_contract_code(win, code: str):

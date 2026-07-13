@@ -14,6 +14,7 @@
 """
 
 from pywinauto import Application, findwindows
+from core.window import switch_panel
 import time
 import sys
 
@@ -53,22 +54,6 @@ def activate_window(hwnd: int):
     win = app.window(handle=hwnd)
     win.set_focus()
     return win
-
-
-def switch_to_combination_panel(win):
-    """切换到组合申报面板(get_item直接定位)。"""
-    tree = win.child_window(auto_id="1223", control_type="Tree")
-    tree.wait("ready", timeout=10)
-    tree.set_focus()
-    tree.type_keys("{HOME}", with_spaces=False)
-    time.sleep(0.2)
-
-    # get_item 直接定位到目标节点: 组合申报 -> 组合申报
-    item = tree.get_item(r"\组合申报\组合申报")
-    tree.set_focus()
-    item.select()
-    time.sleep(0.15)
-    print("[OK] 已切换到组合申报面板")
 
 
 def select_exchange(win, exchange: str):
@@ -309,7 +294,7 @@ def main():
         win = activate_window(hwnd)
 
         # 切换到组合申报面板
-        switch_to_combination_panel(win)
+        switch_panel(win, r"\组合申报\组合申报")
         time.sleep(0.5)
 
         total_executed = 0

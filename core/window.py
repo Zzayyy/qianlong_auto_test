@@ -39,8 +39,7 @@ if getattr(sys, 'frozen', False):
 
 import time
 import sys
-import ctypes
-from pywinauto import Application, findwindows, mouse
+from pywinauto import Application, findwindows
 from pywinauto.timings import Timings
 
 
@@ -74,73 +73,78 @@ def countdown(seconds: int):
     print(" " * 30, end="\r")
 
 
-def _select_tree_item_by_path(tree, panel_path: str):
-    """用 get_item 直接定位并选中树节点。
+def _load_menu_locator():
+    """懒加载 win32gui菜单定位 模块（中文文件名，用 importlib 导入）。
 
-    Args:
-        tree: Tree 控件
-        panel_path: 树形面板路径,如 r"\查询\资金持仓" 或 "\撤单"
+    该模块提供 detect_target_bitness / find_treeview / RemoteMem / select_node
+    等函数，通过 TVM_* 消息直接定位并选中左侧菜单树节点，不依赖屏幕坐标。
     """
-    # 规范化路径
-    path = panel_path.replace("/", "\\")
-    if not path.startswith("\\"):
-        path = "\\" + path
+    if getattr(_load_menu_locator, "mod", None) is not None:
+        return _load_menu_locator.mod
 
-    # get_item 直接定位到目标节点,无需逐级展开
-    item = tree.get_item(path)
-    tree.set_focus()        # 必须
-    item.select()
-    time.sleep(0.15)
-    return item
+    import importlib.util
+    import os
+
+    here = os.path.dirname(os.path.abspath(__file__))
+    loc_path = os.path.abspath(os.path.join(here, "..", "win32gui菜单定位.py"))
+
+    if not os.path.exists(loc_path):
+        raise RuntimeError(f"未找到 win32gui菜单定位.py: {loc_path}")
+
+    spec = importlib.util.spec_from_file_location("win32gui_menu_loc", loc_path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    _load_menu_locator.mod = mod
+    return mod
 
 
 def switch_panel(win, panel_path: str, use_title: bool = False):
-    """切换到指定面板。
+    """切换到指定面板（使用 win32gui 直接定位 TreeView 节点）。
+
+    参考 win32gui菜单定位.py 的方法：通过 TVM_* 消息直接定位并选中左侧菜单树
+    节点，不再依赖屏幕坐标点击，免去分辨率换算与鼠标移动带来的脆弱性。
 
     Args:
-        win: 主窗口
+        win: 主窗口（pywinauto 对象或含 handle 属性的对象）
         panel_path: 树形面板路径,如 r"\查询\资金持仓" 或 "撤单"
-        use_title: 是否用title定位TreeItem(历史委托/历史成交需要)
+        use_title: 保留参数（该定位方法不依赖 title，仅用于兼容调用方）
     """
-    # ── 先激活左侧菜单区域（全局菜单Home功能） ──
-    rect = win.rectangle()
+    target_hwnd = getattr(win, "handle", win)
 
-    # 根据屏幕分辨率动态计算水平偏移量
-    screen_width = ctypes.windll.user32.GetSystemMetrics(0)
-    offset_x = int(screen_width * 0.01)
-    if offset_x < 50:
-        offset_x = 50
-    if offset_x > 200:
-        offset_x = 200
+    menu = _load_menu_locator()
 
-    # 菜单位置：窗口最左边 + 偏移量，垂直居中
-    menu_x = rect.left + offset_x 
-    menu_y = rect.top + (rect.bottom - rect.top) // 2
-
-    mouse.move(coords=(menu_x, menu_y))
+    # 先把目标窗口置前，确保 SendMessage 能被正常处理
+    try:
+        win32gui.SetForegroundWindow(target_hwnd)
+    except Exception:
+        pass
     time.sleep(0.3)
-    mouse.click(coords=(menu_x, menu_y))
-    time.sleep(0.5)
-    win.type_keys("{HOME}", with_spaces=False)
-    time.sleep(0.3)
-    # ───────────────────────────────────────────────
 
-    tree = win.child_window(auto_id="1223", control_type="Tree")
-    tree.wait("ready", timeout=10)
-    tree.set_focus()
+    # 检测目标进程位数（32/64 位结构体布局不同，必须使用对应布局）
+    target_bits = menu.detect_target_bitness(target_hwnd)
 
-    # 先滚到顶部
-    tree.type_keys("{HOME}", with_spaces=False)
-    time.sleep(0.2)
+    # 通过控件 ID 直接定位 TreeView 句柄（auto_id=1223）
+    tree_hwnd = menu.find_treeview(target_hwnd, control_id=1223)
+    if not tree_hwnd:
+        raise RuntimeError("未找到左侧 TreeView 控件(auto_id=1223)，无法切换面板")
 
-    # 提取最终面板名称
-    panel_name = panel_path.rsplit("\\", 1)[-1]
+    # 在目标进程内分配内存，按路径逐级定位并选中节点
+    mem = menu.RemoteMem(tree_hwnd, target_bits)
+    try:
+        # 路径字符串 -> 层级列表："\查询\资金持仓" -> ["查询", "资金持仓"]
+        path = panel_path.replace("/", "\\")
+        if path.startswith("\\"):
+            path = path[1:]
+        path_list = [p for p in path.split("\\") if p]
 
-    # get_item 直接定位并切换到目标面板(无需右击全部展开、无需滚动)
-    item = _select_tree_item_by_path(tree, panel_path)
+        h_item = menu.select_node(tree_hwnd, path_list, mem)
+        if not h_item:
+            raise RuntimeError(f"未找到面板路径: {panel_path}")
+    finally:
+        mem.close()
 
-    # 最后 click_input 确保触发点击事件
-    # item.click_input()
+    panel_name = path_list[-1]
     print(f"[OK] 已切换到'{panel_name}'面板")
 
 
