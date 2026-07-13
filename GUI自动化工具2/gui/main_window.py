@@ -974,10 +974,13 @@ class AutomationGUI:
             self.runner.stop()
         # 子进程结束后会触发回调，task_center 据此进入停止收尾流程
 
-    def execute_task_item(self, item, record_id):
-        """由任务中心调用：执行队列中的单个任务项（带参数快照）"""
+    def execute_task_item(self, item, record_id, next_category=""):
+        """由任务中心调用：执行队列中的单个任务项（带参数快照）
+
+        next_category: 下一个任务的分类，传给脚本用于决定交易系统设置窗口是否保留。
+        """
         script = {"name": item["script_name"], "path": item["script_path"]}
-        task = Task(script, item["category"], item["params"])
+        task = Task(script, item["category"], item["params"], next_category=next_category)
         self.runner.run(task)
 
     def _reset_running_state_if_idle(self):

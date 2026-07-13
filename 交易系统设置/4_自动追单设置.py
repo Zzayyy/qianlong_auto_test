@@ -34,7 +34,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from PIL import Image
 from pywinauto import Application, findwindows
-from core.window import find_window, activate_window, countdown
+from core.window import find_window, activate_window, countdown, close_settings_dialog
 
 
 # ====================== 可配置参数 ======================
@@ -636,6 +636,13 @@ def main():
         # 9. 保存报告
         report_path = os.path.join(OUTPUT_DIR, RESULT_SUBDIR, f"自动追单设置测试报告_{timestamp}.txt")
         result.to_file(report_path)
+
+        # 10. 关闭/保留交易系统设置窗口
+        #     任务中心顺序执行时：若下一个任务仍是“交易系统设置”分类，则保留窗口供其
+        #     复用（避免反复开关）；否则关闭窗口（含单独运行/任务中心最后一个任务），
+        #     以免下一个非本类脚本因找不到窗口而报错。
+        keep_open = os.environ.get("GUI_NEXT_CATEGORY", "") == "交易系统设置"
+        close_settings_dialog(dlg, keep_open=keep_open)
 
         print(f"\n=== 测试完成 ===")
 

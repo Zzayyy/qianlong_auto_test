@@ -806,8 +806,14 @@ class TaskCenter:
         self._record_id = self.gui.history.add_record(item["script_name"], item["category"])
         self.gui._refresh_history()
 
+        # 计算下一个任务的分类（用于决定交易系统设置窗口是否保留）
+        if self._current_index + 1 < len(self.tasks):
+            next_category = self.tasks[self._current_index + 1].get("category", "")
+        else:
+            next_category = ""
+
         # 交给主窗口引擎执行（脚本路径 + 已快照的参数）
-        self.controller.execute_task_item(item, self._record_id)
+        self.controller.execute_task_item(item, self._record_id, next_category)
 
     def on_finish(self, return_code, elapsed, item):
         """单个任务结束回调：更新状态后执行下一个"""

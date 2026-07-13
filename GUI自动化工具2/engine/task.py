@@ -7,10 +7,13 @@ import os
 class Task:
     """一次脚本执行任务：脚本信息 + 分类 + 运行时参数"""
 
-    def __init__(self, script, category, params=None):
+    def __init__(self, script, category, params=None, next_category=None):
         self.script = script            # {"name": str, "path": str}
         self.category = category
         self.params = params or {}
+        # 任务中心顺序执行时，下一个任务的分类（用于决定交易系统设置窗口是否保留）。
+        # 最后一个任务 / 单独执行时为 None。
+        self.next_category = next_category
 
     @property
     def name(self):
@@ -43,5 +46,8 @@ class Task:
         # 交易系统设置 输出路径
         if self.category == "交易系统设置":
             env["GUI_OUTPUT_DIR"] = p.get("settings_output_dir", "")
+
+        # 下一个任务的分类：交易系统设置脚本据此决定是否保留设置窗口
+        env["GUI_NEXT_CATEGORY"] = self.next_category or ""
 
         return env

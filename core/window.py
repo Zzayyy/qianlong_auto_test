@@ -236,3 +236,53 @@ def click_output_button(win, button_auto_id: str = "1159") -> bool:
     except Exception as e:
         print(f"[WARN] 点击'输出'按钮失败: {e}")
         return False
+
+
+def close_settings_dialog(dlg, title: str = "交易系统设置", keep_open: bool = False):
+    """关闭（或保留）交易系统设置对话框。
+
+    任务中心顺序执行场景下用于解决“窗口残留”问题：
+      - keep_open=True  -> 保留窗口，供下一个同样属于“交易系统设置”分类的脚本复用。
+                           这些脚本的 open_settings_dialog 会先复用已打开的窗口，
+                           从而避免每个脚本都重复点击打开/关闭窗口。
+      - keep_open=False -> 关闭窗口，防止下一个非“交易系统设置”分类的脚本因找不到
+                           本类窗口而报错（也是单独运行/任务中心最后一个任务的安全默认）。
+
+    关闭策略：优先 dlg.close()（WM_CLOSE），失败则用 Alt+F4 兜底；最后校验窗口是否已关闭。
+    """
+    if keep_open:
+        print(f"[INFO] 保留'{title}'窗口，供下一个交易系统设置脚本复用")
+        return
+
+    if dlg is None:
+        return
+
+    try:
+        # 策略1：pywinauto close()（WM_CLOSE）
+        try:
+            dlg.close()
+        except Exception:
+            pass
+
+        # 校验：若窗口仍存在，用 Alt+F4 再尝试一次
+        try:
+            dlg.rectangle()
+        except Exception:
+            print(f"[OK] 已关闭'{title}'窗口")
+            return
+
+        try:
+            dlg.set_focus()
+            dlg.type_keys("%{F4}")
+            time.sleep(0.5)
+        except Exception:
+            pass
+
+        # 再校验一次是否已关闭
+        try:
+            dlg.rectangle()
+            print(f"[WARN] 未能自动关闭'{title}'窗口，请手动关闭")
+        except Exception:
+            print(f"[OK] 已关闭'{title}'窗口")
+    except Exception as e:
+        print(f"[WARN] 关闭'{title}'窗口时出错: {e}")
