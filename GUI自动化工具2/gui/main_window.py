@@ -370,14 +370,63 @@ class AutomationGUI:
         if not self.is_running:
             self._set_status(f"就绪 - 当前功能: {category}")
 
+    # ====================== 任务历史标签页 ======================
     def _build_history_panel(self, parent):
-        """构建任务历史标签页：工具条 + Treeview（时间/任务/分类/状态/耗时）"""
+        """构建任务历史标签页：统计面板 + 列表视图"""
+        # —— 统计面板（成功率 / 平均耗时 / 今日执行 / 历史总计）——
+        stats_frame = ttk.Frame(parent)
+        stats_frame.pack(side=tk.TOP, fill=tk.X, pady=(0, 6))
+
+        self.stat_success = self._make_stat_card(stats_frame, "成功率")
+        self.stat_avg = self._make_stat_card(stats_frame, "平均耗时")
+        self.stat_today = self._make_stat_card(stats_frame, "今日执行")
+        self.stat_total = self._make_stat_card(stats_frame, "历史总计")
+
+        # —— 列表视图 ——
+        self._build_history_list(parent)
+
+        self._refresh_history()
+
+    def _make_stat_card(self, parent, title):
+        """生成一个统计卡片（标题 + 大号数值），返回数值标签引用"""
+        card = ttk.LabelFrame(parent, text=title, padding=(6, 2), labelanchor="n")
+        card.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=3)
+        value_label = ttk.Label(
+            card, text="—", font=("Microsoft YaHei UI", 15, "bold"),
+            foreground="#0078d4", anchor=tk.CENTER
+        )
+        value_label.pack(fill=tk.X, pady=(2, 2))
+        return value_label
+
+    # ---------- 列表视图 ----------
+    def _build_history_list(self, parent):
+        """构建列表视图：工具条（统计/筛选/清空）+ Treeview"""
         # 工具条
         tool_frame = ttk.Frame(parent)
         tool_frame.pack(side=tk.TOP, fill=tk.X, pady=(0, 5))
 
         self.history_count_label = ttk.Label(tool_frame, text="", foreground="gray")
         self.history_count_label.pack(side=tk.LEFT)
+
+        # 状态筛选
+        ttk.Label(tool_frame, text="状态:").pack(side=tk.LEFT, padx=(10, 2))
+        self.history_filter_var = tk.StringVar(value="全部")
+        filter_combo = ttk.Combobox(
+            tool_frame, textvariable=self.history_filter_var, state="readonly", width=8
+        )
+        filter_combo["values"] = ["全部", "成功", "失败", "异常", "已停止", "运行中"]
+        filter_combo.pack(side=tk.LEFT)
+        filter_combo.bind("<<ComboboxSelected>>", lambda e: self._refresh_history())
+
+        # 时间范围筛选
+        ttk.Label(tool_frame, text="时间:").pack(side=tk.LEFT, padx=(8, 2))
+        self.history_range_var = tk.StringVar(value="全部")
+        range_combo = ttk.Combobox(
+            tool_frame, textvariable=self.history_range_var, state="readonly", width=8
+        )
+        range_combo["values"] = ["全部", "今天", "近一周", "近一月"]
+        range_combo.pack(side=tk.LEFT)
+        range_combo.bind("<<ComboboxSelected>>", lambda e: self._refresh_history())
 
         ttk.Button(
             tool_frame, text="清空记录", command=self._clear_history, width=10
@@ -393,11 +442,11 @@ class AutomationGUI:
         self.history_tree.heading("category", text="分类")
         self.history_tree.heading("status", text="状态")
         self.history_tree.heading("elapsed", text="耗时")
-        self.history_tree.column("time", width=130, stretch=False)
-        self.history_tree.column("task", width=100, stretch=False)
+        self.history_tree.column("time", width=85, stretch=False)
+        self.history_tree.column("task", width=120, stretch=True)
         self.history_tree.column("category", width=80, stretch=False)
-        self.history_tree.column("status", width=50, stretch=False)
-        self.history_tree.column("elapsed", width=50, stretch=False)
+        self.history_tree.column("status", width=55, stretch=False)
+        self.history_tree.column("elapsed", width=55, stretch=False)
 
         # 状态配色
         self.history_tree.tag_configure("success", foreground="#008000")
@@ -414,12 +463,45 @@ class AutomationGUI:
         # 双击查看详情
         self.history_tree.bind('<Double-Button-1>', self._show_history_detail)
 
-        self._refresh_history()
-
+    # ---------- 刷新入口 ----------
     def _refresh_history(self):
-        """刷新任务历史列表（线程安全：仅主线程调用）"""
+        """刷新任务历史：统计面板 + 列表视图"""
+        self._refresh_stats()
+        self._refresh_history_list()
+
+    def _refresh_stats(self):
+        """计算并显示统计卡片：成功率 / 平均耗时 / 今日执行 / 历史总计"""
+        records = self.history.records
+        total = len(records)
+        finished = [r for r in records if r.get("status") in (
+            STATUS_SUCCESS, STATUS_FAILED, STATUS_ERROR, STATUS_STOPPED)]
+        success = [r for r in finished if r.get("status") == STATUS_SUCCESS]
+        today = sum(1 for r in records if self._is_today(r.get("time", "")))
+        elapsed_vals = [float(r.get("elapsed", 0) or 0) for r in finished]
+        avg = (sum(elapsed_vals) / len(elapsed_vals)) if elapsed_vals else 0.0
+        rate = (len(success) / len(finished) * 100) if finished else 0.0
+
+        self.stat_total.config(text=str(total))
+        self.stat_today.config(text=str(today))
+        self.stat_avg.config(text=self.history.format_elapsed(avg))
+        self.stat_success.config(text=f"{rate:.0f}%")
+        # 成功率配色
+        if not finished:
+            self.stat_success.config(foreground="#888888")
+        elif rate >= 80:
+            self.stat_success.config(foreground="#008000")
+        elif rate >= 50:
+            self.stat_success.config(foreground="#FF8C00")
+        else:
+            self.stat_success.config(foreground="#f44747")
+
+    def _refresh_history_list(self):
+        """刷新列表视图（应用状态 + 时间范围筛选）"""
         tree = self.history_tree
         tree.delete(*tree.get_children())
+        total = len(self.history.records)
+        filt = self.history_filter_var.get() if hasattr(self, "history_filter_var") else "全部"
+        rng = self.history_range_var.get() if hasattr(self, "history_range_var") else "全部"
 
         status_tag = {
             STATUS_SUCCESS: "success",
@@ -428,15 +510,21 @@ class AutomationGUI:
             STATUS_STOPPED: "stopped",
             STATUS_RUNNING: "running",
         }
+        shown = 0
         for rec in self.history.records:
             status = rec.get("status", "")
+            if filt != "全部" and status != filt:
+                continue
+            if rng != "全部" and not self._in_range(rec.get("time", ""), rng):
+                continue
+            shown += 1
             tag = status_tag.get(status, "")
             elapsed = self.history.format_elapsed(rec.get("elapsed", 0))
             tree.insert(
                 "", tk.END,
                 iid=str(rec["id"]),
                 values=(
-                    rec.get("time", ""),
+                    self._concise_time(rec.get("time", "")),
                     rec.get("task", ""),
                     rec.get("category", ""),
                     status,
@@ -445,7 +533,73 @@ class AutomationGUI:
                 tags=(tag,) if tag else (),
             )
 
-        self.history_count_label.config(text=f"共 {len(self.history.records)} 条")
+        parts = [f"共 {total} 条"]
+        if filt != "全部" or rng != "全部":
+            parts.append(f"显示 {shown} 条")
+        self.history_count_label.config(text=" | ".join(parts))
+
+
+    # ---------- 时间格式化工具 ----------
+    @staticmethod
+    def _concise_time(time_str):
+        """把 YYYY-MM-DD HH:MM:SS 转为紧凑展示：
+        今天 -> HH:MM；今年 -> MM-DD HH:MM；跨年 -> YYYY-MM-DD"""
+        try:
+            dt = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
+        except Exception:
+            return time_str
+        now = datetime.now()
+        if dt.date() == now.date():
+            return dt.strftime("%H:%M")
+        if dt.year == now.year:
+            return dt.strftime("%m-%d %H:%M")
+        return dt.strftime("%Y-%m-%d")
+
+    @staticmethod
+    def _relative_time(time_str):
+        """相对时间：刚刚 / N分钟前 / N小时前 / N天前；跨月返回空串"""
+        try:
+            dt = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
+        except Exception:
+            return ""
+        delta = datetime.now() - dt
+        sec = delta.total_seconds()
+        if sec < 0:
+            return ""
+        if sec < 60:
+            return "刚刚"
+        if sec < 3600:
+            return f"{int(sec // 60)}分钟前"
+        if sec < 86400:
+            return f"{int(sec // 3600)}小时前"
+        if sec < 86400 * 30:
+            return f"{int(sec // 86400)}天前"
+        return ""
+
+    @staticmethod
+    def _is_today(time_str):
+        """判断记录是否为今天"""
+        try:
+            dt = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
+        except Exception:
+            return False
+        return dt.date() == datetime.now().date()
+
+    @staticmethod
+    def _in_range(time_str, rng):
+        """判断记录时间是否落在指定范围内（今天 / 近一周 / 近一月）"""
+        try:
+            dt = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
+        except Exception:
+            return False
+        now = datetime.now()
+        if rng == "今天":
+            return dt.date() == now.date()
+        if rng == "近一周":
+            return 0 <= (now - dt).total_seconds() < 7 * 86400
+        if rng == "近一月":
+            return 0 <= (now - dt).total_seconds() < 30 * 86400
+        return True
 
     def _clear_history(self):
         """清空任务历史"""
@@ -457,18 +611,23 @@ class AutomationGUI:
             self._log("[历史] 已清空任务历史记录")
 
     def _show_history_detail(self, event):
-        """双击查看任务详情"""
+        """双击列表查看任务详情"""
         sel = self.history_tree.selection()
         if not sel:
             return
-        rec_id = int(sel[0])
+        self._show_history_detail_by_id(int(sel[0]))
+
+    def _show_history_detail_by_id(self, rec_id):
+        """按记录 id 查看任务详情（列表 / 时间轴共用）"""
         rec = next((r for r in self.history.records if r["id"] == rec_id), None)
         if not rec:
             return
         detail = rec.get("detail", "")
+        rel = self._relative_time(rec.get("time", ""))
         msg = (
-            f"时间: {rec.get('time', '')}\n"
-            f"任务: {rec.get('task', '')}\n"
+            f"时间: {rec.get('time', '')}"
+            + (f" ({rel})" if rel else "")
+            + f"\n任务: {rec.get('task', '')}\n"
             f"分类: {rec.get('category', '')}\n"
             f"状态: {rec.get('status', '')}\n"
             f"耗时: {self.history.format_elapsed(rec.get('elapsed', 0))}"
