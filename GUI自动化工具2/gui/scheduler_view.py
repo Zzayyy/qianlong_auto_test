@@ -5,6 +5,7 @@
 
 import os as _os
 import json, tkinter as tk
+import datetime
 from tkinter import ttk, messagebox, simpledialog
 from config import SCRIPTS_CONFIG, CATEGORIES
 from engine.scheduler import compute_next_run, format_schedule_desc
