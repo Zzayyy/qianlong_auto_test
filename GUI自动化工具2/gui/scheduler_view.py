@@ -85,6 +85,7 @@ class AddSchedDialog(simpledialog.Dialog):
         self.group_combo = ttk.Combobox(self.grp_f, textvariable=self.group_var, values=gnames, state="readonly", width=25)
         self.group_combo.grid(row=0, column=1, sticky=tk.W, padx=(4,0))
         if gnames: self.group_combo.set(gnames[0])
+        self.group_combo.bind("<<ComboboxSelected>>", self._on_group_change)
         self.grp_f.grid_remove()
 
         # === 脚本选择（卡片网格） ===
@@ -203,39 +204,13 @@ class AddSchedDialog(simpledialog.Dialog):
         if self.target_type.get() == "script":
             self.cat_f.grid()
             self.grp_f.grid_remove()
-            self._grp_tree_remove()
             self.sc_f.grid()
             self._fill_scripts()
         else:
             self.cat_f.grid_remove()
             self.grp_f.grid()
-            self.sc_f.grid_remove()
-            self._show_group_detail()
-
-    def _show_group_detail(self):
-        """显示选中编队的任务列表"""
-        gn = self.group_var.get()
-        if not gn:
-            return
-        g = next((g for g in self.groups if g["name"] == gn), None)
-        if not g:
-            return
-        tasks = g.get("tasks", [])
-        for w in self._grp_display or []:
-            w.destroy()
-        self._grp_display = []
-        ttl = ttk.Label(self.grp_f, text=f"\u7f16\u961f\u4efb\u52a1 ({len(tasks)} \u4e2a\u811a\u672c):", foreground="gray", font=("", 9))
-        ttl.grid(row=1, column=0, columnspan=2, sticky=tk.W, pady=(2,0))
-        self._grp_display.append(ttl)
-        for ti, t in enumerate(tasks[:5]):
-            lb = ttk.Label(self.grp_f, text=f"  {ti+1}. {t.get("script_name", "")}", foreground="gray", font=("", 8))
-            lb.grid(row=2+ti, column=0, columnspan=2, sticky=tk.W)
-            self._grp_display.append(lb)
-        if len(tasks) > 5:
-            more = ttk.Label(self.grp_f, text=f"  ...\u8fd8\u6709 {len(tasks)-5} \u4e2a", foreground="gray", font=("", 8))
-            more.grid(row=2+5, column=0, columnspan=2, sticky=tk.W)
-            self._grp_display.append(more)
-
+            self.sc_f.grid()
+            self._fill_group_scripts()
     def _grp_tree_remove(self):
         """清除编队详情显示"""
         for w in getattr(self, "_grp_display", []) or []:
@@ -245,6 +220,51 @@ class AddSchedDialog(simpledialog.Dialog):
     def _on_cat_change(self, event=None):
         self._fill_scripts()
 
+
+    def _on_group_change(self, event=None):
+        if self.target_type.get() == "group":
+            self._fill_group_scripts()
+
+    def _fill_group_scripts(self):
+        """用选中编队的任务填充卡片网格"""
+        for frm, _ in self._card_frames:
+            try: frm.destroy()
+            except: pass
+        self._card_frames = []
+        self._all_scripts = []
+        self._selected_idx = None
+
+        gn = self.group_var.get()
+        if not gn:
+            self._filter_scripts()
+            self._update_name_preview()
+            return
+        g = next((g for g in self.groups if g["name"] == gn), None)
+        if not g:
+            self._filter_scripts()
+            self._update_name_preview()
+            return
+
+        tasks = g.get("tasks", [])
+        self._all_scripts = tasks
+        for idx, t in enumerate(tasks):
+            card = tk.Frame(self.card_inner, relief="solid", borderwidth=1, bg="white", padx=5, pady=5)
+            r, c = divmod(idx, 2)
+            card.grid(row=r, column=c, sticky=tk.EW, padx=3, pady=3)
+            self.card_inner.grid_columnconfigure(0, weight=1)
+            self.card_inner.grid_columnconfigure(1, weight=1)
+            name = t.get("script_name", "") or "未知脚本"
+            cat = t.get("category", "") or ""
+            ttk.Label(card, text=f"#{idx+1}", foreground="#0078d4", font=("", 8)).pack(anchor=tk.W)
+            ttk.Label(card, text=name, font=("", 9)).pack(anchor=tk.W)
+            if cat:
+                ttk.Label(card, text=cat, foreground="gray", font=("", 7)).pack(anchor=tk.W)
+            card.bind("<Button-1>", lambda e, i=idx: self._on_card_click(i))
+            for child in card.winfo_children():
+                child.bind("<Button-1>", lambda e, i=idx: self._on_card_click(i))
+            self._card_frames.append((card, t))
+        self._filter_scripts()
+        self._update_name_preview()
     def _filter_scripts(self):
         """根据搜索关键词显隔卡片"""
         kw = self.search_var.get().strip().lower()
@@ -260,39 +280,21 @@ class AddSchedDialog(simpledialog.Dialog):
             frm.destroy()
         self._card_frames = []
         self._all_scripts = []
-        cat = self.cat_var.get()
-        self._all_scripts = list(SCRIPTS_CONFIG.get(cat, []))
-        self._selected_idx = None
-
-        for idx, s in enumerate(self._all_scripts):
-            card = ttk.Frame(self.card_inner, relief="solid", borderwidth=1, padding="6")
-            card.rowconfigure(0, weight=1)
-            card.columnconfigure(0, weight=1)
-            r, c = divmod(idx, 2)
-            card.grid(row=r, column=c, sticky=tk.EW, padx=3, pady=3)
-            self.card_inner.grid_columnconfigure(0, weight=1)
-            self.card_inner.grid_columnconfigure(1, weight=1)
-            num = s["name"].split(".")[0] if "." in s["name"] else str(idx+1)
-            ttk.Label(card, text=f"#{num}", foreground="#0078d4", font=("", 8)).pack(anchor=tk.W)
-            ttk.Label(card, text=s["name"].split(".",1)[-1].strip() if "." in s["name"] else s["name"], font=("", 9)).pack(anchor=tk.W)
-            card.bind("<Button-1>", lambda e, i=idx: self._on_card_click(i))
-            for child in card.winfo_children():
-                child.bind("<Button-1>", lambda e, i=idx: self._on_card_click(i))
-            self._card_frames.append((card, s))
-
-        self._filter_scripts()
-        self._update_name_preview()
-
     def _on_card_click(self, idx):
-        """点击卡片时高亮选中状态"""
+        """点击卡片时高亮选中状态（蓝色背景+加粗边框）"""
         self._selected_idx = idx
         for i, (frm, _) in enumerate(self._card_frames):
             if i == idx:
-                frm.configure(relief="solid", borderwidth=2)
+                frm.configure(bg="#dbeafe", borderwidth=2)
+                for child in frm.winfo_children():
+                    try: child.configure(bg="#dbeafe")
+                    except: pass
             else:
-                frm.configure(relief="solid", borderwidth=1)
+                frm.configure(bg="white", borderwidth=1)
+                for child in frm.winfo_children():
+                    try: child.configure(bg="white")
+                    except: pass
         self._update_name_preview()
-
     def _on_sched_change(self):
         st = self.sched_type.get()
         if st == "once": self.df.grid()
