@@ -116,6 +116,7 @@ class AddSchedDialog(simpledialog.Dialog):
         self.card_canvas.bind("<Enter>", lambda e: self.card_canvas.bind_all("<MouseWheel>", self._on_card_scroll))
         self.card_canvas.bind("<Leave>", lambda e: self.card_canvas.unbind_all("<MouseWheel>"))
 
+        self.sched_type = tk.StringVar(value="daily")
         self._fill_scripts()
 
         # === 定时配置 ===
@@ -124,7 +125,6 @@ class AddSchedDialog(simpledialog.Dialog):
         sch_f.grid_columnconfigure(1, weight=1)
         row += 1
         ttk.Label(sch_f, text="方式:").grid(row=0, column=0, sticky=tk.W)
-        self.sched_type = tk.StringVar(value="daily")
         sf = ttk.Frame(sch_f)
         sf.grid(row=0, column=1, sticky=tk.W, padx=(8,0))
         for k,v in [("once","一次"),("daily","每天"),("weekly","每周"),("monthly","每月")]:
