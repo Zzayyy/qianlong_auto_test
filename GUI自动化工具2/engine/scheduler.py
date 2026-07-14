@@ -170,6 +170,7 @@ class TaskScheduler:
     def stop(self):
         self._running = False
 
+
     def _scheduler_loop(self):
         while self._running:
             try:

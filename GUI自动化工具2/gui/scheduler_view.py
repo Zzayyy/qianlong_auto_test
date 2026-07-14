@@ -36,7 +36,7 @@ class AddSchedDialog(simpledialog.Dialog):
             pass
 
     def body(self, master):
-        self.geometry("600x620")
+        self.geometry("600x660")
         master.grid_columnconfigure(0, weight=1)
         master.grid_rowconfigure(3, weight=1)
         row = 0
@@ -50,8 +50,6 @@ class AddSchedDialog(simpledialog.Dialog):
         self.name_var = tk.StringVar(value="")
         self.name_entry = ttk.Entry(info_f, textvariable=self.name_var)
         self.name_entry.pack(fill=tk.X, pady=(2,0))
-        self.name_preview = ttk.Label(info_f, text="", foreground="gray", font=("", 9))
-        self.name_preview.pack(anchor=tk.W, pady=(2,0))
 
         # === 目标设置 ===
         tg_f = ttk.LabelFrame(master, text="目标设置", padding="8")
@@ -98,8 +96,9 @@ class AddSchedDialog(simpledialog.Dialog):
         # 搜索框
         self.search_var = tk.StringVar(value="")
         sv = self.search_var
-        sv.trace("w", lambda *a: self._filter_scripts())
-        ttk.Entry(sc_f, textvariable=self.search_var).grid(row=0, column=0, sticky=tk.EW, pady=(0,4))
+        self._search_trace = sv.trace("w", lambda *a: self._filter_scripts())
+        self.search_entry = ttk.Entry(sc_f, textvariable=self.search_var)
+        self.search_entry.grid(row=0, column=0, sticky=tk.EW, pady=(0,4))
 
         # 卡片容器 + 滚动
         cc = ttk.Frame(sc_f)
@@ -193,23 +192,23 @@ class AddSchedDialog(simpledialog.Dialog):
         p = prefix.get(self.sched_type.get(), "")
         sel_name = ""
         if self._selected_idx is not None and self._selected_idx < len(self._all_scripts):
-            sel_name = self._all_scripts[self._selected_idx]["name"]
+            sel_name = self._all_scripts[self._selected_idx].get("name", "") or self._all_scripts[self._selected_idx].get("script_name", "")
         cur = self.name_var.get().strip()
         gen = (p + sel_name) if (not cur) else ""
-        self.name_preview.config(text=f"自动生成: {gen}" if gen else "")
-        if not cur and gen:
-            self.name_var.set(gen)
 
     def _on_target_change(self):
         if self.target_type.get() == "script":
             self.cat_f.grid()
             self.grp_f.grid_remove()
-            self.sc_f.grid()
+            self.sc_f.configure(text="选择脚本")
+            self.search_entry.grid()
             self._fill_scripts()
         else:
             self.cat_f.grid_remove()
             self.grp_f.grid()
-            self.sc_f.grid()
+            self.sc_f.configure(text="")
+            self.search_entry.grid_remove()
+            self.search_var.set("")
             self._fill_group_scripts()
     def _grp_tree_remove(self):
         """清除编队详情显示"""
@@ -232,23 +231,23 @@ class AddSchedDialog(simpledialog.Dialog):
             except: pass
         self._card_frames = []
         self._all_scripts = []
-        self._selected_idx = None
+        self._selected_idx = -1
 
         gn = self.group_var.get()
         if not gn:
             self._filter_scripts()
-            self._update_name_preview()
+        # 编队模式不更新名称预览
             return
         g = next((g for g in self.groups if g["name"] == gn), None)
         if not g:
             self._filter_scripts()
-            self._update_name_preview()
+        # 编队模式不更新名称预览
             return
 
         tasks = g.get("tasks", [])
         self._all_scripts = tasks
         for idx, t in enumerate(tasks):
-            card = tk.Frame(self.card_inner, relief="solid", borderwidth=1, bg="white", padx=5, pady=5)
+            card = tk.Frame(self.card_inner, relief="solid", borderwidth=1, bg="white")
             r, c = divmod(idx, 2)
             card.grid(row=r, column=c, sticky=tk.EW, padx=3, pady=3)
             self.card_inner.grid_columnconfigure(0, weight=1)
@@ -259,18 +258,16 @@ class AddSchedDialog(simpledialog.Dialog):
             ttk.Label(card, text=name, font=("", 9)).pack(anchor=tk.W)
             if cat:
                 ttk.Label(card, text=cat, foreground="gray", font=("", 7)).pack(anchor=tk.W)
-            card.bind("<Button-1>", lambda e, i=idx: self._on_card_click(i))
-            for child in card.winfo_children():
-                child.bind("<Button-1>", lambda e, i=idx: self._on_card_click(i))
+            # 只展示，不可选择
             self._card_frames.append((card, t))
         self._filter_scripts()
-        self._update_name_preview()
+        # 编队模式不更新名称预览
     def _filter_scripts(self):
         """根据搜索关键词显隔卡片"""
         kw = self.search_var.get().strip().lower()
         visible = 0
         for i, (frm, script) in enumerate(self._card_frames):
-            match = (not kw) or (kw in script["name"].lower())
+            match = (not kw) or (kw in (script.get("name") or script.get("script_name", "")).lower())
             frm.grid() if match else frm.grid_remove()
             if match: visible += 1
         self.card_canvas.configure(height=min(200, max(80, ((visible+1)//2)*55)))
@@ -280,6 +277,24 @@ class AddSchedDialog(simpledialog.Dialog):
             frm.destroy()
         self._card_frames = []
         self._all_scripts = []
+        self._selected_idx = None
+        cat = self.cat_var.get()
+        self._all_scripts = list(SCRIPTS_CONFIG.get(cat, []))
+        for idx, s in enumerate(self._all_scripts):
+            card = tk.Frame(self.card_inner, relief="solid", borderwidth=1, bg="white")
+            r, c = divmod(idx, 2)
+            card.grid(row=r, column=c, sticky=tk.EW, padx=3, pady=3)
+            self.card_inner.grid_columnconfigure(0, weight=1)
+            self.card_inner.grid_columnconfigure(1, weight=1)
+            num = s["name"].split(".")[0] if "." in s["name"] else str(idx+1)
+            ttk.Label(card, text=f"#{num}", foreground="#1d3cc7", font=("", 8)).pack(anchor=tk.W)
+            ttk.Label(card, text=s["name"].split(".",1)[-1].strip() if "." in s["name"] else s["name"], font=("", 9)).pack(anchor=tk.W)
+            card.bind("<Button-1>", lambda e, i=idx: self._on_card_click(i))
+            for child in card.winfo_children():
+                child.bind("<Button-1>", lambda e, i=idx: self._on_card_click(i))
+            self._card_frames.append((card, s))
+        self._filter_scripts()
+        self._update_name_preview()
     def _on_card_click(self, idx):
         """点击卡片时高亮选中状态（蓝色背景+加粗边框）"""
         self._selected_idx = idx
@@ -294,7 +309,14 @@ class AddSchedDialog(simpledialog.Dialog):
                 for child in frm.winfo_children():
                     try: child.configure(bg="white")
                     except: pass
-        self._update_name_preview()
+        s = self._all_scripts[self._selected_idx]
+        name = s.get("name") or s.get("script_name", "")
+        try:
+            self.search_var.trace_vdelete("w", self._search_trace)
+        except Exception:
+            pass
+        self.search_var.set(name)
+        self._search_trace = self.search_var.trace("w", lambda *a: self._filter_scripts())
     def _on_sched_change(self):
         st = self.sched_type.get()
         if st == "once": self.df.grid()
