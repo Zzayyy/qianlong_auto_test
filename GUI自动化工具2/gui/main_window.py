@@ -405,32 +405,40 @@ class AutomationGUI:
         tool_frame = ttk.Frame(parent)
         tool_frame.pack(side=tk.TOP, fill=tk.X, pady=(0, 5))
 
-        self.history_count_label = ttk.Label(tool_frame, text="", foreground="gray")
-        self.history_count_label.pack(side=tk.LEFT)
+        # 左侧：筛选组（位置固定，不被计数标签宽度影响）
+        left_group = ttk.Frame(tool_frame)
+        left_group.pack(side=tk.LEFT)
 
         # 状态筛选
-        ttk.Label(tool_frame, text="状态:").pack(side=tk.LEFT, padx=(10, 2))
+        ttk.Label(left_group, text="状态:").pack(side=tk.LEFT, padx=(0, 2))
         self.history_filter_var = tk.StringVar(value="全部")
         filter_combo = ttk.Combobox(
-            tool_frame, textvariable=self.history_filter_var, state="readonly", width=8
+            left_group, textvariable=self.history_filter_var, state="readonly", width=8
         )
         filter_combo["values"] = ["全部", "成功", "失败", "异常", "已停止", "运行中"]
         filter_combo.pack(side=tk.LEFT)
         filter_combo.bind("<<ComboboxSelected>>", lambda e: self._refresh_history())
 
         # 时间范围筛选
-        ttk.Label(tool_frame, text="时间:").pack(side=tk.LEFT, padx=(8, 2))
+        ttk.Label(left_group, text="时间:").pack(side=tk.LEFT, padx=(8, 2))
         self.history_range_var = tk.StringVar(value="全部")
         range_combo = ttk.Combobox(
-            tool_frame, textvariable=self.history_range_var, state="readonly", width=8
+            left_group, textvariable=self.history_range_var, state="readonly", width=8
         )
         range_combo["values"] = ["全部", "今天", "近一周", "近一月"]
         range_combo.pack(side=tk.LEFT)
         range_combo.bind("<<ComboboxSelected>>", lambda e: self._refresh_history())
 
+        # 右侧：信息组（计数 + 清空），锚定在右，内部宽度变化不影响左侧
+        right_group = ttk.Frame(tool_frame)
+        right_group.pack(side=tk.RIGHT)
+
+        self.history_count_label = ttk.Label(right_group, text="", foreground="gray")
+        self.history_count_label.pack(side=tk.LEFT, padx=(2, 0))
+
         ttk.Button(
-            tool_frame, text="清空记录", command=self._clear_history, width=10
-        ).pack(side=tk.RIGHT, padx=(2, 0))
+            right_group, text="清空记录", command=self._clear_history, width=10
+        ).pack(side=tk.LEFT, padx=(8, 0))
 
         # 列表
         columns = ("time", "task", "category", "status", "elapsed")
