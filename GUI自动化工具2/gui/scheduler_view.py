@@ -88,7 +88,7 @@ class AddSchedDialog(simpledialog.Dialog):
         self.grp_f.grid_remove()
 
         # === 脚本选择（卡片网格） ===
-        self.sc_f = ttk.LabelFrame(master, text="选择脚本", padding="8")
+        self.sc_f = sc_f = ttk.LabelFrame(master, text="选择脚本", padding="8")
         sc_f.grid(row=row, column=0, sticky=tk.NSEW, padx=8, pady=4)
         sc_f.grid_columnconfigure(0, weight=1)
         self.sc_f.grid_rowconfigure(1, weight=1)
