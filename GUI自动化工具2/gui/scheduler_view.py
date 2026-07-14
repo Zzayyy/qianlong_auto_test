@@ -110,9 +110,9 @@ class AddSchedDialog(simpledialog.Dialog):
         self.card_canvas.grid(row=0, column=0, sticky=tk.NSEW)
         cs.grid(row=0, column=1, sticky=tk.NS)
         self.card_inner = ttk.Frame(self.card_canvas)
-        self.card_canvas.create_window((0,0), window=self.card_inner, anchor="nw")
+        self.canvas_win = self.card_canvas.create_window((0,0), window=self.card_inner, anchor="nw")
         self.card_inner.bind("<Configure>", lambda e: self.card_canvas.configure(scrollregion=self.card_canvas.bbox("all")))
-        self.card_canvas.bind("<Configure>", lambda e: self.card_canvas.itemconfig(1, width=e.width))
+        self.card_canvas.bind("<Configure>", lambda e: self.card_canvas.itemconfig(self.canvas_win, width=e.width))
         # 鼠标滚轮支持
         self.card_canvas.bind("<Enter>", lambda e: self.card_canvas.bind_all("<MouseWheel>", self._on_card_scroll))
         self.card_canvas.bind("<Leave>", lambda e: self.card_canvas.unbind_all("<MouseWheel>"))
@@ -173,6 +173,16 @@ class AddSchedDialog(simpledialog.Dialog):
 
         return self.name_entry
 
+
+    def buttonbox(self):
+        """右对齐的确定/取消按钮"""
+        box = ttk.Frame(self)
+        ok_btn = ttk.Button(box, text="确定", width=10, command=self.ok)
+        ok_btn.pack(side=tk.RIGHT, padx=(0, 0))
+        ttk.Button(box, text="取消", width=10, command=self.cancel).pack(side=tk.RIGHT, padx=(12, 0))
+        box.pack(fill=tk.X, padx=12, pady=(0, 12))
+        self.bind("<Return>", self.ok)
+        self.bind("<Escape>", self.cancel)
     def _on_card_scroll(self, event):
         self.card_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
 
