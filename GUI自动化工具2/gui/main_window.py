@@ -340,6 +340,9 @@ class AutomationGUI:
     def _on_first_map(self, event):
         """窗口首次显示后应用一次分栏比例，随后解绑"""
         self.root.unbind("<Map>")
+        # 窗口完全显示后再布局分隔条
+        self.root.after(20, self._apply_pane_ratio)
+        self.root.after(100, self._apply_pane_ratio)
         self._apply_pane_ratio()
 
     def _apply_pane_ratio(self):
