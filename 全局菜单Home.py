@@ -2,7 +2,7 @@ from pywinauto import Application,findwindows
 from pywinauto import mouse
 import time
 import ctypes
-
+import numpy as np
 # 获取屏幕分辨率
 def get_screen_resolution():
     """获取屏幕分辨率"""
