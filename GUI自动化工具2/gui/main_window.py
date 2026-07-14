@@ -42,6 +42,9 @@ from gui.history import (
 class AutomationGUI:
     """GUI自动化主界面"""
 
+    # 组合申报：全自动脚本只配置委托数量，查询类脚本配置导出参数
+    COMBO_AUTO_SCRIPTS = ("1.组合申报_全自动", "2.拆分申报_全自动")
+
     def __init__(self, root):
         self.root = root
         self.root.title("钱龙期权交易 - GUI自动化工具")
@@ -500,7 +503,7 @@ class AutomationGUI:
 
     def _update_params_for_selected_script(self):
         """根据选中的脚本更新参数面板"""
-        if self.current_category != "下单":
+        if self.current_category not in ("下单", "组合申报"):
             return
         script = self._get_selected_script()
         if not script:
@@ -510,28 +513,32 @@ class AutomationGUI:
         for w in self.params_frame.winfo_children():
             w.destroy()
 
-        # 根据脚本决定是否显示数据预览
-        if script["name"] in ("5.期权下单_一键导出", "6.全选撤单"):
-            # 这两个脚本不需要数据预览
-            self.preview_frame.pack_forget()
-        else:
-            # 其他脚本需要数据预览
-            self.preview_frame.pack(fill=tk.X, pady=(0, 10))
+        if self.current_category == "下单":
+            # 根据脚本决定是否显示数据预览
+            if script["name"] in ("5.期权下单_一键导出", "6.全选撤单"):
+                # 这两个脚本不需要数据预览
+                self.preview_frame.pack_forget()
+            else:
+                # 其他脚本需要数据预览
+                self.preview_frame.pack(fill=tk.X, pady=(0, 10))
 
-        # 根据脚本更新参数配置面板
-        if script["name"] == "6.全选撤单":
-            # 全选撤单：显示提示信息
-            ttk.Label(
-                self.params_frame,
-                text="该功能无需参数配置，点击执行即可。",
-                foreground="gray"
-            ).pack(pady=20)
-        elif script["name"] == "5.期权下单_一键导出":
-            # 期权下单_一键导出：显示参数配置
-            self._build_export_params()
-        else:
-            # 其他脚本：显示订单参数配置
-            self._build_order_params()
+            # 根据脚本更新参数配置面板
+            if script["name"] == "6.全选撤单":
+                # 全选撤单：显示提示信息
+                ttk.Label(
+                    self.params_frame,
+                    text="该功能无需参数配置，点击执行即可。",
+                    foreground="gray"
+                ).pack(pady=20)
+            elif script["name"] == "5.期权下单_一键导出":
+                # 期权下单_一键导出：显示参数配置
+                self._build_export_params()
+            else:
+                # 其他脚本：显示订单参数配置
+                self._build_order_params()
+        elif self.current_category == "组合申报":
+            # 全自动脚本与查询脚本使用不同参数
+            self._build_combo_params()
 
     def _build_query_params(self):
         """查询类参数"""
@@ -569,7 +576,26 @@ class AutomationGUI:
         self.params_frame.columnconfigure(0, weight=1)
 
     def _build_combo_params(self):
-        """组合申报参数"""
+        """组合申报参数：根据选中的脚本显示不同参数
+
+        - 全自动脚本(组合申报_全自动/拆分申报_全自动): 仅需委托数量
+        - 查询类脚本(组合策略持仓查询等): 导出格式/路径/自动打开
+        """
+        script = self._get_selected_script()
+        if script and script["name"] in self.COMBO_AUTO_SCRIPTS:
+            self._build_combo_auto_params()
+        else:
+            self._build_combo_query_params()
+
+    def _build_combo_auto_params(self):
+        """组合申报/拆分申报 全自动：仅委托数量"""
+        ttk.Label(self.params_frame, text="委托数量:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        ttk.Spinbox(self.params_frame, from_=1, to=999, textvariable=self.order_qty, width=10).grid(row=0, column=1, sticky=tk.W, pady=5)
+
+        self.params_frame.columnconfigure(1, weight=1)
+
+    def _build_combo_query_params(self):
+        """组合策略查询类脚本：导出格式 / 路径 / 自动打开"""
         ttk.Label(self.params_frame, text="导出格式:").grid(row=0, column=0, sticky=tk.W, pady=5)
         ttk.Radiobutton(self.params_frame, text="TXT", variable=self.export_format, value="txt").grid(row=0, column=1, sticky=tk.W)
         ttk.Radiobutton(self.params_frame, text="XLS", variable=self.export_format, value="xls").grid(row=0, column=2, sticky=tk.W)
@@ -586,11 +612,6 @@ class AutomationGUI:
 
         ttk.Label(self.params_frame, text="自动打开文件:").grid(row=3, column=0, sticky=tk.W, pady=5)
         ttk.Checkbutton(self.params_frame, text="导出后自动打开", variable=self.auto_open).grid(row=3, column=1, sticky=tk.W, columnspan=2)
-
-        ttk.Separator(self.params_frame, orient=tk.HORIZONTAL).grid(row=4, column=0, columnspan=3, sticky=tk.EW, pady=10)
-
-        ttk.Label(self.params_frame, text="委托数量:").grid(row=5, column=0, sticky=tk.W, pady=5)
-        ttk.Spinbox(self.params_frame, from_=1, to=999, textvariable=self.order_qty, width=10).grid(row=5, column=1, sticky=tk.W, pady=5)
 
         self.params_frame.columnconfigure(1, weight=1)
 
@@ -926,10 +947,13 @@ class AutomationGUI:
             else:
                 self._log(f"Excel文件: {self.xlsx_file.get()}")
         elif self.current_category == "组合申报":
-            self._log(f"导出格式: {self.export_format.get().upper()}")
-            self._log(f"自动打开: {'是' if self.auto_open.get() else '否'}")
-            self._log(f"TXT路径: {self.txt_path.get()}")
-            self._log(f"XLS路径: {self.xls_path.get()}")
+            if script["name"] in self.COMBO_AUTO_SCRIPTS:
+                self._log(f"委托数量: {self.order_qty.get()}")
+            else:
+                self._log(f"导出格式: {self.export_format.get().upper()}")
+                self._log(f"自动打开: {'是' if self.auto_open.get() else '否'}")
+                self._log(f"TXT路径: {self.txt_path.get()}")
+                self._log(f"XLS路径: {self.xls_path.get()}")
         elif self.current_category == "交易系统设置":
             self._log(f"输出路径: {self.settings_output_dir.get()}")
 

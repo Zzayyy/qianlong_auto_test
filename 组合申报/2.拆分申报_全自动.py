@@ -16,11 +16,12 @@
 from pywinauto import Application, findwindows
 import time
 import sys
+import os
 
 
 # ====================== 可配置参数 ======================
 WINDOW_KEY = "钱龙模拟期权宝"        # 窗口标题关键字
-ORDER_QTY = 1              # 委托数量(拆分申报弹窗中的数量)
+ORDER_QTY = int(os.environ.get("GUI_ORDER_QTY", "1"))  # 委托数量(拆分申报弹窗中的数量)，可由 GUI 参数配置覆盖
 COUNTDOWN = 3              # 操作前倒计时秒数
 # ========================================================
 
