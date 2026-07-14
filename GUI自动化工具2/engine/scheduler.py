@@ -100,6 +100,13 @@ class TaskScheduler:
                 self._tasks = []; self._seq = 0
 
     def _save(self):
+        # 备份旧文件，防止写入失败导致数据丢失
+        if _os.path.exists(self.file_path):
+            try:
+                import shutil
+                shutil.copy2(self.file_path, self.file_path + ".bak")
+            except Exception:
+                pass
         try:
             with open(self.file_path,"w",encoding="utf-8") as f:
                 json.dump({"seq":self._seq,"tasks":self._tasks},f,ensure_ascii=False,indent=2)
@@ -212,14 +219,25 @@ class TaskScheduler:
             self._log(f"命令: {cmd[0]}")
             proc = subprocess.Popen(cmd,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,encoding="utf-8",errors="replace",creationflags=subprocess.CREATE_NO_WINDOW,env=env)
             start = time.time()
-            for line in proc.stdout:
-                line = line.rstrip()
-                if line: self._log(line)
-            rc = proc.wait(); elapsed = time.time()-start
+            try:
+                stdout_data, _ = proc.communicate(timeout=600)
+                if stdout_data:
+                    for l in stdout_data.splitlines():
+                        l = l.rstrip()
+                        if l: self._log(l)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+                raise TimeoutError(f"脚本执行超时 (600s)")
+            rc = proc.returncode; elapsed = time.time()-start
             self._log(f"{'exec OK' if rc==0 else 'exec FAIL'}, {elapsed:.1f}s")
             self._on_finish(sched, rc, elapsed)
         except Exception as e:
             self._on_error(sched, str(e))
+        finally:
+            if self._executing:
+                self._executing = False
+                self._set_running_flag(sched["id"], False)
 
     def _execute_group(self, sched):
         gn = sched.get("group_name","")
@@ -247,22 +265,50 @@ class TaskScheduler:
             try:
                 proc = subprocess.Popen(cmd,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,encoding="utf-8",errors="replace",creationflags=subprocess.CREATE_NO_WINDOW,env=env)
                 start = time.time()
-                for line in proc.stdout:
-                    line = line.rstrip()
-                    if line: self._log(line)
-                rc = proc.wait(); el = time.time()-start; tel += el
+                try:
+                    stdout_data2, _ = proc.communicate(timeout=600)
+                    if stdout_data2:
+                        for l2 in stdout_data2.splitlines():
+                            l2 = l2.rstrip()
+                            if l2: self._log(l2)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait()
+                    self._log(f"[{idx+1}/{len(gts)}] 脚本执行超时 (600s)")
+                    rc = -1
+                else:
+                    rc = proc.returncode
+                el = time.time()-start; tel += el
                 if rc==0: ok+=1; self._log('[' + str(idx+1) + '/' + str(len(gts)) + '] \u6210\u529f (' + str(round(el,1)) + 's)')
                 else: self._log('[' + str(idx+1) + '/' + str(len(gts)) + '] \u5931\u8d25\uff0c\u9000\u51fa\u7801: ' + str(rc))
             except Exception as e:
                 self._log('[' + str(idx+1) + '/' + str(len(gts)) + '] \u5f02\u5e38: ' + str(e))
         self._log('\n\u7f16\u961f\u6267\u884c\u5b8c\u6bd5: ' + str(ok) + '/' + str(len(gts)) + ' \u6210\u529f\uff0c\u603b\u8017\u65f6 ' + str(round(tel,1)) + 's')
+        try:
+            self._on_finish(sched, 0 if ok==len(gts) else 1, tel)
+        except Exception as e:
+            self._on_error(sched, str(e))
+        finally:
+            if self._executing:
+                self._executing = False
+                self._set_running_flag(sched["id"], False)
+
+    def _on_finish(self, sched, rc, elapsed):
+        ns = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with self._lock:
+            for t in self._tasks:
+                if t["id"]==sched["id"]:
+                    t["last_run"]=ns; t["total_runs"]=(t.get("total_runs",0)or 0)+1
+                    if rc==0: t["completed_runs"]=(t.get("completed_runs",0)or 0)+1
+                    if t.get("schedule_type")=="once": t["enabled"]=False; t["status"]="已完成"; t["next_run"]=""
+                    else: t["next_run"]=compute_next_run(t); t["status"]="等待"
+                    self._save(); break
         self._executing=False; self._set_running_flag(sched["id"],False)
         st = "成功" if rc==0 else "失败"
-        self.gui.root.after(0,lambda: self.gui._set_status(f"定时任务: {sched.get('name')} {st}"))
+        self.gui.root.after(0,lambda: self.gui._set_status("定时任务: " + sched.get("name","") + " " + st))
         self.gui.root.after(0,lambda: self.gui._refresh_history())
         if self._view: self.gui.root.after(0,self._view._refresh)
-        self._log(f"完成: {sched.get('name')} {st}，下次: {sched.get('next_run','无')}")
-
+        self._log("完成: " + sched.get("name","") + " " + st + "，下次: " + sched.get("next_run","无"))
     def _on_error(self, sched, err):
         ns = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         with self._lock:

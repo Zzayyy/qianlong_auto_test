@@ -70,7 +70,7 @@ class AddSchedDialog(simpledialog.Dialog):
         self.date_frame = ttk.Frame(sched_frame)
         self.date_frame.grid(row=2,column=0,columnspan=4,sticky=tk.W,padx=4,pady=2)
         ttk.Label(self.date_frame,text="执行日期:").pack(side=tk.LEFT)
-        self.date_var = tk.StringVar(value="2026-07-15")
+        self.date_var = tk.StringVar(value="2026-07-14")
         ttk.Entry(self.date_frame,textvariable=self.date_var,width=12).pack(side=tk.LEFT,padx=4)
         self.date_frame.grid_remove()
         self.wd_frame = ttk.Frame(sched_frame)
