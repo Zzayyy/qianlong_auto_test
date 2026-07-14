@@ -19,6 +19,7 @@ class AddSchedDialog(simpledialog.Dialog):
         self._card_frames = []
         self._all_scripts = []
         self._selected_idx = None
+        self._grp_display = []
         super().__init__(parent, title=title or "添加定时任务")
         self.after(10, self._center_on_parent)
 
@@ -35,7 +36,7 @@ class AddSchedDialog(simpledialog.Dialog):
             pass
 
     def body(self, master):
-        self.geometry("600x540")
+        self.geometry("600x620")
         master.grid_columnconfigure(0, weight=1)
         master.grid_rowconfigure(3, weight=1)
         row = 0
@@ -87,10 +88,10 @@ class AddSchedDialog(simpledialog.Dialog):
         self.grp_f.grid_remove()
 
         # === 脚本选择（卡片网格） ===
-        sc_f = ttk.LabelFrame(master, text="选择脚本", padding="8")
+        self.sc_f = ttk.LabelFrame(master, text="选择脚本", padding="8")
         sc_f.grid(row=row, column=0, sticky=tk.NSEW, padx=8, pady=4)
         sc_f.grid_columnconfigure(0, weight=1)
-        sc_f.grid_rowconfigure(2, weight=1)
+        self.sc_f.grid_rowconfigure(1, weight=1)
         row += 1
 
         # 搜索框
@@ -202,11 +203,45 @@ class AddSchedDialog(simpledialog.Dialog):
         if self.target_type.get() == "script":
             self.cat_f.grid()
             self.grp_f.grid_remove()
+            self._grp_tree_remove()
+            self.sc_f.grid()
             self._fill_scripts()
         else:
             self.cat_f.grid_remove()
             self.grp_f.grid()
+            self.sc_f.grid_remove()
+            self._show_group_detail()
 
+    def _show_group_detail(self):
+        """显示选中编队的任务列表"""
+        gn = self.group_var.get()
+        if not gn:
+            return
+        g = next((g for g in self.groups if g["name"] == gn), None)
+        if not g:
+            return
+        tasks = g.get("tasks", [])
+        for w in self._grp_display or []:
+            w.destroy()
+        self._grp_display = []
+        ttl = ttk.Label(self.grp_f, text=f"\u7f16\u961f\u4efb\u52a1 ({len(tasks)} \u4e2a\u811a\u672c):", foreground="gray", font=("", 9))
+        ttl.grid(row=1, column=0, columnspan=2, sticky=tk.W, pady=(2,0))
+        self._grp_display.append(ttl)
+        for ti, t in enumerate(tasks[:5]):
+            lb = ttk.Label(self.grp_f, text=f"  {ti+1}. {t.get("script_name", "")}", foreground="gray", font=("", 8))
+            lb.grid(row=2+ti, column=0, columnspan=2, sticky=tk.W)
+            self._grp_display.append(lb)
+        if len(tasks) > 5:
+            more = ttk.Label(self.grp_f, text=f"  ...\u8fd8\u6709 {len(tasks)-5} \u4e2a", foreground="gray", font=("", 8))
+            more.grid(row=2+5, column=0, columnspan=2, sticky=tk.W)
+            self._grp_display.append(more)
+
+    def _grp_tree_remove(self):
+        """清除编队详情显示"""
+        for w in getattr(self, "_grp_display", []) or []:
+            try: w.destroy()
+            except Exception: pass
+        self._grp_display = []
     def _on_cat_change(self, event=None):
         self._fill_scripts()
 
