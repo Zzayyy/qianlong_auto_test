@@ -27,8 +27,10 @@ from config import (
 )
 from engine.runner import ScriptRunner
 from engine.task import Task
+from engine.scheduler import TaskScheduler
 from gui.widgets import ColoredLogText
 from gui.task_center import TaskCenter
+from gui.scheduler_view import SchedulerPanel
 from gui.history import (
     HistoryManager,
     STATUS_SUCCESS,
@@ -293,6 +295,13 @@ class AutomationGUI:
         task_frame = ttk.Frame(self.right_notebook, padding="5")
         self.right_notebook.add(task_frame, text="任务中心")
         self.task_center = TaskCenter(task_frame, self)
+        # —— 定时任务标签页 ——
+        sched_frame = ttk.Frame(self.right_notebook, padding="5")
+        self.right_notebook.add(sched_frame, text="定时任务")
+        self.scheduler_view = SchedulerPanel(sched_frame, self)
+        # 创建定时任务调度器（后台线程）
+        self.scheduler = TaskScheduler(self)
+        self.scheduler_view.bind_scheduler(self.scheduler)
 
         # 状态栏
         status_frame = ttk.Frame(self.root)
