@@ -201,8 +201,13 @@ class SchedulerPanel:
         self.count_label.pack(side=tk.LEFT)
         ttk.Button(tool_frame,text="添加定时任务",command=self._on_add,width=12).pack(side=tk.RIGHT,padx=(2,0))
         ttk.Button(tool_frame,text="刷新",command=self._on_refresh,width=8).pack(side=tk.RIGHT,padx=(2,0))
+
+        # —— 列表区域 ——
+        list_frame = ttk.Frame(self.parent)
+        list_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
         cols = ("id","name","target","schedule","next_run","last_run","status","enabled")
-        self.tree = ttk.Treeview(self.parent,columns=cols,show="headings",height=15,selectmode=tk.BROWSE)
+        self.tree = ttk.Treeview(list_frame,columns=cols,show="headings",height=15,selectmode=tk.BROWSE)
         for c,h in [("id","ID"),("name","任务名称"),("target","目标"),("schedule","定时方式"),("next_run","下次执行"),("last_run","上次执行"),("status","状态"),("enabled","启用")]:
             self.tree.heading(c,text=h)
         self.tree.column("id",width=36,stretch=False,anchor=tk.CENTER)
@@ -216,20 +221,20 @@ class SchedulerPanel:
         self.tree.tag_configure("running",foreground="#0000FF")
         self.tree.tag_configure("success",foreground="#008000")
         self.tree.tag_configure("disabled",foreground="#808080")
-        # 横向滚动条（列超宽时可滚动）
-        h_scroll = ttk.Scrollbar(self.parent,orient=tk.HORIZONTAL,command=self.tree.xview)
-        self.tree.configure(xscrollcommand=h_scroll.set)
-        v_scroll = ttk.Scrollbar(self.parent,orient=tk.VERTICAL,command=self.tree.yview)
-        self.tree.configure(yscrollcommand=v_scroll.set)
+
+        v_scroll = ttk.Scrollbar(list_frame,orient=tk.VERTICAL,command=self.tree.yview)
+        h_scroll = ttk.Scrollbar(list_frame,orient=tk.HORIZONTAL,command=self.tree.xview)
+        self.tree.configure(yscrollcommand=v_scroll.set, xscrollcommand=h_scroll.set)
         self.tree.pack(side=tk.LEFT,fill=tk.BOTH,expand=True)
         v_scroll.pack(side=tk.RIGHT,fill=tk.Y)
-        btn_frame = ttk.Frame(self.parent)
-        btn_frame.pack(side=tk.BOTTOM,fill=tk.X,pady=(5,0))
         h_scroll.pack(side=tk.BOTTOM,fill=tk.X)
+
+        # —— 底部按钮 ——
+        btn_frame = ttk.Frame(self.parent)
+        btn_frame.pack(side=tk.TOP, fill=tk.X, pady=(5,0))
         ttk.Button(btn_frame,text="启用/禁用",command=self._on_toggle,width=10).pack(side=tk.LEFT,padx=2)
         ttk.Button(btn_frame,text="编辑",command=self._on_edit,width=8).pack(side=tk.LEFT,padx=2)
         ttk.Button(btn_frame,text="删除",command=self._on_delete,width=8).pack(side=tk.LEFT,padx=2)
-
     def bind_scheduler(self, scheduler):
         self.scheduler = scheduler
         scheduler.bind_view(self)
