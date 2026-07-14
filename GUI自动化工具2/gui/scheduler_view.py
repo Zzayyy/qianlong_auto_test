@@ -14,118 +14,248 @@ class AddSchedDialog(simpledialog.Dialog):
     def __init__(self, parent, groups, title=None):
         self.groups = groups
         self.result_data = None
+        self._wd_vars = {}
+        self._card_frames = []
+        self._all_scripts = []
+        self._selected_idx = None
         super().__init__(parent, title=title or "添加定时任务")
+        self.after(10, self._center_on_parent)
+
+    def _center_on_parent(self):
+        try:
+            px = self.parent.winfo_rootx()
+            py = self.parent.winfo_rooty()
+            pw = self.parent.winfo_width()
+            ph = self.parent.winfo_height()
+            sw = self.winfo_width()
+            sh = self.winfo_height()
+            self.geometry(f"+{px+(pw-sw)//2}+{py+(ph-sh)//2}")
+        except Exception:
+            pass
 
     def body(self, master):
-        self.geometry("500x480")
-        master.grid_rowconfigure(5, weight=1)
-        master.grid_columnconfigure(1, weight=1)
-        ttk.Label(master, text="任务名称:").grid(row=0,column=0,sticky=tk.W,padx=8,pady=4)
+        self.geometry("600x540")
+        master.grid_columnconfigure(0, weight=1)
+        master.grid_rowconfigure(3, weight=1)
+        row = 0
+
+        # === 任务信息 ===
+        info_f = ttk.LabelFrame(master, text="任务信息", padding="8")
+        info_f.grid(row=row, column=0, sticky=tk.EW, padx=8, pady=4)
+        info_f.grid_columnconfigure(0, weight=1)
+        row += 1
+        ttk.Label(info_f, text="任务名称:").pack(anchor=tk.W)
         self.name_var = tk.StringVar(value="")
-        ttk.Entry(master, textvariable=self.name_var, width=30).grid(row=0,column=1,sticky=tk.EW,padx=8,pady=4)
-        ttk.Label(master, text="目标类型:").grid(row=1,column=0,sticky=tk.W,padx=8,pady=4)
+        self.name_entry = ttk.Entry(info_f, textvariable=self.name_var)
+        self.name_entry.pack(fill=tk.X, pady=(2,0))
+        self.name_preview = ttk.Label(info_f, text="", foreground="gray", font=("", 9))
+        self.name_preview.pack(anchor=tk.W, pady=(2,0))
+
+        # === 目标设置 ===
+        tg_f = ttk.LabelFrame(master, text="目标设置", padding="8")
+        tg_f.grid(row=row, column=0, sticky=tk.EW, padx=8, pady=4)
+        tg_f.grid_columnconfigure(1, weight=1)
+        row += 1
+        ttk.Label(tg_f, text="目标类型:").grid(row=0, column=0, sticky=tk.W)
         self.target_type = tk.StringVar(value="script")
-        tf = ttk.Frame(master)
-        tf.grid(row=1,column=1,sticky=tk.W,padx=8,pady=4)
-        ttk.Radiobutton(tf,text="单个脚本",variable=self.target_type,value="script",command=self._on_target_change).pack(side=tk.LEFT,padx=(0,10))
-        ttk.Radiobutton(tf,text="任务编队",variable=self.target_type,value="group",command=self._on_target_change).pack(side=tk.LEFT)
-        self.script_frame = ttk.LabelFrame(master,text="选择脚本",padding="5")
-        self.script_frame.grid(row=2,column=0,columnspan=2,sticky=tk.EW,padx=8,pady=4)
-        self.script_frame.grid_columnconfigure(1,weight=1)
-        ttk.Label(self.script_frame,text="分类:").grid(row=0,column=0,sticky=tk.W,padx=4,pady=2)
+        bf = ttk.Frame(tg_f)
+        bf.grid(row=0, column=1, sticky=tk.W, padx=(8,0))
+        ttk.Radiobutton(bf, text="单个脚本", variable=self.target_type, value="script", command=self._on_target_change).pack(side=tk.LEFT, padx=(0,10))
+        ttk.Radiobutton(bf, text="任务编队", variable=self.target_type, value="group", command=self._on_target_change).pack(side=tk.LEFT)
+
+        # 分类下拉（脚本模式）
+        self.cat_f = ttk.Frame(tg_f)
+        self.cat_f.grid(row=1, column=0, columnspan=2, sticky=tk.EW, pady=(6,0))
+        self.cat_f.grid_columnconfigure(1, weight=1)
+        ttk.Label(self.cat_f, text="分类:").grid(row=0, column=0, sticky=tk.W)
         self.cat_var = tk.StringVar(value=CATEGORIES[0] if CATEGORIES else "")
-        self.cat_combo = ttk.Combobox(self.script_frame,textvariable=self.cat_var,values=CATEGORIES,state="readonly",width=15)
-        self.cat_combo.grid(row=0,column=1,sticky=tk.W,padx=4,pady=2)
-        self.cat_combo.bind("<<ComboboxSelected>>",self._on_cat_change)
-        ttk.Label(self.script_frame,text="脚本:").grid(row=1,column=0,sticky=tk.W,padx=4,pady=2)
-        self.script_listbox = tk.Listbox(self.script_frame,height=5,exportselection=False)
-        self.script_listbox.grid(row=1,column=1,sticky=tk.EW,padx=4,pady=2)
-        self.group_frame = ttk.LabelFrame(master,text="选择编队",padding="5")
-        self.group_frame.grid(row=3,column=0,columnspan=2,sticky=tk.EW,padx=8,pady=4)
-        self.group_var = tk.StringVar()
-        self.group_combo = ttk.Combobox(self.group_frame,textvariable=self.group_var,state="readonly",width=25)
-        self.group_combo.pack(fill=tk.X,padx=4,pady=4)
+        self.cat_combo = ttk.Combobox(self.cat_f, textvariable=self.cat_var, values=CATEGORIES, state="readonly", width=15)
+        self.cat_combo.grid(row=0, column=1, sticky=tk.W, padx=(4,0))
+        self.cat_combo.bind("<<ComboboxSelected>>", self._on_cat_change)
+
+        # 编队选择（编队模式）
+        self.grp_f = ttk.Frame(tg_f)
+        self.grp_f.grid(row=1, column=0, columnspan=2, sticky=tk.EW, pady=(6,0))
+        self.grp_f.grid_columnconfigure(1, weight=1)
+        ttk.Label(self.grp_f, text="编队:").grid(row=0, column=0, sticky=tk.W)
         gnames = [g["name"] for g in self.groups]
-        self.group_combo["values"] = gnames
+        self.group_var = tk.StringVar()
+        self.group_combo = ttk.Combobox(self.grp_f, textvariable=self.group_var, values=gnames, state="readonly", width=25)
+        self.group_combo.grid(row=0, column=1, sticky=tk.W, padx=(4,0))
         if gnames: self.group_combo.set(gnames[0])
-        self.group_frame.grid_remove()
-        sched_frame = ttk.LabelFrame(master,text="定时配置",padding="5")
-        sched_frame.grid(row=4,column=0,columnspan=2,sticky=tk.EW,padx=8,pady=4)
-        sched_frame.grid_columnconfigure(3,weight=1)
-        ttk.Label(sched_frame,text="方式:").grid(row=0,column=0,sticky=tk.W,padx=4,pady=2)
+        self.grp_f.grid_remove()
+
+        # === 脚本选择（卡片网格） ===
+        sc_f = ttk.LabelFrame(master, text="选择脚本", padding="8")
+        sc_f.grid(row=row, column=0, sticky=tk.NSEW, padx=8, pady=4)
+        sc_f.grid_columnconfigure(0, weight=1)
+        sc_f.grid_rowconfigure(2, weight=1)
+        row += 1
+
+        # 搜索框
+        self.search_var = tk.StringVar(value="")
+        sv = self.search_var
+        sv.trace("w", lambda *a: self._filter_scripts())
+        ttk.Entry(sc_f, textvariable=self.search_var).grid(row=0, column=0, sticky=tk.EW, pady=(0,4))
+
+        # 卡片容器 + 滚动
+        cc = ttk.Frame(sc_f)
+        cc.grid(row=1, column=0, sticky=tk.NSEW)
+        cc.grid_rowconfigure(0, weight=1)
+        cc.grid_columnconfigure(0, weight=1)
+        self.card_canvas = tk.Canvas(cc, borderwidth=0, highlightthickness=0, height=140)
+        cs = ttk.Scrollbar(cc, orient=tk.VERTICAL, command=self.card_canvas.yview)
+        self.card_canvas.configure(yscrollcommand=cs.set)
+        self.card_canvas.grid(row=0, column=0, sticky=tk.NSEW)
+        cs.grid(row=0, column=1, sticky=tk.NS)
+        self.card_inner = ttk.Frame(self.card_canvas)
+        self.card_canvas.create_window((0,0), window=self.card_inner, anchor="nw")
+        self.card_inner.bind("<Configure>", lambda e: self.card_canvas.configure(scrollregion=self.card_canvas.bbox("all")))
+        self.card_canvas.bind("<Configure>", lambda e: self.card_canvas.itemconfig(1, width=e.width))
+        # 鼠标滚轮支持
+        self.card_canvas.bind("<Enter>", lambda e: self.card_canvas.bind_all("<MouseWheel>", self._on_card_scroll))
+        self.card_canvas.bind("<Leave>", lambda e: self.card_canvas.unbind_all("<MouseWheel>"))
+
+        self._fill_scripts()
+
+        # === 定时配置 ===
+        sch_f = ttk.LabelFrame(master, text="定时配置", padding="8")
+        sch_f.grid(row=row, column=0, sticky=tk.EW, padx=8, pady=4)
+        sch_f.grid_columnconfigure(1, weight=1)
+        row += 1
+        ttk.Label(sch_f, text="方式:").grid(row=0, column=0, sticky=tk.W)
         self.sched_type = tk.StringVar(value="daily")
-        stf = ttk.Frame(sched_frame)
-        stf.grid(row=0,column=1,columnspan=3,sticky=tk.W,padx=4,pady=2)
+        sf = ttk.Frame(sch_f)
+        sf.grid(row=0, column=1, sticky=tk.W, padx=(8,0))
         for k,v in [("once","一次"),("daily","每天"),("weekly","每周"),("monthly","每月")]:
-            rb = ttk.Radiobutton(stf,text=v,variable=self.sched_type,value=k,command=self._on_sched_change)
-            rb.pack(side=tk.LEFT,padx=(0,8))
-        ttk.Label(sched_frame,text="时间:").grid(row=1,column=0,sticky=tk.W,padx=4,pady=2)
+            rb = ttk.Radiobutton(sf, text=v, variable=self.sched_type, value=k, command=self._on_sched_change, style="Toolbutton")
+            rb.pack(side=tk.LEFT, padx=(0,4))
+
+        ttk.Label(sch_f, text="时间:").grid(row=1, column=0, sticky=tk.W, pady=(6,0))
+        tf2 = ttk.Frame(sch_f)
+        tf2.grid(row=1, column=1, sticky=tk.W, padx=(8,0), pady=(6,0))
         self.hour_var = tk.StringVar(value="09")
         self.min_var = tk.StringVar(value="00")
-        hf = ttk.Frame(sched_frame)
-        hf.grid(row=1,column=1,columnspan=3,sticky=tk.W,padx=4,pady=2)
-        ttk.Spinbox(hf,from_=0,to=23,textvariable=self.hour_var,width=4,format="%02.0f").pack(side=tk.LEFT)
-        ttk.Label(hf,text=":").pack(side=tk.LEFT)
-        ttk.Spinbox(hf,from_=0,to=59,textvariable=self.min_var,width=4,format="%02.0f").pack(side=tk.LEFT)
-        self.date_frame = ttk.Frame(sched_frame)
-        self.date_frame.grid(row=2,column=0,columnspan=4,sticky=tk.W,padx=4,pady=2)
-        ttk.Label(self.date_frame,text="执行日期:").pack(side=tk.LEFT)
-        self.date_var = tk.StringVar(value="2026-07-14")
-        ttk.Entry(self.date_frame,textvariable=self.date_var,width=12).pack(side=tk.LEFT,padx=4)
-        self.date_frame.grid_remove()
-        self.wd_frame = ttk.Frame(sched_frame)
-        self.wd_frame.grid(row=3,column=0,columnspan=4,sticky=tk.W,padx=4,pady=2)
-        wd_names = ["周一","周二","周三","周四","周五","周六","周日"]
-        self.wd_vars = {}
-        for i,wn in enumerate(wd_names):
-            self.wd_vars[i] = tk.BooleanVar(value=(i < 5))
-            ttk.Checkbutton(self.wd_frame,text=wn,variable=self.wd_vars[i]).pack(side=tk.LEFT,padx=2)
-        self.wd_frame.grid_remove()
-        self.md_frame = ttk.Frame(sched_frame)
-        self.md_frame.grid(row=4,column=0,columnspan=4,sticky=tk.W,padx=4,pady=2)
-        ttk.Label(self.md_frame,text="每月第").pack(side=tk.LEFT)
+        ttk.Spinbox(tf2, from_=0, to=23, textvariable=self.hour_var, width=4, format="%02.0f").pack(side=tk.LEFT)
+        ttk.Label(tf2, text=":").pack(side=tk.LEFT)
+        ttk.Spinbox(tf2, from_=0, to=59, textvariable=self.min_var, width=4, format="%02.0f").pack(side=tk.LEFT)
+
+        # 日期选择
+        self.df = ttk.Frame(sch_f)
+        self.df.grid(row=2, column=0, columnspan=2, sticky=tk.W, pady=(4,0))
+        ttk.Label(self.df, text="执行日期:").pack(side=tk.LEFT)
+        today = datetime.datetime.now().strftime("%Y-%m-%d")
+        self.date_var = tk.StringVar(value=today)
+        ttk.Entry(self.df, textvariable=self.date_var, width=12).pack(side=tk.LEFT, padx=(4,0))
+        self.df.grid_remove()
+
+        # 星期多选
+        self.wf = ttk.Frame(sch_f)
+        self.wf.grid(row=3, column=0, columnspan=2, sticky=tk.W, pady=(4,0))
+        for i,wn in enumerate(["周一","周二","周三","周四","周五","周六","周日"]):
+            self._wd_vars[i] = tk.BooleanVar(value=(i<5))
+            ttk.Checkbutton(self.wf, text=wn, variable=self._wd_vars[i]).pack(side=tk.LEFT, padx=2)
+        self.wf.grid_remove()
+
+        # 每月第几天
+        self.mf = ttk.Frame(sch_f)
+        self.mf.grid(row=4, column=0, columnspan=2, sticky=tk.W, pady=(4,0))
+        ttk.Label(self.mf, text="每月第").pack(side=tk.LEFT)
         self.md_var = tk.IntVar(value=1)
-        ttk.Spinbox(self.md_frame,from_=1,to=28,textvariable=self.md_var,width=5).pack(side=tk.LEFT,padx=4)
-        ttk.Label(self.md_frame,text="天").pack(side=tk.LEFT)
-        self.md_frame.grid_remove()
-        self._fill_scripts()
-        return master
+        ttk.Spinbox(self.mf, from_=1, to=28, textvariable=self.md_var, width=5).pack(side=tk.LEFT, padx=4)
+        ttk.Label(self.mf, text="天").pack(side=tk.LEFT)
+        self.mf.grid_remove()
+
+        self.name_var.trace("w", lambda *a: self._update_name_preview())
+        self.sched_type.trace("w", lambda *a: self._update_name_preview())
+        self._update_name_preview()
+
+        return self.name_entry
+
+    def _on_card_scroll(self, event):
+        self.card_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+
+    def _update_name_preview(self):
+        prefix = {"once":"单次","daily":"每日","weekly":"每周","monthly":"每月"}
+        p = prefix.get(self.sched_type.get(), "")
+        sel_name = ""
+        if self._selected_idx is not None and self._selected_idx < len(self._all_scripts):
+            sel_name = self._all_scripts[self._selected_idx]["name"]
+        cur = self.name_var.get().strip()
+        gen = (p + sel_name) if (not cur) else ""
+        self.name_preview.config(text=f"自动生成: {gen}" if gen else "")
+        if not cur and gen:
+            self.name_var.set(gen)
 
     def _on_target_change(self):
         if self.target_type.get() == "script":
-            self.script_frame.grid()
-            self.group_frame.grid_remove()
+            self.cat_f.grid()
+            self.grp_f.grid_remove()
+            self._fill_scripts()
         else:
-            self.script_frame.grid_remove()
-            self.group_frame.grid()
+            self.cat_f.grid_remove()
+            self.grp_f.grid()
 
     def _on_cat_change(self, event=None):
         self._fill_scripts()
 
+    def _filter_scripts(self):
+        """根据搜索关键词显隔卡片"""
+        kw = self.search_var.get().strip().lower()
+        visible = 0
+        for i, (frm, script) in enumerate(self._card_frames):
+            match = (not kw) or (kw in script["name"].lower())
+            frm.grid() if match else frm.grid_remove()
+            if match: visible += 1
+        self.card_canvas.configure(height=min(200, max(80, ((visible+1)//2)*55)))
+
     def _fill_scripts(self):
-        self.script_listbox.delete(0, tk.END)
+        for frm, _ in self._card_frames:
+            frm.destroy()
+        self._card_frames = []
+        self._all_scripts = []
         cat = self.cat_var.get()
-        for s in SCRIPTS_CONFIG.get(cat, []):
-            self.script_listbox.insert(tk.END, s["name"])
-        if self.script_listbox.size() > 0:
-            self.script_listbox.selection_set(0)
-            n = self.script_listbox.get(0)
-            prefix = {"once":"单次","daily":"每日","weekly":"每周","monthly":"每月"}
-            self.name_var.set(prefix.get(self.sched_type.get(),"") + n)
+        self._all_scripts = list(SCRIPTS_CONFIG.get(cat, []))
+        self._selected_idx = None
+
+        for idx, s in enumerate(self._all_scripts):
+            card = ttk.Frame(self.card_inner, relief="solid", borderwidth=1, padding="6")
+            card.rowconfigure(0, weight=1)
+            card.columnconfigure(0, weight=1)
+            r, c = divmod(idx, 2)
+            card.grid(row=r, column=c, sticky=tk.EW, padx=3, pady=3)
+            self.card_inner.grid_columnconfigure(0, weight=1)
+            self.card_inner.grid_columnconfigure(1, weight=1)
+            num = s["name"].split(".")[0] if "." in s["name"] else str(idx+1)
+            ttk.Label(card, text=f"#{num}", foreground="#0078d4", font=("", 8)).pack(anchor=tk.W)
+            ttk.Label(card, text=s["name"].split(".",1)[-1].strip() if "." in s["name"] else s["name"], font=("", 9)).pack(anchor=tk.W)
+            card.bind("<Button-1>", lambda e, i=idx: self._on_card_click(i))
+            for child in card.winfo_children():
+                child.bind("<Button-1>", lambda e, i=idx: self._on_card_click(i))
+            self._card_frames.append((card, s))
+
+        self._filter_scripts()
+        self._update_name_preview()
+
+    def _on_card_click(self, idx):
+        """点击卡片时高亮选中状态"""
+        self._selected_idx = idx
+        for i, (frm, _) in enumerate(self._card_frames):
+            if i == idx:
+                frm.configure(relief="solid", borderwidth=2)
+            else:
+                frm.configure(relief="solid", borderwidth=1)
+        self._update_name_preview()
 
     def _on_sched_change(self):
         st = self.sched_type.get()
-        if st == "once": self.date_frame.grid()
-        else: self.date_frame.grid_remove()
-        if st == "weekly": self.wd_frame.grid()
-        else: self.wd_frame.grid_remove()
-        if st == "monthly": self.md_frame.grid()
-        else: self.md_frame.grid_remove()
-        sel = self.script_listbox.curselection()
-        if sel:
-            n = self.script_listbox.get(sel[0])
-            prefix = {"once":"单次","daily":"每日","weekly":"每周","monthly":"每月"}
-            self.name_var.set(prefix.get(st,"") + n)
+        if st == "once": self.df.grid()
+        else: self.df.grid_remove()
+        if st == "weekly": self.wf.grid()
+        else: self.wf.grid_remove()
+        if st == "monthly": self.mf.grid()
+        else: self.mf.grid_remove()
+        self._update_name_preview()
 
     def validate(self):
         name = self.name_var.get().strip()
@@ -133,40 +263,35 @@ class AddSchedDialog(simpledialog.Dialog):
             messagebox.showwarning("提示", "请输入任务名称")
             return False
         import datetime as _dt
-        h = self.hour_var.get().zfill(2)
-        m = self.min_var.get().zfill(2)
-        time_str = h + ":" + m
         st = self.sched_type.get()
         if st == "once":
             try:
                 _dt.datetime.strptime(self.date_var.get(), "%Y-%m-%d")
             except ValueError:
-                messagebox.showwarning("提示", "日期格式错误，请使用 YYYY-MM-DD")
+                messagebox.showwarning("提示", "日期格式错误")
                 return False
-        if st == "weekly" and not any(v.get() for v in self.wd_vars.values()):
+        if st == "weekly" and not any(v.get() for v in self._wd_vars.values()):
             messagebox.showwarning("提示", "请至少选择一天")
             return False
+
         self.result_data = {
-            "name": name, "time": time_str, "schedule_type": st,
+            "name": name,
+            "time": self.hour_var.get().zfill(2) + ":" + self.min_var.get().zfill(2),
+            "schedule_type": st,
             "scheduled_date": self.date_var.get() if st == "once" else "",
-            "weekdays": sorted([k for k,v in self.wd_vars.items() if v.get()]) if st == "weekly" else [],
+            "weekdays": sorted([k for k,v in self._wd_vars.items() if v.get()]) if st == "weekly" else [],
             "month_day": self.md_var.get() if st == "monthly" else 1,
         }
         if self.target_type.get() == "script":
-            sel = self.script_listbox.curselection()
-            if not sel:
+            if self._selected_idx is None or self._selected_idx >= len(self._all_scripts):
                 messagebox.showwarning("提示", "请选择一个脚本")
                 return False
-            sname = self.script_listbox.get(sel[0])
-            cat = self.cat_var.get()
-            for s in SCRIPTS_CONFIG.get(cat, []):
-                if s["name"] == sname:
-                    self.result_data["target_type"] = "script"
-                    self.result_data["script_name"] = sname
-                    self.result_data["script_path"] = s["path"]
-                    self.result_data["category"] = cat
-                    self.result_data["params"] = self._snapshot_params()
-                    break
+            s = self._all_scripts[self._selected_idx]
+            self.result_data["target_type"] = "script"
+            self.result_data["script_name"] = s["name"]
+            self.result_data["script_path"] = s["path"]
+            self.result_data["category"] = self.cat_var.get()
+            self.result_data["params"] = self._snapshot_params()
         else:
             gn = self.group_var.get()
             if not gn:
@@ -184,8 +309,6 @@ class AddSchedDialog(simpledialog.Dialog):
             try: w = w.master
             except AttributeError: break
         return {}
-
-
 class SchedulerPanel:
     def __init__(self, parent, controller):
         self.parent = parent
