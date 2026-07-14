@@ -343,7 +343,6 @@ class AutomationGUI:
         # 窗口完全显示后再布局分隔条
         self.root.after(20, self._apply_pane_ratio)
         self.root.after(100, self._apply_pane_ratio)
-        self._apply_pane_ratio()
 
     def _apply_pane_ratio(self):
         """按固定比例设置左右分隔条位置（不受右侧标签页数量影响）"""

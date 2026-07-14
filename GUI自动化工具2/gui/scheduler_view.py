@@ -214,10 +214,10 @@ class SchedulerPanel:
         self.tree.column("name",width=80,minwidth=60,stretch=True)
         self.tree.column("target",width=55,minwidth=40,stretch=True)
         self.tree.column("schedule",width=55,minwidth=40,stretch=True)
-        self.tree.column("next_run",width=75,minwidth=65,stretch=False)
-        self.tree.column("last_run",width=75,minwidth=65,stretch=False)
-        self.tree.column("status",width=46,minwidth=38,stretch=False,anchor=tk.CENTER)
-        self.tree.column("enabled",width=28,minwidth=26,stretch=False,anchor=tk.CENTER)
+        self.tree.column("next_run",width=75,minwidth=65,stretch=True)
+        self.tree.column("last_run",width=75,minwidth=65,stretch=True)
+        self.tree.column("status",width=46,minwidth=38,stretch=True,anchor=tk.CENTER)
+        self.tree.column("enabled",width=35,minwidth=30,stretch=True,anchor=tk.CENTER)
         self.tree.tag_configure("running",foreground="#0000FF")
         self.tree.tag_configure("success",foreground="#008000")
         self.tree.tag_configure("disabled",foreground="#808080")
@@ -243,14 +243,14 @@ class SchedulerPanel:
     def _refresh(self):
         if not self.scheduler: return
         self.tree.delete(*self.tree.get_children())
-        for t in self.scheduler.tasks:
+        for idx, t in enumerate(self.scheduler.tasks, 1):
             tid = t.get("id",0); en = t.get("enabled",False); st = t.get("status","")
             tag = "running" if st == "运行中" else ("success" if st in ("已完成","等待") and en else ("disabled" if not en else ""))
             target = t.get("script_name","") or t.get("group_name","")
             if t.get("target_type") == "group": target = "[编队] " + target
             sd = format_schedule_desc(t); nr = t.get("next_run","")
             lr = t.get("last_run","") or "-"; et = "是" if en else "否"
-            self.tree.insert("",tk.END,iid=str(tid),values=(tid,t.get("name",""),target,sd,nr,lr,st,et),tags=(tag,) if tag else ())
+            self.tree.insert("",tk.END,iid=str(tid),values=(idx,t.get("name",""),target,sd,nr,lr,st,et),tags=(tag,) if tag else ())
         self.count_label.config(text=f"共 {len(self.scheduler.tasks)} 个任务")
 
     def _on_add(self):
