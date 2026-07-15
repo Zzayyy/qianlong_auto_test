@@ -6,6 +6,7 @@
   - 任务队列支持上移 / 下移 / 删除 / 清空
   - 一键「开始顺序执行」，引擎逐个脚本串行执行
   - 执行中可「停止」（停止当前并中止后续任务）
+  - 停止后可「继续执行」：从第一个未完成任务（已停止/等待）恢复执行
   - 队列持久化到 logs/task_center.json，重启后保留
   - 编队（分组）功能：
       * 把当前队列保存为命名编队（保存为编队）
@@ -97,6 +98,7 @@ class TaskCenter:
         self._current_index = -1       # 当前执行到的下标（用于状态着色与停止）
         self._record_id = None         # 当前任务的 history 记录 id
         self._stop = False             # 用户请求停止（中止后续任务）
+        self._has_started = False      # 是否已开始过一次执行（用于决定是否显示「继续执行」）
 
         # 持久化路径
         self.file_path = os.path.join(self.gui.log_dir, "task_center.json")
@@ -117,8 +119,13 @@ class TaskCenter:
         self.summary_label = ttk.Label(tool_frame, text="队列: 0 项 | 等待执行", foreground="gray")
         self.summary_label.pack(side=tk.LEFT)
 
-        ttk.Button(tool_frame, text="开始顺序执行", command=self.start, width=13).pack(side=tk.RIGHT, padx=(2, 0))
+        # 右侧按钮：从左到右依次为 开始顺序执行 / 继续执行 / 停止
         ttk.Button(tool_frame, text="停止", command=self._on_stop, width=8).pack(side=tk.RIGHT, padx=(2, 0))
+        self.btn_resume = ttk.Button(
+            tool_frame, text="继续执行", command=self.resume, width=11, state=tk.DISABLED
+        )
+        self.btn_resume.pack(side=tk.RIGHT, padx=(2, 0))
+        ttk.Button(tool_frame, text="开始顺序执行", command=self.start, width=13).pack(side=tk.RIGHT, padx=(2, 0))
 
         # —— 编队管理条 ——
         group_frame = ttk.Frame(parent)
@@ -758,6 +765,7 @@ class TaskCenter:
 
         self.is_running = True
         self._stop = False
+        self._has_started = True
         self._current_index = -1
 
         # 复位所有任务状态
@@ -780,6 +788,49 @@ class TaskCenter:
         self.gui._log("\n[任务中心] 收到停止指令，将在当前任务结束后中止后续任务...")
         self.gui._set_status("任务中心: 正在停止...")
         self.controller.stop_task_center()
+
+    def _has_remaining(self):
+        """队列中是否还有未完成任务（等待 / 已停止）"""
+        return any(t["status"] in (self.ST_PENDING, self.ST_STOPPED) for t in self.tasks)
+
+    def resume(self):
+        """继续执行：从第一个未完成任务（已停止 / 等待）开始恢复执行"""
+        if self.is_running:
+            messagebox.showwarning("提示", "任务正在执行中")
+            return
+        if not self.tasks:
+            messagebox.showwarning("提示", "任务队列为空，请先加入脚本")
+            return
+
+        # 找到第一个未完成的任务下标（已停止的任务会被重新执行）
+        start_idx = None
+        for i, t in enumerate(self.tasks):
+            if t["status"] in (self.ST_PENDING, self.ST_STOPPED):
+                start_idx = i
+                break
+        if start_idx is None:
+            messagebox.showinfo("提示", "所有任务均已完成，无需继续执行")
+            return
+
+        self.is_running = True
+        self._stop = False
+        self._has_started = True
+        self._current_index = start_idx - 1   # 让 run_next() 从 start_idx 处开始
+
+        # 把 start_idx 起的未完成任务复位为「等待」后继续
+        for t in self.tasks[start_idx:]:
+            t["status"] = self.ST_PENDING
+
+        self._set_running_ui(True)
+        self._refresh()
+        self.gui._log("\n" + "=" * 60)
+        self.gui._log(
+            f"[任务中心] 继续执行，从任务 {start_idx + 1} 开始，剩余 {len(self.tasks) - start_idx} 个任务"
+        )
+        self.gui._set_status(
+            f"任务中心: {start_idx + 1}/{len(self.tasks)} 准备就绪", running=True
+        )
+        self.controller.run_task_center(self)
 
     def run_next(self):
         """由 controler 在主线程回调：执行下一个未执行任务；无则收尾"""
@@ -885,10 +936,16 @@ class TaskCenter:
             if isinstance(child, ttk.Frame):
                 for b in child.winfo_children():
                     if isinstance(b, ttk.Button):
-                        if b.cget("text") == "开始顺序执行":
+                        txt = b.cget("text")
+                        if txt == "开始顺序执行":
                             b.config(state=tk.DISABLED if running else tk.NORMAL)
-                        elif b.cget("text") == "停止":
+                        elif txt == "停止":
                             b.config(state=tk.NORMAL if running else tk.DISABLED)
+                        elif txt == "继续执行":
+                            if running or not self._has_started:
+                                b.config(state=tk.DISABLED)
+                            else:
+                                b.config(state=tk.NORMAL if self._has_remaining() else tk.DISABLED)
 
         # 编队控件：运行中禁用，非运行恢复
         self.group_combo.config(state=tk.DISABLED if running else "readonly")
@@ -969,3 +1026,5 @@ class TaskCenter:
         self._dirty = False
         self._refresh_group_combo(GROUP_PLACEHOLDER)
         self._refresh()
+        # 初始化按钮状态（未开始执行时「停止」「继续执行」均禁用）
+        self._set_running_ui(False)
