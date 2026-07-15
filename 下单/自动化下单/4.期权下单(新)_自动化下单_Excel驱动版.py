@@ -242,13 +242,8 @@ def get_checkbox(win, name: str, cache: dict = None):
         cb = win.child_window(auto_id=auto_id, control_type="CheckBox")
         cb.wait("ready", timeout=3)
     except Exception:
-        # 控件可能因其它选项(如勾选"自动"会让"备兑"置灰)而暂时改变类型/不可用,
-        # 此时仅按 auto_id 再查一次,使其能走"灰色跳过"的统一分支
-        try:
-            cb = win.child_window(auto_id=auto_id)
-            cb.wait("ready", timeout=3)
-        except Exception:
-            return None
+        # 控件可能因其它选项(如勾选"自动"会让"备兑"置灰)而暂时不可见/不可用
+        return None
     if cache is not None:
         cache[name] = cb
     return cb
