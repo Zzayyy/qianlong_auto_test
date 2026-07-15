@@ -53,6 +53,10 @@ class ColoredLogText(scrolledtext.ScrolledText):
         ts = datetime.now().strftime("%H:%M:%S")
         tag = self._get_tag(message)
         self.config(state=tk.NORMAL)
+        # 限制日志行数，防止内存泄漏
+        MAX_LINES = 5000
+        if float(self.index('end-1c')) > MAX_LINES * 2:
+            self.delete(1.0, f'end-{MAX_LINES}l')
         if tag:
             self.insert(tk.END, f"[{ts}] {message}\n", tag)
         else:

@@ -213,51 +213,91 @@ def confirm_auto_dialog(main_win=None, timeout: float = 8):
     print(f"[WARN] 等待'自动净仓'弹窗超时({timeout}s)")
 
 
-def set_checkbox(win, name: str, enable: bool):
-    """设置复选框的勾选状态。"""
-    if name not in CHECKBOX_AUTO_IDS:
-        raise ValueError(f"未知复选框: {name!r}")
-
+def get_checkbox(win, name: str, cache: dict = None):
+    """获取复选框控件,支持缓存句柄(同一会话内复用,避免重复查找)。"""
     auto_id = CHECKBOX_AUTO_IDS[name]
+    if cache is not None:
+        cached = cache.get(name)
+        if cached is not None:
+            try:
+                cached.is_enabled()  # 探测句柄是否仍有效
+                return cached
+            except Exception:
+                cache.pop(name, None)
     try:
         cb = win.child_window(auto_id=auto_id, control_type="CheckBox")
         cb.wait("ready", timeout=3)
-    except Exception as e:
-        # print(f"[DEBUG] 复选框 {name}(auto_id={auto_id}) 查找失败: {e}")
+    except Exception:
+        # 控件可能因其它选项(如勾选"自动"会让"备兑"置灰)而暂时不可见/不可用
+        return None
+    if cache is not None:
+        cache[name] = cb
+    return cb
+
+
+def set_checkbox(win, name: str, enable: bool, cache: dict = None):
+    """设置复选框到目标状态(直接 toggle,无需移动鼠标,速度更快)。
+
+    优化点:
+      1. 使用 UIA TogglePattern(cb.toggle())代替 click_input(),避免鼠标移动/点击
+      2. 仅在当前状态与目标不一致时才操作,无冗余动作
+      3. toggle 失效时自动回退到 click_input(),保证可靠性
+    """
+    if name not in CHECKBOX_AUTO_IDS:
+        raise ValueError(f"未知复选框: {name!r}")
+
+    cb = get_checkbox(win, name, cache)
+    if cb is None:
+        print(f"[WARN] 复选框 {name} 未找到(可能受其它选项影响被置灰/隐藏),跳过")
         return
 
-    # 调试: 打印复选框状态信息
-    # print(f"[DEBUG] 复选框 {name}: is_enabled={cb.is_enabled()}, toggle_state={cb.get_toggle_state()}")
-
-    # 检查是否为灰色（不可用）状态
+    # 检查是否为灰色(不可用)状态
     if not cb.is_enabled():
-        print(f"[--] 复选框 {name} 为灰色(不可用),跳过")
+        if enable:
+            print(f"[WARN] 复选框 {name} 为灰色(不可用),无法勾选(可能'自动'已勾选),跳过")
+        else:
+            print(f"[--] 复选框 {name} 为灰色(不可用),跳过")
         return
 
     is_checked = cb.get_toggle_state() == 1
+    if enable == is_checked:
+        print(f"[--] 复选框 {name} 已是{'勾选' if enable else '取消勾选'}状态,跳过")
+        return
 
-    if enable and not is_checked:
+    # 优先用 UIA TogglePattern 快速切换(不移动鼠标)
+    try:
+        cb.toggle()
+    except Exception:
         cb.click_input()
+
+    # 验证是否生效,未生效则回退到真实点击
+    try:
+        if (cb.get_toggle_state() == 1) != enable:
+            cb.click_input()
+    except Exception:
+        pass
+
+    if enable:
         print(f"[OK] 勾选复选框: {name}")
         # 勾选"自动"时会弹出"自动净仓"确认弹窗,需回车确认
         if name == "自动":
-            time.sleep(0.3)
+            time.sleep(0.2)
             confirm_auto_dialog(main_win=win)
-    elif not enable and is_checked:
-        cb.click_input()
-        print(f"[OK] 取消勾选复选框: {name}")
     else:
-        print(f"[--] 复选框 {name} 已是{'勾选' if enable else '取消勾选'}状态,跳过")
+        print(f"[OK] 取消勾选复选框: {name}")
 
 
-def set_all_checkboxes(win, enable_beidui: bool, enable_zidong: bool, enable_fok: bool):
-    """统一设置备兑、自动、FOK 三个复选框。"""
-    set_checkbox(win, "备兑", enable_beidui)
-    time.sleep(0.1)
-    set_checkbox(win, "自动", enable_zidong)
-    time.sleep(0.1)
-    set_checkbox(win, "FOK", enable_fok)
-    time.sleep(0.1)
+def set_all_checkboxes(win, enable_beidui: bool, enable_zidong: bool, enable_fok: bool, cache: dict = None):
+    """统一设置备兑、自动、FOK 三个复选框(直接设定到目标状态,无需预重置)。
+
+    设置顺序说明:必须先确定"自动"的最终状态,再设"备兑"。
+    因为软件中勾选"自动"后"备兑"会置灰,若先设"备兑"再设"自动",
+    上一单遗留的"自动=勾选"会让本单"备兑"一开始就是灰色而设不上去。
+    先设"自动":若目标为取消,则"备兑"解冻;若目标为勾选,则"备兑"本就该保持未勾选。
+    """
+    set_checkbox(win, "自动", enable_zidong, cache=cache)
+    set_checkbox(win, "备兑", enable_beidui, cache=cache)
+    set_checkbox(win, "FOK", enable_fok, cache=cache)
 
 
 def select_quote_type(win, option: str, auto_id: str = QUOTE_AUTO_ID):
@@ -509,6 +549,8 @@ def main():
         switch_panel(win, tree_item)
         time.sleep(0.5)
 
+        cb_cache = {}  # 复选框控件缓存,整个下单过程复用句柄
+
         for idx, cfg in enumerate(configs, 1):
             contract_code = str(cfg.get("合约代码", "")).strip()
             quote_type = str(cfg.get("报价方式", "")).strip()
@@ -543,13 +585,9 @@ def main():
                 select_quote_type(win, quote_type)
                 time.sleep(0.3)
 
-            # 先重置所有复选框(取消勾选),确保控件可见可用
-            set_all_checkboxes(win, False, False, False)
-            time.sleep(0.3)
-
-            # 设置复选框
-            set_all_checkboxes(win, enable_beidui, enable_zidong, enable_fok)
-            time.sleep(0.2)
+            # 直接设置复选框到目标状态(状态比较已保证正确,无需先全部取消)
+            set_all_checkboxes(win, enable_beidui, enable_zidong, enable_fok, cache=cb_cache)
+            time.sleep(0.1)
 
             # 执行下单动作
             if action:
