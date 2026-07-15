@@ -50,4 +50,12 @@ class Task:
         # 下一个任务的分类：交易系统设置脚本据此决定是否保留设置窗口
         env["GUI_NEXT_CATEGORY"] = self.next_category or ""
 
+        # 客户端（多客户端支持）：透传 client_id，由子进程 core 解析
+        # window_key 与菜单路径，无需在本处耦合具体客户端细节
+        env["GUI_CLIENT_ID"] = p.get("client_id", "") or ""
+
+        # 透传 GUI 自身 PID，供子进程 find_window 排除本工具窗口
+        # （本工具的窗口标题同样含客户端关键字，否则会定位到自己）
+        env["GUI_PID"] = str(os.getpid())
+
         return env

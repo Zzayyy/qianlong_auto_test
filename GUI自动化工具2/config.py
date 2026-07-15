@@ -29,6 +29,20 @@ else:
 # 项目根目录（打包后指向 _internal，开发环境指向项目根目录）
 PROJECT_ROOT = BASE_DIR
 
+# ====================== 客户端档案（多客户端支持） ======================
+# 让本模块能引用 core.clients（项目根目录的 core 包），集中维护多客户端逻辑
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+from core.clients import (  # noqa: E402
+    load_clients,
+    get_clients,
+    get_client,
+    get_client_ids,
+    get_client_name,
+    get_default_client_id,
+)
+
 # ====================== 用户配置 ======================
 # 配置文件路径：打包后放在exe同级目录，开发环境放在脚本同级目录
 if IS_FROZEN:
@@ -37,7 +51,7 @@ else:
     CONFIG_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 DEFAULT_OUTPUT_DIR = r"E:\Code\3\output"
-CATEGORIES = ["查询", "下单", "组合申报", "交易系统设置"]
+CATEGORIES = ["查询", "通知查询", "下单", "组合申报", "交易系统设置"]
 
 
 def load_user_config() -> dict:
@@ -57,7 +71,8 @@ def load_user_config() -> dict:
         "output_dirs": {cat: DEFAULT_OUTPUT_DIR for cat in CATEGORIES},
         "auto_open": False,
         "export_format": "txt",
-        "log_level": "详细"
+        "log_level": "详细",
+        "client": get_default_client_id(),
     }
 
 
@@ -122,6 +137,9 @@ SCRIPTS_CONFIG = {
         {"name": "4.期权持仓_平仓/反手自动化_RapidOCR", "path": rf"{PROJECT_ROOT}\下单\表格\10.Excel驱动_OCR_RapidOCR.py"},
         {"name": "5.期权下单_一键导出", "path": rf"{PROJECT_ROOT}\下单\自动化导出\期权下单(新)_自动导出.py"},
         {"name": "6.全选撤单", "path": rf"{PROJECT_ROOT}\撤单\撤单_全选撤单_自动化.py"},
+    ],
+    "通知查询": [
+        {"name": "1.通知查询", "path": rf"{PROJECT_ROOT}\通知查询\通知查询.py", "script_id": "通知查询"},
     ],
     "组合申报": [
         {"name": "1.组合申报_全自动", "path": rf"{PROJECT_ROOT}\组合申报\2.组合申报_全自动.py"},

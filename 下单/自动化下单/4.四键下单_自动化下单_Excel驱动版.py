@@ -1,4 +1,13 @@
 # -*- coding: utf-8 -*-
+import sys
+import os
+_here = os.path.dirname(os.path.abspath(__file__))
+for _d in (_here, os.path.dirname(_here), os.path.dirname(os.path.dirname(_here))):
+    if os.path.isdir(os.path.join(_d, "core")) and _d not in sys.path:
+        sys.path.insert(0, _d)
+        break
+from core.window import find_window, activate_window
+
 """
 钱龙期权交易 - 四键下单面板自动化(Excel文件驱动版)
 ==============================================
@@ -105,20 +114,7 @@ def read_excel(path: str) -> list:
     return rows
 
 
-def find_window(keyword: str):
-    """根据关键字查找窗口,返回第一个匹配的句柄。"""
-    elements = findwindows.find_elements(title_re=f".*{keyword}.*")
-    if not elements:
-        raise RuntimeError(f"未找到包含'{keyword}'的窗口,请确认软件已启动")
-    return elements[0].handle
 
-
-def activate_window(hwnd: int):
-    """连接窗口并置前。"""
-    app = Application(backend="uia").connect(handle=hwnd)
-    win = app.window(handle=hwnd)
-    win.set_focus()
-    return win
 
 
 def switch_panel(win, tree_item: str):

@@ -1,0 +1,21 @@
+{
+  "default_client": "qianlong",
+  "clients": [
+    {
+      "id": "qianlong",
+      "name": "钱龙模拟期权宝",
+      "window_key": "钱龙模拟期权宝",
+      "menu_map": {},
+      "unsupported": ["通知查询"]
+    },
+    {
+      "id": "guotai_haitong",
+      "name": "国泰海通证券期权宝",
+      "window_key": "国泰海通证券期权宝",
+      "menu_map": {
+        "\\查询\\期权合约": "期权\\期权合约查询"
+      },
+      "unsupported": []
+    }
+  ]
+}

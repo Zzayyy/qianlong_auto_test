@@ -17,6 +17,7 @@ except ImportError:
 
 from config import (
     SCRIPTS_CONFIG,
+    CATEGORIES,
     load_user_config,
     save_user_config,
     get_output_dir,
@@ -24,6 +25,10 @@ from config import (
     get_script_filename,
     IS_FROZEN,
     PROJECT_ROOT,
+    get_client,
+    get_client_ids,
+    get_client_name,
+    get_default_client_id,
 )
 from engine.runner import ScriptRunner
 from engine.task import Task
@@ -49,7 +54,6 @@ class AutomationGUI:
 
     def __init__(self, root):
         self.root = root
-        self.root.title("钱龙期权交易 - GUI自动化工具")
         self.root.geometry("950x750")
         self.root.minsize(850, 650)
 
@@ -73,6 +77,12 @@ class AutomationGUI:
 
         # 加载用户配置
         self.user_config = load_user_config()
+
+        # 当前客户端（多客户端支持）：优先读用户配置，否则取档案默认
+        self.client_id = self.user_config.get("client") or get_default_client_id()
+        if not get_client(self.client_id):
+            self.client_id = get_default_client_id()
+        self.client_var = tk.StringVar(value=get_client_name(self.client_id))
 
         # 参数变量（使用配置中的默认值）
         self.export_format = tk.StringVar(value=self.user_config.get("export_format", "txt"))
@@ -107,6 +117,7 @@ class AutomationGUI:
         self._current_record_id = None  # 当前正在运行的记录 id
 
         self._build_ui()
+        self._update_title()
         self.logger.info("GUI自动化工具启动")
 
     def _setup_runner(self):
@@ -141,13 +152,10 @@ class AutomationGUI:
         menubar = tk.Menu(self.root)
         self.root.config(menu=menubar)
 
-        # 功能菜单
-        func_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="功能", menu=func_menu)
-        func_menu.add_command(label="下单", command=lambda: self._switch_category("下单"))
-        func_menu.add_command(label="组合申报", command=lambda: self._switch_category("组合申报"))
-        func_menu.add_command(label="查询", command=lambda: self._switch_category("查询"))
-        func_menu.add_command(label="交易系统设置", command=lambda: self._switch_category("交易系统设置"))
+        # 功能菜单（随客户端动态显示支持的分类）
+        self.func_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="功能", menu=self.func_menu)
+        self._rebuild_func_menu()
 
         # 工具菜单
         tool_menu = tk.Menu(menubar, tearoff=0)
@@ -180,6 +188,17 @@ class AutomationGUI:
         # 主框架
         main_frame = ttk.Frame(self.root, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
+
+        # 顶部栏：客户端选择（多客户端支持）
+        top_bar = ttk.Frame(main_frame)
+        top_bar.pack(side=tk.TOP, fill=tk.X, pady=(0, 6))
+        ttk.Label(top_bar, text="客户端:").pack(side=tk.LEFT, padx=(0, 4))
+        self.client_combo = ttk.Combobox(
+            top_bar, textvariable=self.client_var, state="readonly", width=18
+        )
+        self.client_combo["values"] = [get_client_name(cid) for cid in get_client_ids()]
+        self.client_combo.pack(side=tk.LEFT)
+        self.client_combo.bind("<<ComboboxSelected>>", self._on_client_change)
 
         # 标题
         ttk.Label(
@@ -219,27 +238,28 @@ class AutomationGUI:
         middle_frame = ttk.Frame(left_frame)
         middle_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, pady=(0, 10))
 
-        # 脚本列表
-        list_frame = ttk.LabelFrame(middle_frame, text="脚本列表", padding="8")
+        # 脚本列表（树形：分类 -> 脚本，随客户端动态显示/隐藏）
+        list_frame = ttk.LabelFrame(middle_frame, text="功能 / 脚本", padding="8")
         list_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
 
-        self.script_listbox = tk.Listbox(
+        self.script_tree = ttk.Treeview(
             list_frame,
-            font=("Microsoft YaHei UI", 10),
-            selectmode=tk.SINGLE,
-            exportselection=False,
-            height=12
+            show="tree",
+            selectmode=tk.BROWSE,
+            height=12,
         )
-        self.script_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.script_listbox.yview)
+        self.script_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.script_tree.yview)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.script_listbox.config(yscrollcommand=scrollbar.set)
-        self.script_listbox.bind('<Double-Button-1>', lambda e: self._execute_script())
-        self.script_listbox.bind('<<ListboxSelect>>', lambda e: (self._update_paths_for_selected_script(), self._update_params_for_selected_script()))
-        # 从脚本列表拖入任务队列
-        self.script_listbox.bind('<ButtonPress-1>', self._on_list_drag_start)
-        self.script_listbox.bind('<B1-Motion>', self._on_list_drag_motion)
-        self.script_listbox.bind('<ButtonRelease-1>', self._on_list_drag_end)
+        self.script_tree.config(yscrollcommand=scrollbar.set)
+        self.script_tree.bind('<Double-Button-1>', self._on_tree_double_click)
+        self.script_tree.bind('<<TreeviewSelect>>', self._on_tree_select)
+        # 从树拖入任务队列
+        self.script_tree.bind('<ButtonPress-1>', self._on_list_drag_start)
+        self.script_tree.bind('<B1-Motion>', self._on_list_drag_motion)
+        self.script_tree.bind('<ButtonRelease-1>', self._on_list_drag_end)
+        # iid -> {"script": 脚本配置, "category": 分类}
+        self.tree_script_map = {}
 
         # 参数配置面板
         self.params_frame = ttk.LabelFrame(middle_frame, text="参数配置", padding="8")
@@ -324,8 +344,9 @@ class AutomationGUI:
         )
         self.time_label.pack(side=tk.LEFT, padx=(2, 0))
 
-        # 默认显示下单
-        self._switch_category("下单")
+        # 构建左侧「分类 -> 脚本」树，默认选中「下单」
+        self._build_script_tree()
+        self._select_category("下单")
 
         # 左右分栏比例：sash 位置占整体宽度的比例
         #   0.5 = 五五分 | 0.6 = 左6右4 | 0.8 = 左8右2（改这里即可调默认比例）
@@ -355,31 +376,103 @@ class AutomationGUI:
         self._last_sash = target
         self.paned.sashpos(0, target)
 
-    def _switch_category(self, category):
-        """切换分类"""
+    def _is_script_supported(self, script, client):
+        """当前客户端是否支持该脚本（依据客户端档案的 unsupported 列表）"""
+        if not client:
+            return True
+        unsupported = client.get("unsupported", [])
+        if script.get("script_id") and script["script_id"] in unsupported:
+            return False
+        if script["name"] in unsupported:
+            return False
+        return True
+
+    def _build_script_tree(self):
+        """根据当前客户端重建左侧「分类 -> 脚本」树（仅显示支持的）"""
+        self.script_tree.delete(*self.script_tree.get_children())
+        self.tree_script_map.clear()
+        client = get_client(self.client_id)
+        for category in CATEGORIES:
+            scripts = [s for s in SCRIPTS_CONFIG.get(category, [])
+                       if self._is_script_supported(s, client)]
+            if not scripts:
+                # 该客户端无此分类的任何脚本，则不显示该分类
+                continue
+            cat_iid = f"cat::{category}"
+            self.script_tree.insert("", tk.END, iid=cat_iid, text=category, open=False)
+            for s in scripts:
+                sid_iid = f"script::{s['path']}"
+                self.script_tree.insert(cat_iid, tk.END, iid=sid_iid, text=s["name"])
+                self.tree_script_map[sid_iid] = {"script": s, "category": category}
+
+    def _rebuild_func_menu(self):
+        """重建「功能」菜单，仅列出当前客户端支持的分类"""
+        self.func_menu.delete(0, tk.END)
+        client = get_client(self.client_id)
+        for category in CATEGORIES:
+            if any(self._is_script_supported(s, client)
+                   for s in SCRIPTS_CONFIG.get(category, [])):
+                self.func_menu.add_command(
+                    label=category,
+                    command=lambda c=category: self._select_category(c)
+                )
+
+    def _select_category(self, category):
+        """选中某个功能分类（来自树节点或功能菜单）"""
         self.current_category = category
         self.category_label.config(text=f"当前功能: {category}")
-        self.script_listbox.delete(0, tk.END)
-
-        scripts = SCRIPTS_CONFIG.get(category, [])
-        for script in scripts:
-            self.script_listbox.insert(tk.END, script["name"])
-
-        # 重建参数面板
+        # 展开对应分类节点
+        cat_iid = f"cat::{category}"
+        if self.script_tree.exists(cat_iid):
+            self.script_tree.item(cat_iid, open=True)
+        # 清空脚本选择（避免沿用上一次选中的具体脚本）
+        cur_sel = self.script_tree.selection()
+        if cur_sel:
+            self.script_tree.selection_remove(*cur_sel)
         self._rebuild_params()
-
         # 仅下单显示数据预览
-        if self.current_category == "下单":
+        if category == "下单":
             self.preview_frame.pack(fill=tk.X, pady=(0, 10))
         else:
             self.preview_frame.pack_forget()
-
         self._log(f"切换分类: {category}")
         self.logger.info(f"切换分类: {category}")
-
         # 空闲时同步状态栏（运行中不覆盖）
         if not self.is_running:
             self._set_status(f"就绪 - 当前功能: {category}")
+
+    def _on_tree_select(self, event=None):
+        """树选择事件：脚本节点 -> 选中脚本；分类节点 -> 设为当前功能并展开"""
+        sel = self.script_tree.selection()
+        if not sel:
+            return
+        iid = sel[0]
+        item = self.tree_script_map.get(iid)
+        if item:
+            # 选中具体脚本
+            self.current_category = item["category"]
+            self.category_label.config(text=f"当前功能: {item['category']}")
+            self._rebuild_params()
+            self._update_paths_for_selected_script()
+            self._update_params_for_selected_script()
+        else:
+            # 选中分类节点：设为当前功能并展开/收起
+            category = iid.split("::", 1)[1]
+            self.current_category = category
+            self.category_label.config(text=f"当前功能: {category}")
+            self._rebuild_params()
+            if category == "下单":
+                self.preview_frame.pack(fill=tk.X, pady=(0, 10))
+            else:
+                self.preview_frame.pack_forget()
+            self.script_tree.item(iid, open=not self.script_tree.item(iid, "open"))
+
+    def _on_tree_double_click(self, event):
+        """双击树：仅当双击具体脚本节点时才执行，双击分类节点只展开/收起"""
+        iid = self.script_tree.identify_row(event.y)
+        if not iid or iid not in self.tree_script_map:
+            return  # 分类节点：不执行
+        self._execute_script()
 
     # ====================== 任务历史标签页 ======================
     def _build_history_panel(self, parent):
@@ -962,42 +1055,26 @@ class AutomationGUI:
             self._log(f"[预览] Excel读取失败: {e}")
 
     def _get_selected_script(self):
-        """获取选中的脚本"""
-        selection = self.script_listbox.curselection()
-        if not selection:
+        """获取选中的脚本（仅当树中选中具体脚本节点时返回）"""
+        sel = self.script_tree.selection()
+        if not sel:
             return None
-        script_name = self.script_listbox.get(selection[0])
-        for scripts in SCRIPTS_CONFIG.values():
-            for s in scripts:
-                if s["name"] == script_name:
-                    return s
-        return None
+        item = self.tree_script_map.get(sel[0])
+        return item["script"] if item else None
 
     # ====================== 脚本列表 -> 任务队列 拖拽 ======================
     def _on_list_drag_start(self, event):
-        """从脚本列表开始拖拽（记录待拖出的脚本）"""
+        """从树中开始拖拽（记录待拖出的脚本）"""
         if self.task_center is None or self.task_center.is_running:
             self._drag_script = None
             return
-        idx = self.script_listbox.nearest(event.y)
-        if idx < 0:
+        iid = self.script_tree.identify_row(event.y)
+        if not iid or iid not in self.tree_script_map:
             self._drag_script = None
             return
-        name = self.script_listbox.get(idx)
-        script = None
-        category = None
-        for cat, scripts in SCRIPTS_CONFIG.items():
-            for s in scripts:
-                if s["name"] == name:
-                    script, category = s, cat
-                    break
-            if script:
-                break
-        if script is None:
-            self._drag_script = None
-            return
-        self._drag_script = dict(script)
-        self._drag_script["category"] = category
+        item = self.tree_script_map[iid]
+        self._drag_script = dict(item["script"])
+        self._drag_script["category"] = item["category"]
         self._drag_active = False
         self._drag_start_y = event.y
 
@@ -1156,7 +1233,37 @@ class AutomationGUI:
             "export_targets": export_targets or [],
             "export_output_dir": self.export_output_dir.get(),
             "settings_output_dir": self.settings_output_dir.get(),
+            "client_id": self.client_id,
         }
+
+    # ====================== 客户端切换（多客户端支持） ======================
+    def _update_title(self):
+        """根据当前客户端更新窗口标题"""
+        self.root.title(f"{get_client_name(self.client_id)} - GUI自动化工具")
+
+    def _on_client_change(self, event=None):
+        """下拉切换客户端：持久化配置并刷新当前分类脚本列表"""
+        name = self.client_var.get()
+        cid = next((c for c in get_client_ids() if get_client_name(c) == name), None)
+        if not cid or cid == self.client_id:
+            return
+        self.client_id = cid
+        self.user_config["client"] = cid
+        save_user_config(self.user_config)
+        self._update_title()
+        self._log(f"[配置] 已切换客户端: {name}")
+        self.logger.info(f"切换客户端: {cid}")
+        # 重建树与功能菜单（应用 unsupported 过滤），并复位到有效分类
+        self._build_script_tree()
+        self._rebuild_func_menu()
+        client = get_client(self.client_id)
+        supported = [c for c in CATEGORIES
+                     if any(self._is_script_supported(s, client)
+                            for s in SCRIPTS_CONFIG.get(c, []))]
+        if self.current_category not in supported:
+            self.current_category = supported[0] if supported else ""
+        if self.current_category:
+            self._select_category(self.current_category)
 
     # ====================== 任务中心：顺序执行驱动 ======================
     def run_task_center(self, task_center):

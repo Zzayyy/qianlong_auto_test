@@ -8,6 +8,7 @@ import time
 from core.window import find_window, activate_window, switch_panel, click_output_button, countdown
 from core.export_dialog import handle_export_dialog
 from core.save_as_dialog import handle_save_as_dialog
+from core.clients import get_client, resolve_panel_path
 
 
 def parse_env_config(config: dict) -> dict:
@@ -20,8 +21,17 @@ def parse_env_config(config: dict) -> dict:
     """
     result = config.copy()
 
-    # GUI传入的环境变量
-    result["window_key"] = os.environ.get("GUI_WINDOW_KEY") or config.get("window_key", "钱龙模拟期权宝")
+    # 当前客户端（多客户端支持）：来自 GUI_CLIENT_ID 环境变量
+    client_id = os.environ.get("GUI_CLIENT_ID") or None
+    client = get_client(client_id) if client_id else None
+
+    # 窗口关键字：优先 GUI_WINDOW_KEY 覆盖，其次客户端档案，最后脚本默认
+    if os.environ.get("GUI_WINDOW_KEY"):
+        result["window_key"] = os.environ["GUI_WINDOW_KEY"]
+    elif client and client.get("window_key"):
+        result["window_key"] = client["window_key"]
+    else:
+        result["window_key"] = config.get("window_key", "钱龙模拟期权宝")
     result["export_format"] = os.environ.get("GUI_EXPORT_FORMAT") or config.get("export_format", "txt")
     result["countdown_sec"] = int(os.environ.get("GUI_COUNTDOWN") or config.get("countdown_sec", 3))
     result["settle_delay"] = float(os.environ.get("GUI_DELAY") or config.get("settle_delay", 1.0))
@@ -48,6 +58,15 @@ def parse_env_config(config: dict) -> dict:
     # 清理路径中的不可见字符，并统一斜杠为 Windows 反斜杠
     result["output_path"] = ''.join(c for c in result["output_path"] if c.isprintable()).strip()
     result["output_path"] = result["output_path"].replace("/", "\\")
+
+    # 菜单路径：按客户端档案解析（支持菜单改名/独有菜单/不支持项）
+    panel = resolve_panel_path(config, client_id)
+    if panel is None:
+        client_name = client.get("name") if client else (client_id or "")
+        print(f"[错误] 当前客户端「{client_name}」不支持运行「{config.get('name', '')}」")
+        sys.exit(1)
+    result["panel_path"] = panel
+    result["script_id"] = config.get("script_id") or config.get("name", "")
 
     return result
 
