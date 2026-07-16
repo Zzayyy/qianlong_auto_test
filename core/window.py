@@ -2,11 +2,13 @@ import os
 import sys
 import win32gui
 import win32con
+import win32process
 from win32gui import (
     EnumChildWindows,
     GetWindowText,
     IsWindowVisible
 )
+from core.clients import get_client
 from pywinauto import Application,findwindows
 import time
 # -*- coding: utf-8 -*-
@@ -45,11 +47,46 @@ from pywinauto.timings import Timings
 
 
 def find_window(keyword: str) -> int:
-    """根据关键字查找窗口,返回第一个匹配的句柄。"""
+    """根据关键字查找窗口,返回第一个匹配且非本工具的句柄。
+
+    本自动化工具的窗口标题同样包含客户端关键字（如“钱龙模拟期权宝 - GUI自动化工具”），
+    若不排除，find_elements 可能把自身窗口当成目标，导致切错软件。
+    排除策略：
+      1) 优先使用当前客户端档案中的 window_key（多客户端支持，GUI_CLIENT_ID 指定时）；
+      2) 排除 GUI 进程及其子进程（通过 GUI_PID 环境变量 + 当前子进程 PID）；
+      3) 排除标题中含本工具标记“GUI自动化工具”的窗口（兜底）。
+    """
+    # 多客户端支持：若 GUI 指定了客户端，优先使用该客户端的 window_key
+    client_id = os.environ.get("GUI_CLIENT_ID")
+    if client_id:
+        client = get_client(client_id)
+        if client and client.get("window_key"):
+            keyword = client["window_key"]
+
+    # 收集需要排除的进程 PID
+    exclude_pids = {os.getpid()}  # 当前子进程自身
+    gui_pid = os.environ.get("GUI_PID")
+    if gui_pid and gui_pid.isdigit():
+        exclude_pids.add(int(gui_pid))
+
     elements = findwindows.find_elements(title_re=f".*{keyword}.*")
-    if not elements:
-        raise RuntimeError(f"未找到包含'{keyword}'的窗口,请确认软件已启动")
-    return elements[0].handle
+    for el in elements:
+        # 兜底：标题含本工具标记的直接跳过
+        try:
+            if "GUI自动化工具" in (el.name or ""):
+                continue
+        except Exception:
+            pass
+        # 按进程 PID 排除自身
+        try:
+            _, pid = win32process.GetWindowThreadProcessId(el.handle)
+            if pid in exclude_pids:
+                continue
+        except Exception:
+            pass
+        return el.handle
+
+    raise RuntimeError(f"未找到包含'{keyword}'的窗口,请确认软件已启动")
 
 
 def activate_window(hwnd: int):

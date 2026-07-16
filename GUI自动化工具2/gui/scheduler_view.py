@@ -6,11 +6,12 @@ import os as _os
 import json, tkinter as tk
 import datetime
 from tkinter import ttk, messagebox, simpledialog
-from config import SCRIPTS_CONFIG, CATEGORIES
+from config import get_scripts_config, CATEGORIES
 from engine.scheduler import compute_next_run, format_schedule_desc
 class AddSchedDialog(simpledialog.Dialog):
-    def __init__(self, parent, groups, title=None):
+    def __init__(self, parent, groups, client_id=None, title=None):
         self.groups = groups
+        self.client_id = client_id
         self.result_data = None
         self._wd_vars = {}
         self._card_frames = []
@@ -60,7 +61,10 @@ class AddSchedDialog(simpledialog.Dialog):
         self.cat_f.grid_columnconfigure(1, weight=1)
         ttk.Label(self.cat_f, text="分类:").grid(row=0, column=0, sticky=tk.W)
         self.cat_var = tk.StringVar(value=CATEGORIES[0] if CATEGORIES else "")
-        self.cat_combo = ttk.Combobox(self.cat_f, textvariable=self.cat_var, values=CATEGORIES, state="readonly", width=15)
+        cats = [c for c in CATEGORIES if get_scripts_config(self.client_id).get(c)]
+        self.cat_combo = ttk.Combobox(self.cat_f, textvariable=self.cat_var, values=cats, state="readonly", width=15)
+        if cats:
+            self.cat_var.set(cats[0])
         self.cat_combo.grid(row=0, column=1, sticky=tk.W, padx=(4,0))
         self.cat_combo.bind("<<ComboboxSelected>>", self._on_cat_change)
         # 编队选择（编队模式）
@@ -220,7 +224,7 @@ class AddSchedDialog(simpledialog.Dialog):
         self._all_scripts = []
         self._selected_idx = None
         cat = self.cat_var.get()
-        self._all_scripts = list(SCRIPTS_CONFIG.get(cat, []))
+        self._all_scripts = list(get_scripts_config(self.client_id).get(cat, []))
         for idx, s in enumerate(self._all_scripts):
             card = tk.Frame(self.card_inner, relief="solid", borderwidth=1, bg="white")
             r, c = divmod(idx, 2)
@@ -292,6 +296,7 @@ class AddSchedDialog(simpledialog.Dialog):
             self.result_data["target_type"] = "script"
             self.result_data["script_name"] = s["name"]
             self.result_data["script_path"] = s["path"]
+            self.result_data["query_key"] = s.get("query_key", "")
             self.result_data["category"] = self.cat_var.get()
             self.result_data["params"] = self._snapshot_params()
         else:
@@ -379,7 +384,7 @@ class SchedulerPanel:
                 with open(gp,"r",encoding="utf-8") as f: data = json.load(f)
                 groups = data if isinstance(data,list) else data.get("groups",[])
             except: groups = []
-        dlg = AddSchedDialog(self.parent,groups,title="添加定时任务")
+        dlg = AddSchedDialog(self.parent, groups, client_id=self.gui.client_id, title="添加定时任务")
         if dlg.result_data:
             self.scheduler.add_task(dlg.result_data)
             self._refresh()
