@@ -9,6 +9,9 @@ from config import IS_FROZEN, PROJECT_ROOT
 
 WEEKDAY_NAMES = ["周一","周二","周三","周四","周五","周六","周日"]
 
+# 过期任务保护阈值：next_run 超过此秒数则跳过本轮执行，等待下一次正常调度窗口
+CATCHUP_THRESHOLD = 300  # 5 分钟
+
 def compute_next_run(sched):
     stype = sched["schedule_type"]
     time_str = sched.get("time","09:00")
@@ -177,6 +180,7 @@ class TaskScheduler:
                 if not self._executing:
                     now = datetime.now()
                     due = []
+                    skipped = []
                     with self._lock:
                         for t in self._tasks:
                             if not t.get("enabled", False): continue
@@ -185,13 +189,23 @@ class TaskScheduler:
                             try:
                                 dt = datetime.strptime(nr,"%Y-%m-%d %H:%M")
                             except ValueError: continue
-                            if now >= dt: due.append(t)
-                    for sched in due:
-                        if not self._running: break
-                        self._execute(sched)
+                            if now >= dt:
+                                gap = (now - dt).total_seconds()
+                                if gap > CATCHUP_THRESHOLD:
+                                    t["next_run"] = compute_next_run(t)
+                                    skipped.append(t.get("name",""))
+                                else:
+                                    due.append(t)
+                    if skipped:
+                        self._save()
+                if skipped:
+                    self._log(f"跳过 {len(skipped)} 个过期任务（距计划时间超过5分钟）: {', '.join(skipped)}")
+                for sched in due:
+                    if not self._running: break
+                    self._execute(sched)
             except Exception:
                 pass
-            time.sleep(30)
+            time.sleep(5)
 
     def _execute(self, sched):
         if self._executing:
