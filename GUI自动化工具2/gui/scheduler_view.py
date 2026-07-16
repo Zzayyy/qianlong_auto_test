@@ -9,8 +9,9 @@ from tkinter import ttk, messagebox, simpledialog
 from config import get_scripts_config, CATEGORIES
 from engine.scheduler import compute_next_run, format_schedule_desc
 class AddSchedDialog(simpledialog.Dialog):
-    def __init__(self, parent, groups, client_id=None, title=None):
+    def __init__(self, parent, groups, gui, client_id=None, title=None):
         self.groups = groups
+        self.gui = gui
         self.client_id = client_id
         self.result_data = None
         self._wd_vars = {}
@@ -308,12 +309,8 @@ class AddSchedDialog(simpledialog.Dialog):
             self.result_data["group_name"] = gn
         return True
     def _snapshot_params(self):
-        w = self.parent
-        while w:
-            if hasattr(w, "collect_params"):
-                return w.collect_params()
-            try: w = w.master
-            except AttributeError: break
+        if hasattr(self, "gui") and hasattr(self.gui, "collect_params"):
+            return self.gui.collect_params()
         return {}
 class SchedulerPanel:
     def __init__(self, parent, controller):
@@ -332,6 +329,9 @@ class SchedulerPanel:
         # —— 列表区域 ——
         list_frame = ttk.Frame(self.parent)
         list_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        # 改用 grid 布局以填充滚动条角落，消除右下角三角图标
+        list_frame.grid_rowconfigure(0, weight=1)
+        list_frame.grid_columnconfigure(0, weight=1)
         cols = ("id","name","target","schedule","next_run","last_run","status","enabled")
         self.tree = ttk.Treeview(list_frame,columns=cols,show="headings",height=15,selectmode=tk.BROWSE)
         for c,h in [("id","ID"),("name","任务名称"),("target","目标"),("schedule","定时方式"),("next_run","下次执行"),("last_run","上次执行"),("status","状态"),("enabled","启用")]:
@@ -348,11 +348,9 @@ class SchedulerPanel:
         self.tree.tag_configure("success",foreground="#008000")
         self.tree.tag_configure("disabled",foreground="#808080")
         v_scroll = ttk.Scrollbar(list_frame,orient=tk.VERTICAL,command=self.tree.yview)
-        h_scroll = ttk.Scrollbar(list_frame,orient=tk.HORIZONTAL,command=self.tree.xview)
-        self.tree.configure(yscrollcommand=v_scroll.set, xscrollcommand=h_scroll.set)
-        self.tree.pack(side=tk.LEFT,fill=tk.BOTH,expand=True)
-        v_scroll.pack(side=tk.RIGHT,fill=tk.Y)
-        h_scroll.pack(side=tk.BOTTOM,fill=tk.X)
+        self.tree.configure(yscrollcommand=v_scroll.set)
+        self.tree.grid(row=0, column=0, sticky="nsew")
+        v_scroll.grid(row=0, column=1, sticky="ns")
         # —— 底部按钮 ——
         btn_frame = ttk.Frame(self.parent)
         btn_frame.pack(side=tk.TOP, fill=tk.X, pady=(5,0))
@@ -384,7 +382,7 @@ class SchedulerPanel:
                 with open(gp,"r",encoding="utf-8") as f: data = json.load(f)
                 groups = data if isinstance(data,list) else data.get("groups",[])
             except: groups = []
-        dlg = AddSchedDialog(self.parent, groups, client_id=self.gui.client_id, title="添加定时任务")
+        dlg = AddSchedDialog(self.parent, groups, gui=self.gui, client_id=self.gui.client_id, title="添加定时任务")
         if dlg.result_data:
             self.scheduler.add_task(dlg.result_data)
             self._refresh()
