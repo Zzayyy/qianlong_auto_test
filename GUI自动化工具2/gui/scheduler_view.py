@@ -296,6 +296,7 @@ class AddSchedDialog(simpledialog.Dialog):
             self.result_data["target_type"] = "script"
             self.result_data["script_name"] = s["name"]
             self.result_data["script_path"] = s["path"]
+            self.result_data["query_key"] = s.get("query_key", "")
             self.result_data["category"] = self.cat_var.get()
             self.result_data["params"] = self._snapshot_params()
         else:

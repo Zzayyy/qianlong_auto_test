@@ -54,6 +54,9 @@ class Task:
         # window_key 与菜单路径，无需在本处耦合具体客户端细节
         env["GUI_CLIENT_ID"] = p.get("client_id", "") or ""
 
+        # 查询类通用驱动所需：指明要执行的具体查询（queries.json 的 key）
+        env["GUI_QUERY_KEY"] = self.script.get("query_key", "") or ""
+
         # 透传 GUI 自身 PID，供子进程 find_window 排除本工具窗口
         # （本工具的窗口标题同样含客户端关键字，否则会定位到自己）
         env["GUI_PID"] = str(os.getpid())

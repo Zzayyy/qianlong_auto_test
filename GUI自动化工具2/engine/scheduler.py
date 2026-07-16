@@ -213,7 +213,7 @@ class TaskScheduler:
             sp = sched.get("script_path","")
             if not _os.path.exists(sp):
                 self._on_error(sched, f"脚本文件不存在: {sp}"); return
-            task = Task({"name":sched.get("script_name",""),"path":sp},sched.get("category",""),sched.get("params",{}))
+            task = Task({"name":sched.get("script_name",""),"path":sp,"query_key":sched.get("query_key","")},sched.get("category",""),sched.get("params",{}))
             env = task.build_env(PROJECT_ROOT)
             env["PYTHONIOENCODING"]="utf-8"; env["PYTHONUTF8"]="1"
             cmd = [sys.executable,"--_run_script",sp] if IS_FROZEN else [sys.executable,"-u",sp]
@@ -259,7 +259,7 @@ class TaskScheduler:
         for idx, gt in enumerate(gts):
             sp = gt.get("script_path","")
             if not _os.path.exists(sp): self._log(f"  [{idx+1}/{len(gts)}] 脚本不存在: {sp}"); continue
-            task = Task({"name":gt.get("script_name",""),"path":sp},gt.get("category",""),gt.get("params",{}))
+            task = Task({"name":gt.get("script_name",""),"path":sp,"query_key":gt.get("query_key","")},gt.get("category",""),gt.get("params",{}))
             env = task.build_env(PROJECT_ROOT); env["PYTHONIOENCODING"]="utf-8"; env["PYTHONUTF8"]="1"
             cmd = [sys.executable,"--_run_script",sp] if IS_FROZEN else [sys.executable,"-u",sp]
             self._log('[' + str(idx+1) + '/' + str(len(gts)) + '] \u5f00\u59cb: ' + gt.get('script_name',''))

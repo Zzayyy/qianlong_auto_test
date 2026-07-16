@@ -389,7 +389,8 @@ class AutomationGUI:
             cat_iid = f"cat::{category}"
             self.script_tree.insert("", tk.END, iid=cat_iid, text=category, open=False)
             for s in scripts:
-                sid_iid = f"script::{s['path']}"
+                # iid 必须唯一：查询类脚本现已统一指向同一驱动文件，故用 query_key 区分
+                sid_iid = f"script::{category}::{s.get('query_key') or s['path']}"
                 self.script_tree.insert(cat_iid, tk.END, iid=sid_iid, text=s["name"])
                 self.tree_script_map[sid_iid] = {"script": s, "category": category}
 
@@ -1272,7 +1273,8 @@ class AutomationGUI:
 
         next_category: 下一个任务的分类，传给脚本用于决定交易系统设置窗口是否保留。
         """
-        script = {"name": item["script_name"], "path": item["script_path"]}
+        script = {"name": item["script_name"], "path": item["script_path"],
+                  "query_key": item.get("query_key", "")}
         task = Task(script, item["category"], item["params"], next_category=next_category)
         self.runner.run(task)
 

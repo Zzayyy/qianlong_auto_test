@@ -50,7 +50,8 @@ if IS_FROZEN:
 else:
     CONFIG_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
-DEFAULT_OUTPUT_DIR = r"E:\Code\3\output"
+# 默认输出目录：普通用户机器上放到桌面（开发者机器路径 E:\Code\3\output 不适用）
+DEFAULT_OUTPUT_DIR = os.path.join(os.path.expanduser("~"), "Desktop")
 CATEGORIES = ["查询", "通知查询", "下单", "组合申报", "交易系统设置"]
 
 
@@ -86,9 +87,16 @@ def save_user_config(config: dict):
 
 
 def get_output_dir(config: dict, category: str) -> str:
-    """获取指定界面的输出目录"""
+    """获取指定界面的输出目录。
+
+    若配置为空字符串/缺失，则回退到 DEFAULT_OUTPUT_DIR（桌面），
+    避免 os.path.join("", "x.txt") 得到裸文件名、导致文件落进程序安装目录。
+    """
     dirs = config.get("output_dirs", {})
-    return dirs.get(category, DEFAULT_OUTPUT_DIR)
+    d = dirs.get(category, DEFAULT_OUTPUT_DIR)
+    if not d or not str(d).strip():
+        d = DEFAULT_OUTPUT_DIR
+    return d
 
 
 def set_output_dir(config: dict, category: str, path: str):
@@ -107,33 +115,36 @@ def get_script_filename(script_name: str) -> str:
 
 # ====================== 脚本清单 ======================
 SCRIPTS_CONFIG = {
+    # 查询类脚本已统一为单个驱动 查询/run_query.py + 查询/queries.json 数据表。
+    # 每个条目通过 query_key（=默认菜单路径）告诉驱动具体执行哪一项；
+    # 客户端差异由 clients.json 的 menu_map/unsupported + core.runner 在运行时解析。
     "查询": [
-        {"name": "1. 资金持仓", "path": rf"{PROJECT_ROOT}\查询\1.资金持仓.py"},
-        {"name": "2. 策略持仓", "path": rf"{PROJECT_ROOT}\查询\2.策略持仓.py"},
-        {"name": "3. 策略委托", "path": rf"{PROJECT_ROOT}\查询\3.策略委托.py"},
-        {"name": "4. 历史策略持仓", "path": rf"{PROJECT_ROOT}\查询\4.历史策略持仓.py"},
-        {"name": "5. 当日委托", "path": rf"{PROJECT_ROOT}\查询\5.当日委托.py"},
-        {"name": "6. 当日成交", "path": rf"{PROJECT_ROOT}\查询\6.当日成交.py"},
-        {"name": "7. 历史委托", "path": rf"{PROJECT_ROOT}\查询\7.历史委托.py"},
-        {"name": "8. 历史成交", "path": rf"{PROJECT_ROOT}\查询\8.历史成交.py"},
-        {"name": "9. 期权合约", "path": rf"{PROJECT_ROOT}\查询\9.期权合约.py"},
-        {"name": "10. 资金查询", "path": rf"{PROJECT_ROOT}\查询\10.资金查询.py"},
-        {"name": "11. 当日行权被指派查询", "path": rf"{PROJECT_ROOT}\查询\11.当日行权被指派查询.py"},
-        {"name": "12. 行权结果查询", "path": rf"{PROJECT_ROOT}\查询\12.行权结果查询.py"},
-        {"name": "13. 历史行权指派查询", "path": rf"{PROJECT_ROOT}\查询\13.历史行权指派查询.py"},
-        {"name": "14. 历史对账单查询", "path": rf"{PROJECT_ROOT}\查询\14.历史对账单查询.py"},
-        {"name": "15. 历史交割单查询", "path": rf"{PROJECT_ROOT}\查询\15.历史交割单查询.py"},
-        {"name": "16. 历史行权交割查询", "path": rf"{PROJECT_ROOT}\查询\16.历史行权交割查询.py"},
-        {"name": "17. 客户限仓信息查询", "path": rf"{PROJECT_ROOT}\查询\17.客户限仓信息查询.py"},
-        {"name": "18. 限购额度查询", "path": rf"{PROJECT_ROOT}\查询\18.限购额度查询.py"},
-        {"name": "19. 行权负债信息查询", "path": rf"{PROJECT_ROOT}\查询\19.行权负债信息查询.py"},
-        {"name": "20. 历史行权负债信息", "path": rf"{PROJECT_ROOT}\查询\20.历史行权负债信息.py"},
+        {"name": "1. 资金持仓", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\资金持仓"},
+        {"name": "2. 策略持仓", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\策略持仓"},
+        {"name": "3. 策略委托", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\策略委托"},
+        {"name": "4. 历史策略持仓", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\历史策略持仓"},
+        {"name": "5. 当日委托", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\当日委托"},
+        {"name": "6. 当日成交", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\当日成交"},
+        {"name": "7. 历史委托", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\历史委托"},
+        {"name": "8. 历史成交", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\历史成交"},
+        {"name": "9. 期权合约", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\期权合约"},
+        {"name": "10. 资金查询", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\资金查询"},
+        {"name": "11. 当日行权被指派查询", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\当日行权被指派查询"},
+        {"name": "12. 行权结果查询", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\行权结果查询"},
+        {"name": "13. 历史行权指派查询", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\历史行权指派查询"},
+        {"name": "14. 历史对账单查询", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\历史对账单查询"},
+        {"name": "15. 历史交割单查询", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\历史交割单查询"},
+        {"name": "16. 历史行权交割查询", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\历史行权交割查询"},
+        {"name": "17. 客户限仓信息查询", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\客户限仓信息查询"},
+        {"name": "18. 限购额度查询", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\限购额度查询"},
+        {"name": "19. 行权负债信息查询", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\行权负债信息查询"},
+        {"name": "20. 历史行权负债信息", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\历史行权负债信息"},
         # 以下为国泰海通专属菜单（钱龙无此菜单，由 clients.json 的 unsupported 过滤）
-        {"name": "21. 可用备兑股份", "path": rf"{PROJECT_ROOT}\查询\21.可用备兑股份.py"},
-        {"name": "22. 备兑股份不足", "path": rf"{PROJECT_ROOT}\查询\22.备兑股份不足.py"},
-        {"name": "23. 当日行权成功明细", "path": rf"{PROJECT_ROOT}\查询\23.当日行权成功明细.py"},
-        {"name": "24. 对账单资金流水", "path": rf"{PROJECT_ROOT}\查询\24.对账单资金流水.py"},
-        {"name": "25. 账号查询", "path": rf"{PROJECT_ROOT}\查询\25.账号查询.py"},
+        {"name": "21. 可用备兑股份", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\可用备兑股份"},
+        {"name": "22. 备兑股份不足", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\备兑股份不足"},
+        {"name": "23. 当日行权成功明细", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\当日行权成功明细"},
+        {"name": "24. 对账单资金流水", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\对账单资金流水"},
+        {"name": "25. 账号查询", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\账号查询"},
     ],
     "下单": [
         {"name": "1.期权下单_自动化下单", "path": rf"{PROJECT_ROOT}\下单\自动化下单\4.期权下单(新)_自动化下单_Excel驱动版.py"},
@@ -145,15 +156,15 @@ SCRIPTS_CONFIG = {
         {"name": "6.全选撤单", "path": rf"{PROJECT_ROOT}\撤单\撤单_全选撤单_自动化.py"},
     ],
     "通知查询": [
-        {"name": "1.通知查询", "path": rf"{PROJECT_ROOT}\通知查询\通知查询.py", "script_id": "通知查询"},
+        {"name": "1.通知查询", "path": rf"{PROJECT_ROOT}\run_query.py", "script_id": "通知查询", "query_key": r"\通知查询\合约信息变更数量"},
     ],
     "组合申报": [
         {"name": "1.组合申报_全自动", "path": rf"{PROJECT_ROOT}\组合申报\2.组合申报_全自动.py"},
         {"name": "2.拆分申报_全自动", "path": rf"{PROJECT_ROOT}\组合申报\2.拆分申报_全自动.py"},
-        {"name": "3.组合策略持仓查询", "path": rf"{PROJECT_ROOT}\组合申报\查询\1.组合策略持仓查询.py"},
-        {"name": "4.组合策略信息查询", "path": rf"{PROJECT_ROOT}\组合申报\查询\2.组合策略信息查询.py"},
-        {"name": "5.组合委托流水查询", "path": rf"{PROJECT_ROOT}\组合申报\查询\3.组合委托流水查询.py"},
-        {"name": "6.历史组合委托流水", "path": rf"{PROJECT_ROOT}\组合申报\查询\4.历史组合委托流水.py"},
+        {"name": "3.组合策略持仓查询", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\组合申报\组合策略持仓查询"},
+        {"name": "4.组合策略信息查询", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\组合申报\组合策略信息查询"},
+        {"name": "5.组合委托流水查询", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\组合申报\组合委托流水查询"},
+        {"name": "6.历史组合委托流水", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\组合申报\历史组合委托流水"},
     ],
     "交易系统设置": [
         {"name": "1.委托设置", "path": rf"{PROJECT_ROOT}\交易系统设置\1_委托设置.py"},

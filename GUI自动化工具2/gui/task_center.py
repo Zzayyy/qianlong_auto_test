@@ -308,6 +308,7 @@ class TaskCenter:
                 "category": row["category"],
                 "script_name": row["script_name"],
                 "script_path": row["script_path"],
+                "query_key": row.get("query_key", ""),
                 "params": row.get("params", {}),
                 "status": self.ST_PENDING,
             })
@@ -320,6 +321,7 @@ class TaskCenter:
             "category": t["category"],
             "script_name": t["script_name"],
             "script_path": t["script_path"],
+            "query_key": t.get("query_key", ""),
             "params": t["params"],
         }
 
@@ -405,6 +407,7 @@ class TaskCenter:
                 "category": row["category"],
                 "script_name": row["script_name"],
                 "script_path": row["script_path"],
+                "query_key": row.get("query_key", ""),
                 "params": row.get("params", {}),
                 "status": self.ST_PENDING,
             })
@@ -466,6 +469,7 @@ class TaskCenter:
             "category": category,
             "script_name": script["name"],
             "script_path": script["path"],
+            "query_key": script.get("query_key", ""),
             "params": params,
             "status": self.ST_PENDING,
         })
@@ -684,6 +688,7 @@ class TaskCenter:
             "category": category,
             "script_name": script["name"],
             "script_path": script["path"],
+            "query_key": script.get("query_key", ""),
             "params": params,
             "status": self.ST_PENDING,
         }
@@ -731,6 +736,7 @@ class TaskCenter:
             "category": src["category"],
             "script_name": src["script_name"],
             "script_path": src["script_path"],
+            "query_key": src.get("query_key", ""),
             "params": dict(src["params"]),
             "status": self.ST_PENDING,
         }
@@ -997,6 +1003,7 @@ class TaskCenter:
                 "category": t["category"],
                 "script_name": t["script_name"],
                 "script_path": t["script_path"],
+                "query_key": t.get("query_key", ""),
                 "params": t["params"],
             } for t in self.tasks]
             with open(self.file_path, "w", encoding="utf-8") as f:
@@ -1016,6 +1023,7 @@ class TaskCenter:
                         "category": row["category"],
                         "script_name": row["script_name"],
                         "script_path": row["script_path"],
+                        "query_key": row.get("query_key", ""),
                         "params": row.get("params", {}),
                         "status": self.ST_PENDING,
                     })
