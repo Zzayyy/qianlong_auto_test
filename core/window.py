@@ -129,14 +129,16 @@ def _select_tree_item_by_path(tree, panel_path: str):
         raise ValueError(f"无效的面板路径: {panel_path}")
 
     # 逐级 select 展开
+    container = tree
     for part in parts:
-        item = tree.child_window(title=part, control_type="TreeItem", found_index=0)
+        item = container.child_window(title=part, control_type="TreeItem", found_index=0)
         tree.set_focus()        # 必须
         item.wait("visible", timeout=3)
         item.select()
         time.sleep(0.15)
+        container = item  # 下一级只在当前节点子节点中搜索
 
-    return tree.child_window(title=parts[-1], control_type="TreeItem", found_index=0)
+    return item
 
 
 def switch_panel(win, panel_path: str, use_title: bool = False):
