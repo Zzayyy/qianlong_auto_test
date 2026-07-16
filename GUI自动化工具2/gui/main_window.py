@@ -753,6 +753,8 @@ class AutomationGUI:
 
         if self.current_category == "查询":
             self._build_query_params()
+        elif self.current_category == "通知查询":
+            self._build_query_params()
         elif self.current_category == "下单":
             self._build_order_params()
         elif self.current_category == "组合申报":
@@ -1159,7 +1161,7 @@ class AutomationGUI:
         save_user_config(self.user_config)
 
         # 确保路径已设置
-        if self.current_category == "查询" and not self.txt_path.get():
+        if self.current_category in ("查询", "通知查询") and not self.txt_path.get():
             self._update_paths_for_selected_script()
 
         # 收集运行时参数，构造任务
@@ -1178,6 +1180,11 @@ class AutomationGUI:
 
         # 打印参数
         if self.current_category == "查询":
+            self._log(f"导出格式: {self.export_format.get().upper()}")
+            self._log(f"自动打开: {'是' if self.auto_open.get() else '否'}")
+            self._log(f"TXT路径: {self.txt_path.get()}")
+            self._log(f"XLS路径: {self.xls_path.get()}")
+        elif self.current_category == "通知查询":
             self._log(f"导出格式: {self.export_format.get().upper()}")
             self._log(f"自动打开: {'是' if self.auto_open.get() else '否'}")
             self._log(f"TXT路径: {self.txt_path.get()}")

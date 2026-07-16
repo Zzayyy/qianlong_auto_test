@@ -89,7 +89,15 @@
     "settle_delay": 1.0
   },
   "\\通知查询\\合约信息变更数量": {
-    "export_format": "xls",
+    "settle_delay": 1.0
+  },
+  "\\通知查询\\合约信息变更明细": {
+    "settle_delay": 1.0
+  },
+  "\\通知查询\\当日风险通知": {
+    "settle_delay": 1.0
+  },
+  "\\通知查询\\历史风险通知": {
     "settle_delay": 1.0
   }
 }

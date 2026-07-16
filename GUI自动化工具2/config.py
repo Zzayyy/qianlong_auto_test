@@ -156,7 +156,10 @@ SCRIPTS_CONFIG = {
         {"name": "6.全选撤单", "path": rf"{PROJECT_ROOT}\撤单\撤单_全选撤单_自动化.py"},
     ],
     "通知查询": [
-        {"name": "1.通知查询", "path": rf"{PROJECT_ROOT}\run_query.py", "script_id": "通知查询", "query_key": r"\通知查询\合约信息变更数量"},
+        {"name": "1.合约信息变更数量", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\通知查询\合约信息变更数量"},
+        {"name": "2.合约信息变更明细", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\通知查询\合约信息变更明细"},
+        {"name": "3.当日风险通知", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\通知查询\当日风险通知"},
+        {"name": "4.历史风险通知", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\通知查询\历史风险通知"},
     ],
     "组合申报": [
         {"name": "1.组合申报_全自动", "path": rf"{PROJECT_ROOT}\组合申报\2.组合申报_全自动.py"},

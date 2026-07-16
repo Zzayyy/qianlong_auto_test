@@ -1,11 +1,12 @@
 {
   "output_dir": "C:/Users/Administrator/Desktop",
   "auto_open": false,
-  "export_format": "xls",
+  "export_format": "txt",
   "output_dirs": {
     "查询": "C:\\Users\\Administrator\\Desktop\\查询",
     "组合申报": "C:\\Users\\Administrator\\Desktop\\组合申报",
-    "交易系统设置": "C:\\Users\\Administrator\\Desktop\\交易系统设置"
+    "交易系统设置": "C:\\Users\\Administrator\\Desktop\\交易系统设置",
+    "通知查询": "C:\\Users\\Administrator\\Desktop\\通知查询"
   },
   "log_level": "详细",
   "client": "guotai_haitong"
