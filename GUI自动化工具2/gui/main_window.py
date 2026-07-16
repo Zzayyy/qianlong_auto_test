@@ -16,7 +16,7 @@ except ImportError:
     HAS_OPENPYXL = False
 
 from config import (
-    SCRIPTS_CONFIG,
+    get_scripts_config,
     CATEGORIES,
     load_user_config,
     save_user_config,
@@ -376,25 +376,13 @@ class AutomationGUI:
         self._last_sash = target
         self.paned.sashpos(0, target)
 
-    def _is_script_supported(self, script, client):
-        """当前客户端是否支持该脚本（依据客户端档案的 unsupported 列表）"""
-        if not client:
-            return True
-        unsupported = client.get("unsupported", [])
-        if script.get("script_id") and script["script_id"] in unsupported:
-            return False
-        if script["name"] in unsupported:
-            return False
-        return True
-
     def _build_script_tree(self):
-        """根据当前客户端重建左侧「分类 -> 脚本」树（仅显示支持的）"""
+        """根据当前客户端重建左侧「分类 -> 脚本」树（对应软件菜单、过滤不支持的）"""
         self.script_tree.delete(*self.script_tree.get_children())
         self.tree_script_map.clear()
-        client = get_client(self.client_id)
+        scripts_config = get_scripts_config(self.client_id)
         for category in CATEGORIES:
-            scripts = [s for s in SCRIPTS_CONFIG.get(category, [])
-                       if self._is_script_supported(s, client)]
+            scripts = scripts_config.get(category, [])
             if not scripts:
                 # 该客户端无此分类的任何脚本，则不显示该分类
                 continue
@@ -408,10 +396,9 @@ class AutomationGUI:
     def _rebuild_func_menu(self):
         """重建「功能」菜单，仅列出当前客户端支持的分类"""
         self.func_menu.delete(0, tk.END)
-        client = get_client(self.client_id)
+        scripts_config = get_scripts_config(self.client_id)
         for category in CATEGORIES:
-            if any(self._is_script_supported(s, client)
-                   for s in SCRIPTS_CONFIG.get(category, [])):
+            if scripts_config.get(category):
                 self.func_menu.add_command(
                     label=category,
                     command=lambda c=category: self._select_category(c)
@@ -1256,10 +1243,7 @@ class AutomationGUI:
         # 重建树与功能菜单（应用 unsupported 过滤），并复位到有效分类
         self._build_script_tree()
         self._rebuild_func_menu()
-        client = get_client(self.client_id)
-        supported = [c for c in CATEGORIES
-                     if any(self._is_script_supported(s, client)
-                            for s in SCRIPTS_CONFIG.get(c, []))]
+        supported = [c for c in CATEGORIES if get_scripts_config(self.client_id).get(c)]
         if self.current_category not in supported:
             self.current_category = supported[0] if supported else ""
         if self.current_category:
