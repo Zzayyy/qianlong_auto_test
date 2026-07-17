@@ -112,8 +112,8 @@ class ComparePanel:
         # 列对齐与固定宽度（窗口过窄时各列保持此宽度，自然产生横向溢出，通过底部滚动条查看）
         self.tree.column("name", stretch=False, anchor=tk.W, width=75)
         self.tree.column("type", stretch=False, anchor=tk.CENTER, width=50)
-        self.tree.column("a", stretch=False, anchor=tk.CENTER, width=42)
-        self.tree.column("b", stretch=False, anchor=tk.CENTER, width=42)
+        self.tree.column("a", stretch=False, anchor=tk.CENTER, width=48)
+        self.tree.column("b", stretch=False, anchor=tk.CENTER, width=48)
         self.tree.column("result", stretch=False, anchor=tk.CENTER, width=60)
         self.tree.column("summary", stretch=False, anchor=tk.W, width=200)
 
