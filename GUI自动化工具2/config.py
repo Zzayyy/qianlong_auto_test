@@ -145,6 +145,7 @@ SCRIPTS_CONFIG = {
         {"name": "23. 当日行权成功明细", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\当日行权成功明细"},
         {"name": "24. 对账单资金流水", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\对账单资金流水"},
         {"name": "25. 账号查询", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\账号查询"},
+        {"name": "26. 对账单资金资产", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\对账单资金资产"},
     ],
     "下单": [
         {"name": "1.期权下单_自动化下单", "path": rf"{PROJECT_ROOT}\下单\自动化下单\4.期权下单(新)_自动化下单_Excel驱动版.py"},
@@ -155,12 +156,14 @@ SCRIPTS_CONFIG = {
         {"name": "5.期权下单_一键导出", "path": rf"{PROJECT_ROOT}\下单\自动化导出\期权下单(新)_自动导出.py"},
         {"name": "6.全选撤单", "path": rf"{PROJECT_ROOT}\撤单\撤单_全选撤单_自动化.py"},
     ],
+    # 以下为国泰海通专属菜单
     "通知查询": [
         {"name": "1.合约信息变更数量", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\通知查询\合约信息变更数量"},
         {"name": "2.合约信息变更明细", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\通知查询\合约信息变更明细"},
         {"name": "3.当日风险通知", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\通知查询\当日风险通知"},
         {"name": "4.历史风险通知", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\通知查询\历史风险通知"},
     ],
+    # 以下为国泰海通专属菜单
     "结算单": [
         {"name": "1.结算单", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\结算单\结算单"},
         {"name": "2.历史出入金流水明细", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\结算单\历史出入金流水明细"},
