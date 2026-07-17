@@ -52,7 +52,7 @@ else:
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 # 默认输出目录：普通用户机器上放到桌面（开发者机器路径 E:\Code\3\output 不适用）
 DEFAULT_OUTPUT_DIR = os.path.join(os.path.expanduser("~"), "Desktop")
-CATEGORIES = ["查询", "通知查询", "下单", "组合申报", "交易系统设置"]
+CATEGORIES = ["查询", "通知查询", "结算单", "下单", "组合申报", "交易系统设置"]
 
 
 def load_user_config() -> dict:
@@ -145,6 +145,7 @@ SCRIPTS_CONFIG = {
         {"name": "23. 当日行权成功明细", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\当日行权成功明细"},
         {"name": "24. 对账单资金流水", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\对账单资金流水"},
         {"name": "25. 账号查询", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\账号查询"},
+        {"name": "26. 对账单资金资产", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\对账单资金资产"},
     ],
     "下单": [
         {"name": "1.期权下单_自动化下单", "path": rf"{PROJECT_ROOT}\下单\自动化下单\4.期权下单(新)_自动化下单_Excel驱动版.py"},
@@ -155,8 +156,25 @@ SCRIPTS_CONFIG = {
         {"name": "5.期权下单_一键导出", "path": rf"{PROJECT_ROOT}\下单\自动化导出\期权下单(新)_自动导出.py"},
         {"name": "6.全选撤单", "path": rf"{PROJECT_ROOT}\撤单\撤单_全选撤单_自动化.py"},
     ],
+    # 以下为国泰海通专属菜单
     "通知查询": [
-        {"name": "1.通知查询", "path": rf"{PROJECT_ROOT}\run_query.py", "script_id": "通知查询", "query_key": r"\通知查询\合约信息变更数量"},
+        {"name": "1.合约信息变更数量", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\通知查询\合约信息变更数量"},
+        {"name": "2.合约信息变更明细", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\通知查询\合约信息变更明细"},
+        {"name": "3.当日风险通知", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\通知查询\当日风险通知"},
+        {"name": "4.历史风险通知", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\通知查询\历史风险通知"},
+    ],
+    # 以下为国泰海通专属菜单
+    "结算单": [
+        {"name": "1.结算单", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\结算单\结算单"},
+        {"name": "2.历史出入金流水明细", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\结算单\历史出入金流水明细"},
+        {"name": "3.历史出入金流水汇总", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\结算单\历史出入金流水汇总"},
+        {"name": "4.历史合约持仓明细", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\结算单\历史合约持仓明细"},
+        {"name": "5.历史交收明细", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\结算单\历史交收明细"},
+        {"name": "6.历史交收金额汇总", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\结算单\历史交收金额汇总"},
+        {"name": "7.历史行权指派明细", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\结算单\历史行权指派明细"},
+        {"name": "8.历史资金资产", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\结算单\历史资金资产"},
+        {"name": "9.历史行权交收流水明细", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\结算单\历史行权交收流水明细"},
+        {"name": "10.历史风险信息", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\结算单\历史风险信息"},
     ],
     "组合申报": [
         {"name": "1.组合申报_全自动", "path": rf"{PROJECT_ROOT}\组合申报\2.组合申报_全自动.py"},
