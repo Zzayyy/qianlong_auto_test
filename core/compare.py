@@ -149,6 +149,62 @@ def _engine_available(engine):
         return False
 
 
+def _xlrd_cell_to_value(cell):
+    """把 xlrd 单元格转为与原生读取一致的值（交给 _norm_cell 统一规整）。"""
+    import xlrd
+    ctype = cell.ctype
+    if ctype == xlrd.XL_CELL_EMPTY:
+        return ""
+    if ctype == xlrd.XL_CELL_NUMBER:
+        return cell.value
+    if ctype == xlrd.XL_CELL_DATE:
+        # 日期转为稳定字符串，便于与对照端（可能以文本/数值存储）一致比对
+        try:
+            return xlrd.xldate.xldate_as_datetime(cell.value, 0).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+        except Exception:
+            return cell.value
+    if ctype == xlrd.XL_CELL_BOOLEAN:
+        return "TRUE" if cell.value else "FALSE"
+    if ctype == xlrd.XL_CELL_ERROR:
+        try:
+            return xlrd.error_text_from_code.get(cell.value, str(cell.value))
+        except Exception:
+            return str(cell.value)
+    return cell.value  # 文本
+
+
+def _read_with_xlrd(path):
+    """用 xlrd 读取 .xls，并显式指定中文编码。
+
+    很多交易终端导出的老版 .xls 没有 CODEPAGE 记录，xlrd 默认会回退到
+    iso-8859-1 导致中文乱码（并刷出大量 'No CODEPAGE record...' 警告）。
+    这里依次尝试 gb18030/gbk 中文编码覆盖，最后再回退到 xlrd 默认行为。
+    """
+    import xlrd
+    last_err = None
+    for enc in ("gb18030", "gbk", None):
+        try:
+            if enc is None:
+                book = xlrd.open_workbook(path)
+            else:
+                book = xlrd.open_workbook(path, encoding_override=enc)
+            sheets = {}
+            for sname in book.sheet_names():
+                ws = book.sheet_by_name(sname)
+                data = [
+                    [_xlrd_cell_to_value(ws.cell(r, c))
+                     for c in range(ws.ncols)]
+                    for r in range(ws.nrows)
+                ]
+                sheets[sname] = pd.DataFrame(data, dtype=object)
+            return sheets
+        except Exception as e:
+            last_err = e
+    raise last_err
+
+
 def _read_excel_sheets(path):
     """读取 Excel 全部工作表，返回 {sheet名: DataFrame(header=None, dtype=object)}。
 
@@ -176,6 +232,9 @@ def _read_excel_sheets(path):
     last_err = None
     for eng in usable:
         try:
+            if eng == "xlrd":
+                # xlrd 需显式指定中文编码，否则无 CODEPAGE 的 .xls 会乱码
+                return _read_with_xlrd(path)
             return pd.read_excel(
                 path, sheet_name=None, engine=eng, header=None, dtype=object
             )
@@ -219,6 +278,11 @@ def _sheet_rows(df):
     for _, row in df.iterrows():
         rows.append([_norm_cell(v) for v in row.tolist()])
     return rows
+
+
+def _drop_empty_rows(rows):
+    """丢弃「所有单元格均为空」的行，避免尾部/空白填充行产生幽灵差异。"""
+    return [r for r in rows if any(c for c in r)]
 
 
 def _build_key_map(rows):
@@ -310,17 +374,31 @@ def compare_excel(path_a, path_b, ignore_row_order=True):
 
     names_a = list(sheets_a.keys())
     names_b = list(sheets_b.keys())
-    only_a = [s for s in names_a if s not in sheets_b]
-    only_b = [s for s in names_b if s not in sheets_a]
-    common = [s for s in names_a if s in sheets_b]
+
+    # 工作表匹配：先按名称精确匹配；名称未匹配到的，再按位置兜底匹配。
+    # 这样可避免「Sheet1 / 策略持仓」这类仅命名不同的表被误报为「缺/多工作表」，
+    # 进而让真正的内容差异（新增/减少行）能被正确比较出来。
+    matched = set()
+    pairs = []  # (基准表名, 对照表名)
+    for na in names_a:
+        if na in sheets_b:
+            pairs.append((na, na))
+            matched.add(na)
+    rest_a = [n for n in names_a if n not in matched]
+    rest_b = [n for n in names_b if n not in matched]
+    k = min(len(rest_a), len(rest_b))
+    for i in range(k):
+        pairs.append((rest_a[i], rest_b[i]))
+    only_a = rest_a[k:]   # 真正仅基准存在的工作表
+    only_b = rest_b[k:]   # 真正仅对照存在的工作表
 
     sheet_results = []
     all_equal = True
-    for name in common:
-        rows_a = _sheet_rows(sheets_a[name])
-        rows_b = _sheet_rows(sheets_b[name])
+    for na, nb in pairs:
+        rows_a = _drop_empty_rows(_sheet_rows(sheets_a[na]))
+        rows_b = _drop_empty_rows(_sheet_rows(sheets_b[nb]))
         sr = _compare_sheet(rows_a, rows_b, ignore_row_order)
-        sr["name"] = name
+        sr["name"] = na  # 以基准(A)工作表名为准展示
         sheet_results.append(sr)
         if not sr["equal"]:
             all_equal = False

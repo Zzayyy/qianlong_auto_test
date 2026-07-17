@@ -96,31 +96,50 @@ class ComparePanel:
         list_frame = ttk.LabelFrame(parent, text="比对结果", padding="6")
         list_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
+        # 嵌套内框：tree + v_scroll 在内框并排，h_scroll 放在 list_frame 底部横跨整宽
+        tree_box = ttk.Frame(list_frame)
+        tree_box.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
         columns = ("name", "type", "a", "b", "result", "summary")
-        self.tree = ttk.Treeview(list_frame, columns=columns, show="headings", height=12, selectmode=tk.BROWSE)
+        self.tree = ttk.Treeview(tree_box, columns=columns, show="headings",
+                                 height=12, selectmode=tk.BROWSE)
         self.tree.heading("name", text="文件名")
         self.tree.heading("type", text="类型")
         self.tree.heading("a", text="基准(A)")
         self.tree.heading("b", text="对照(B)")
         self.tree.heading("result", text="比对结果")
         self.tree.heading("summary", text="摘要")
-        self.tree.column("name", width=160, stretch=True)
-        self.tree.column("type", width=70, stretch=False)
-        self.tree.column("a", width=60, stretch=False, anchor=tk.CENTER)
-        self.tree.column("b", width=60, stretch=False, anchor=tk.CENTER)
-        self.tree.column("result", width=70, stretch=False, anchor=tk.CENTER)
-        self.tree.column("summary", width=260, stretch=True)
+        # 列对齐与固定宽度（窗口过窄时各列保持此宽度，自然产生横向溢出，通过底部滚动条查看）
+        self.tree.column("name", stretch=False, anchor=tk.W, width=75)
+        self.tree.column("type", stretch=False, anchor=tk.CENTER, width=50)
+        self.tree.column("a", stretch=False, anchor=tk.CENTER, width=42)
+        self.tree.column("b", stretch=False, anchor=tk.CENTER, width=42)
+        self.tree.column("result", stretch=False, anchor=tk.CENTER, width=60)
+        self.tree.column("summary", stretch=False, anchor=tk.W, width=200)
 
         self.tree.tag_configure("c_equal", foreground="#008000")
         self.tree.tag_configure("c_diff", foreground="#f44747")
         self.tree.tag_configure("c_only", foreground="#FF8C00")
 
-        v_scroll = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.tree.yview)
+        v_scroll = ttk.Scrollbar(tree_box, orient=tk.VERTICAL, command=self.tree.yview)
         h_scroll = ttk.Scrollbar(list_frame, orient=tk.HORIZONTAL, command=self.tree.xview)
         self.tree.configure(yscrollcommand=v_scroll.set, xscrollcommand=h_scroll.set)
+
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         v_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         h_scroll.pack(side=tk.BOTTOM, fill=tk.X)
+
+        # 鼠标滚轮优化：悬停即可垂直滚动；Shift+滚轮横向滚动（返回 "break" 阻止重复触发）
+        def _on_mousewheel(event):
+            # 用位掩码判断 Shift（tk.SHIFT 在本环境可能不存在，直接抛 AttributeError）
+            if event.state & 0x1:
+                self.tree.xview_scroll(-1 * (event.delta // 120), "units")
+            else:
+                self.tree.yview_scroll(-1 * (event.delta // 120), "units")
+            return "break"
+        self.tree.bind("<MouseWheel>", _on_mousewheel)
+        tree_box.bind("<MouseWheel>", _on_mousewheel)
+        list_frame.bind("<MouseWheel>", _on_mousewheel)
 
         # 双击查看单文件差异详情
         self.tree.bind('<Double-Button-1>', self._on_row_double)
@@ -141,10 +160,12 @@ class ComparePanel:
         # 路径显示 + 浏览按钮（最可靠的上传入口）
         row1 = ttk.Frame(outer)
         row1.pack(side=tk.TOP, fill=tk.X, pady=(0, 4))
-        entry = ttk.Entry(row1, textvariable=var, state="readonly", width=40)
-        entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        # 先放「浏览」按钮并固定其右侧空间，再让路径框填充剩余宽度，
+        # 这样无论路径多长，「浏览」按钮始终可见
         ttk.Button(row1, text="浏览", width=8,
                   command=lambda s=side: self._browse(s)).pack(side=tk.RIGHT, padx=(4, 0))
+        entry = ttk.Entry(row1, textvariable=var, state="readonly", width=40)
+        entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         # 拖入提示区（纯展示，不覆盖任何窗口过程）
         hint_text = "\U0001F4C1 把文件夹拖到这里，或点击「浏览」选择"
