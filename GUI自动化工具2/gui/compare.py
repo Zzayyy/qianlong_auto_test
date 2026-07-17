@@ -115,7 +115,7 @@ class ComparePanel:
         self.tree.column("a", stretch=False, anchor=tk.CENTER, width=48)
         self.tree.column("b", stretch=False, anchor=tk.CENTER, width=48)
         self.tree.column("result", stretch=False, anchor=tk.CENTER, width=60)
-        self.tree.column("summary", stretch=False, anchor=tk.W, width=200)
+        self.tree.column("summary", stretch=True, anchor=tk.W, width=200)
 
         self.tree.tag_configure("c_equal", foreground="#008000")
         self.tree.tag_configure("c_diff", foreground="#f44747")

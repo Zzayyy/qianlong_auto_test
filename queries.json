@@ -19,17 +19,17 @@
     "settle_delay": 1.0
   },
   "\\查询\\历史委托": {
-    "settle_delay": 10.0,
+    "settle_delay": 3.0,
     "use_title": true
   },
   "\\查询\\历史成交": {
-    "settle_delay": 10.0
+    "settle_delay": 3.0
   },
   "\\查询\\期权合约": {
-    "settle_delay": 10.0
+    "settle_delay": 3.0
   },
   "\\查询\\资金查询": {
-    "settle_delay": 10.0
+    "settle_delay": 1.0
   },
   "\\查询\\当日行权被指派查询": {
     "settle_delay": 1.0
