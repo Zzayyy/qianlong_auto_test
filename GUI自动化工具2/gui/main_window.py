@@ -44,6 +44,7 @@ from gui.history import (
     STATUS_STOPPED,
     STATUS_RUNNING,
 )
+from gui.compare import ComparePanel
 
 
 class AutomationGUI:
@@ -54,7 +55,7 @@ class AutomationGUI:
 
     def __init__(self, root):
         self.root = root
-        self.root.geometry("950x750")
+        self.root.geometry("1000x750")
         self.root.minsize(850, 650)
 
         self.is_running = False
@@ -322,6 +323,11 @@ class AutomationGUI:
         # 创建定时任务调度器（后台线程）
         self.scheduler = TaskScheduler(self)
         self.scheduler_view.bind_scheduler(self.scheduler)
+
+        # —— 结果比对待办标签页 ——
+        compare_frame = ttk.Frame(self.right_notebook, padding="5")
+        self.right_notebook.add(compare_frame, text="结果比对")
+        self.compare_panel = ComparePanel(compare_frame, self)
 
         # 状态栏
         status_frame = ttk.Frame(self.root)

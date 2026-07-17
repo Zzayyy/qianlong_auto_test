@@ -4,6 +4,7 @@
 """
 import os as _os, json, time, threading, subprocess, sys
 from datetime import datetime, timedelta
+import calendar
 from .task import Task
 from config import IS_FROZEN, PROJECT_ROOT
 
@@ -48,13 +49,20 @@ def compute_next_run(sched):
         return ""
     if stype == "monthly":
         day = max(1, min(28, sched.get("month_day",1)))
-        c = base.replace(day=day)
+        try:
+            c = base.replace(day=day)
+        except ValueError:
+            # 当前月天数不足，使用当月最后一天
+            last_day = calendar.monthrange(base.year, base.month)[1]
+            c = base.replace(day=last_day)
         if c <= now:
             m = c.month + 1
             y = c.year
             if m > 12:
                 m = 1; y += 1
-            c = c.replace(year=y, month=m)
+            # 安全跨月：如果目标月天数不足，用该月最后一天
+            last = calendar.monthrange(y, m)[1]
+            c = c.replace(year=y, month=m, day=min(c.day, last))
         return c.strftime("%Y-%m-%d %H:%M")
     return ""
 
