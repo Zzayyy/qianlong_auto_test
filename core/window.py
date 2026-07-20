@@ -300,8 +300,9 @@ def click_output_button(win, button_auto_id: str = "1159") -> bool:
         return False
 
 
-def close_settings_dialog(dlg, title: str = "交易系统设置", keep_open: bool = False):
-    """关闭（或保留）交易系统设置对话框。
+def close_settings_dialog(dlg, title: str = "交易系统设置", keep_open: bool = False,
+                          main_hwnd: int = None, timeout: float = 3.0) -> bool:
+    """安全关闭（或保留）交易系统设置对话框。
 
     任务中心顺序执行场景下用于解决“窗口残留”问题：
       - keep_open=True  -> 保留窗口，供下一个同样属于“交易系统设置”分类的脚本复用。
@@ -310,41 +311,62 @@ def close_settings_dialog(dlg, title: str = "交易系统设置", keep_open: boo
       - keep_open=False -> 关闭窗口，防止下一个非“交易系统设置”分类的脚本因找不到
                            本类窗口而报错（也是单独运行/任务中心最后一个任务的安全默认）。
 
-    关闭策略：优先 dlg.close()（WM_CLOSE），失败则用 Alt+F4 兜底；最后校验窗口是否已关闭。
+    关闭策略：记录并校验设置窗口句柄，只向该句柄发送 WM_CLOSE，然后等待句柄真正
+    销毁。禁止使用依赖当前焦点的 Alt+F4，避免设置窗口关闭后焦点回到主交易窗口时
+    误触发整个客户端的退出确认。
     """
     if keep_open:
         print(f"[INFO] 保留'{title}'窗口，供下一个交易系统设置脚本复用")
-        return
+        return True
 
     if dlg is None:
-        return
+        return True
 
     try:
-        # 策略1：pywinauto close()（WM_CLOSE）
-        try:
-            dlg.close()
-        except Exception:
-            pass
-
-        # 校验：若窗口仍存在，用 Alt+F4 再尝试一次
-        try:
-            dlg.rectangle()
-        except Exception:
-            print(f"[OK] 已关闭'{title}'窗口")
-            return
-
-        try:
-            dlg.set_focus()
-            dlg.type_keys("%{F4}")
-            time.sleep(0.5)
-        except Exception:
-            pass
-
-        # 再校验一次是否已关闭
-        try:
-            dlg.rectangle()
-            print(f"[WARN] 未能自动关闭'{title}'窗口，请手动关闭")
-        except Exception:
-            print(f"[OK] 已关闭'{title}'窗口")
+        dlg_hwnd = int(dlg.handle)
     except Exception as e:
-        print(f"[WARN] 关闭'{title}'窗口时出错: {e}")
+        print(f"[WARN] 无法取得'{title}'窗口句柄: {e}")
+        return False
+
+    if not win32gui.IsWindow(dlg_hwnd):
+        print(f"[OK] '{title}'窗口已经关闭")
+        return True
+
+    # 最重要的安全保护：识别异常时绝不允许关闭主交易窗口。
+    if main_hwnd is not None and dlg_hwnd == int(main_hwnd):
+        print(
+            f"[错误] 拒绝关闭'{title}'：设置窗口句柄与主窗口相同 "
+            f"(hwnd={dlg_hwnd})"
+        )
+        return False
+
+    try:
+        class_name = win32gui.GetClassName(dlg_hwnd)
+        window_text = win32gui.GetWindowText(dlg_hwnd)
+        print(
+            f"[INFO] 准备关闭'{title}': hwnd={dlg_hwnd}, "
+            f"class={class_name}, title={window_text!r}"
+        )
+    except Exception:
+        pass
+
+    try:
+        # PostMessage 只作用于指定句柄，不依赖前台焦点；即使主窗口已重新获得焦点，
+        # 也不会像 Alt+F4 一样误触发整个交易客户端退出。
+        win32gui.PostMessage(dlg_hwnd, win32con.WM_CLOSE, 0, 0)
+    except Exception as e:
+        print(f"[WARN] 向'{title}'发送关闭消息失败: {e}")
+        return False
+
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if not win32gui.IsWindow(dlg_hwnd):
+            print(f"[OK] 已关闭'{title}'窗口")
+            return True
+        time.sleep(0.1)
+
+    print(
+        f"[WARN] '{title}'窗口在 {timeout:.1f} 秒内未关闭，已停止自动关闭；"
+        "不会发送 Alt+F4，以免误关主交易软件"
+    )
+    return False

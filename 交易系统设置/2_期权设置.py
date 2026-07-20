@@ -1527,6 +1527,8 @@ def main():
     print("=" * 60)
 
     result = SettingsTestResult()
+    hwnd = None
+    dlg = None
 
     try:
         # 1. 倒计时
@@ -1575,13 +1577,6 @@ def main():
         report_path = os.path.join(OUTPUT_DIR, RESULT_SUBDIR, f"期权设置测试报告_{timestamp}.txt")
         result.to_file(report_path)
 
-        # 10. 关闭/保留交易系统设置窗口
-        #     任务中心顺序执行时：若下一个任务仍是“交易系统设置”分类，则保留窗口供其
-        #     复用（避免反复开关）；否则关闭窗口（含单独运行/任务中心最后一个任务），
-        #     以免下一个非本类脚本因找不到窗口而报错。
-        keep_open = os.environ.get("GUI_NEXT_CATEGORY", "") == "交易系统设置"
-        close_settings_dialog(dlg, keep_open=keep_open)
-
         print(f"\n=== 测试完成 ===")
 
     except KeyboardInterrupt:
@@ -1592,6 +1587,15 @@ def main():
         import traceback
         traceback.print_exc()
         sys.exit(1)
+    finally:
+        # 无论正常完成、异常还是用户中断，都执行安全收尾。
+        if dlg is not None:
+            keep_open = os.environ.get("GUI_NEXT_CATEGORY", "") == "交易系统设置"
+            close_ok = close_settings_dialog(
+                dlg, keep_open=keep_open, main_hwnd=hwnd
+            )
+            if not close_ok:
+                print("[WARN] 交易系统设置窗口未正常关闭，请确认后再执行后续非设置类任务")
 
 
 if __name__ == "__main__":

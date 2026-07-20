@@ -1,0 +1,46 @@
+'''
+这是第一个方法，完全的模拟，不用鼠标点击，但是对于弹窗不适用，弹窗会识别不到，所以用方法二
+'''
+import win32gui
+import win32con
+from win32gui import (
+    EnumChildWindows,
+    GetWindowText,
+    IsWindowVisible
+)
+from pywinauto import Application,findwindows
+import time
+
+
+# 获取窗口
+
+elements = findwindows.find_elements(title_re=f".*{"钱龙模拟"}.*")
+if not elements:
+    None
+# 默认取第一个匹配的句柄即可
+print(elements[0].handle)
+target_hwnd = elements[0].handle
+
+app = Application(backend="uia").connect(handle=target_hwnd)
+window = app.window(handle=target_hwnd)
+
+window.set_focus()  # 激活窗口
+buttons = []
+
+def cb(hwnd, _):
+    if GetWindowText(hwnd) == "输出":
+        buttons.append(hwnd)
+
+EnumChildWindows(target_hwnd, cb, None)
+
+print(buttons)
+
+for hwnd in buttons:
+    print(hwnd, IsWindowVisible(hwnd))
+
+
+btn = next(h for h in buttons if IsWindowVisible(h))
+
+
+print(btn)
+win32gui.SendMessage(btn, 0x00F5, 0, 0)
