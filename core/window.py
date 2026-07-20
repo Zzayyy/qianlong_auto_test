@@ -197,18 +197,27 @@ def switch_panel(win, panel_path: str, use_title: bool = False):
     rect = tree.rectangle()
     print(f"控件位置: left={rect.left}, top={rect.top}, right={rect.right}, bottom={rect.bottom}")
 
+    # 提取最终面板名称
+    panel_name = panel_path.rsplit("\\", 1)[-1]
+
     # 在控件中心位置滚动
     center_x = (rect.left + rect.right) // 2
     center_y = (rect.top + rect.bottom) // 2
 
+    # ── 优化：第一次向下滚动之前，先尝试查找一次 ──
+    # 全部展开后目标节点可能已在可见区域内，可直接命中，避免无谓滚动。
+    try:
+        item = _select_tree_item_by_path(tree, panel_path)
+        print(f"[OK] 已切换到'{panel_name}'面板（首次查找命中，无需滚动）")
+        return
+    except Exception as e:
+        print(f"[INFO] 首次查找未命中，开始向下滚动查找 '{panel_name}'...")
+
     # 第一次向下滚动
     mouse.scroll(coords=(center_x, center_y), wheel_dist=-7)
     time.sleep(0.3)
-    
-    # 提取最终面板名称
-    panel_name = panel_path.rsplit("\\", 1)[-1]
-    
-    # 尝试查找目标节点并切换面板
+
+    # 第一次滚动后查找
     try:
         item = _select_tree_item_by_path(tree, panel_path)
     except Exception as e:
@@ -229,6 +238,7 @@ def switch_panel(win, panel_path: str, use_title: bool = False):
     # 最后 click_input 确保触发点击事件
     # item.click_input()
     print(f"[OK] 已切换到'{panel_name}'面板")
+
 
 
 def click_output_button(win, button_auto_id: str = "1159") -> bool:
