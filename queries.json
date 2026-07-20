@@ -1,7 +1,12 @@
 {
   "\\查询\\资金持仓": {
     "export_type": "xls_only",
-    "settle_delay": 1.0
+    "settle_delay": 1.0,
+    "client_overrides": {
+      "guotai_haitong": {
+        "export_type": null
+      }
+    }
   },
   "\\查询\\策略持仓": {
     "settle_delay": 1.0
@@ -26,7 +31,12 @@
     "settle_delay": 10.0
   },
   "\\查询\\期权合约": {
-    "settle_delay": 10.0
+    "settle_delay": 10.0,
+    "client_overrides": {
+      "guotai_haitong": {
+        "export_type": "xls_only"
+      }
+    }
   },
   "\\查询\\资金查询": {
     "settle_delay": 10.0
