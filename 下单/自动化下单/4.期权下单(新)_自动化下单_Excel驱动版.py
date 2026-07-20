@@ -50,6 +50,10 @@ import time
 import sys
 import ctypes
 import openpyxl
+import win32gui
+import win32con
+import win32api
+import win32process
 
 
 # ====================== 可配置参数 ======================
@@ -145,22 +149,155 @@ def switch_panel(win, tree_item: str):
     print(f"[OK] 已切换到面板: {tree_item}")
 
 
-def fill_contract_code(win, code: str):
-    """双击合约代码输入框,清空后写入新代码。"""
-    edit = win.child_window(auto_id="18005", control_type="Edit")
-    edit.wait("ready", timeout=5)
-    edit.double_click_input()
-    time.sleep(0.2)
-    edit.type_keys("^a", with_spaces=False)
-    edit.set_edit_text(str(code))
+# ====================== win32gui 加速辅助 ======================
+def _find_child_by_ctrl_id(parent_hwnd, ctrl_id):
+    """枚举 parent_hwnd 的所有子窗口,返回控件 ID 匹配 ctrl_id 的句柄列表(快于 UIA 查找)。"""
+    found = []
+    def _cb(hwnd, _):
+        try:
+            if win32gui.GetDlgCtrlID(hwnd) == ctrl_id:
+                found.append(hwnd)
+        except Exception:
+            pass
+    try:
+        win32gui.EnumChildWindows(parent_hwnd, _cb, None)
+    except Exception:
+        pass
+    return found
+
+
+def _first_visible(hwnds):
+    """从候选句柄中取第一个可见的;都为不可见时返回第一个;空则返回 None。"""
+    if not hwnds:
+        return None
+    return next((h for h in hwnds if win32gui.IsWindowVisible(h)), hwnds[0])
+
+
+def _mouse_click(hwnd):
+    """用真实鼠标点击控件中心(可靠触发软件点击逻辑,等价于 click_input 但无 UIA 查找开销)。"""
+    # 尽量把所属顶层窗口置前,确保点击落在正确位置
+    try:
+        root = win32gui.GetAncestor(hwnd, 2)  # GA_ROOT = 2
+        if not root:
+            root = win32gui.GetParent(hwnd)
+        if root:
+            win32gui.SetForegroundWindow(root)
+    except Exception:
+        pass
+    time.sleep(0.02)
+    l, t, r, b = win32gui.GetWindowRect(hwnd)
+    x = (l + r) // 2
+    y = (t + b) // 2
+    win32api.SetCursorPos((x, y))
+    win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0)
+    win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0)
+
+
+def _find_windows_by_text(main_hwnd, text):
+    """查找文字等于 text 的可见窗口(先查主窗口子窗口,再查同进程顶层弹窗)。
+
+    用于定位下拉项(ListItem/Button):这些项在 UIA 中是 ListItem,
+    在 win32 中是带文字的独立窗口。
+    """
+    found = []
+    def _child_cb(hwnd, _):
+        try:
+            if win32gui.GetWindowText(hwnd) == text and win32gui.IsWindowVisible(hwnd):
+                found.append(hwnd)
+        except Exception:
+            pass
+    try:
+        win32gui.EnumChildWindows(main_hwnd, _child_cb, None)
+    except Exception:
+        pass
+    if found:
+        return found
+    # 主窗口子窗口未命中,再查同进程顶层弹窗(如下拉列表)
+    try:
+        _, pid = win32process.GetWindowThreadProcessId(main_hwnd)
+    except Exception:
+        pid = None
+    def _top_cb(hwnd, _):
+        try:
+            if win32gui.GetWindowText(hwnd) == text and win32gui.IsWindowVisible(hwnd):
+                if pid is not None:
+                    _, wpid = win32process.GetWindowThreadProcessId(hwnd)
+                    if wpid != pid:
+                        return
+                found.append(hwnd)
+        except Exception:
+            pass
+    try:
+        win32gui.EnumWindows(_top_cb, None)
+    except Exception:
+        pass
+    return found
+
+
+def _edit_set_text(edit_hwnd, text):
+    """直接对 Edit 控件发送 WM_SETTEXT(等价于 pywinauto 的 set_edit_text,但无 UIA 查找开销)。"""
+    try:
+        win32gui.SetFocus(edit_hwnd)
+    except Exception:
+        pass
+    win32gui.SendMessage(edit_hwnd, win32con.WM_SETTEXT, 0, str(text))
+
+
+def _edit_keyboard_confirm(edit_hwnd):
+    """对编辑框发送 Ctrl+A / End / Enter(兜底用,等价于原键盘方案)。"""
+    try:
+        win32gui.SetForegroundWindow(win32gui.GetParent(edit_hwnd) or edit_hwnd)
+    except Exception:
+        pass
+    try:
+        win32gui.SetFocus(edit_hwnd)
+    except Exception:
+        pass
+    time.sleep(0.1)
+    win32api.keybd_event(0x11, 0, 0, 0)            # Ctrl down
+    win32api.keybd_event(0x41, 0, 0, 0)            # A
+    win32api.keybd_event(0x41, 0, win32con.KEYEVENTF_KEYUP, 0)
+    win32api.keybd_event(0x11, 0, win32con.KEYEVENTF_KEYUP, 0)
+    time.sleep(0.05)
+    win32api.keybd_event(0x23, 0, 0, 0)            # End
+    win32api.keybd_event(0x23, 0, win32con.KEYEVENTF_KEYUP, 0)
+    time.sleep(0.05)
+    win32api.keybd_event(0x0D, 0, 0, 0)            # Enter
+    win32api.keybd_event(0x0D, 0, win32con.KEYEVENTF_KEYUP, 0)
+
+
+def _press_enter(edit_hwnd):
+    """仅向编辑框发送回车(兜底用)。"""
+    try:
+        win32gui.SetForegroundWindow(win32gui.GetParent(edit_hwnd) or edit_hwnd)
+    except Exception:
+        pass
+    try:
+        win32gui.SetFocus(edit_hwnd)
+    except Exception:
+        pass
+    time.sleep(0.1)
+    win32api.keybd_event(0x0D, 0, 0, 0)
+    win32api.keybd_event(0x0D, 0, win32con.KEYEVENTF_KEYUP, 0)
+
+
+def fill_contract_code(main_hwnd, code: str):
+    """录入合约代码(直接 WM_SETTEXT 整段替换,无鼠标/UIA 查找开销)。"""
+    edit = _first_visible(_find_child_by_ctrl_id(main_hwnd, 18005))
+    if not edit:
+        print("[WARN] 未找到合约代码输入框(auto_id=18005),跳过")
+        return
+    _edit_set_text(edit, code)
     print(f"[OK] 已录入合约代码: {code}")
 
 
-def click_lock(win):
-    """点击"锁定"按钮,触发合约信息刷新。"""
-    btn = win.child_window(title="锁定", control_type="Button")
-    btn.wait("visible", timeout=5)
-    btn.click_input()
+def click_lock(main_hwnd):
+    """点击"锁定"按钮,触发合约信息刷新(win32gui 直接 BM_CLICK)。"""
+    btn = _first_visible(_find_windows_by_text(main_hwnd, "锁定"))
+    if not btn:
+        print("[WARN] 未找到'锁定'按钮,跳过")
+        return
+    win32gui.SendMessage(btn, win32con.BM_CLICK, 0, 0)
     print("[OK] 已点击'锁定'按钮")
 
 
@@ -223,67 +360,70 @@ def confirm_auto_dialog(main_win=None, timeout: float = 8):
     print(f"[WARN] 等待'自动净仓'弹窗超时({timeout}s)")
 
 
-def get_checkbox(win, name: str, cache: dict = None):
-    """获取复选框控件,支持缓存句柄(同一会话内复用,避免重复查找)。"""
-    auto_id = CHECKBOX_AUTO_IDS[name]
+def get_checkbox(main_hwnd, name: str, cache: dict = None):
+    """获取复选框控件句柄,支持缓存(同一会话内复用,避免重复查找)。"""
+    if name not in CHECKBOX_AUTO_IDS:
+        raise ValueError(f"未知复选框: {name!r}")
+    ctrl_id = int(CHECKBOX_AUTO_IDS[name])
     if cache is not None:
         cached = cache.get(name)
-        if cached is not None:
-            try:
-                cached.is_enabled()  # 探测句柄是否仍有效
-                return cached
-            except Exception:
-                cache.pop(name, None)
-    try:
-        cb = win.child_window(auto_id=auto_id, control_type="CheckBox")
-        cb.wait("ready", timeout=3)
-    except Exception:
+        if cached is not None and win32gui.IsWindow(cached):
+            return cached
+        elif cached is not None:
+            cache.pop(name, None)
+    matches = _find_child_by_ctrl_id(main_hwnd, ctrl_id)
+    h = _first_visible(matches)
+    if h is None:
         # 控件可能因其它选项(如勾选"自动"会让"备兑"置灰)而暂时不可见/不可用
         return None
     if cache is not None:
-        cache[name] = cb
-    return cb
+        cache[name] = h
+    return h
 
 
-def set_checkbox(win, name: str, enable: bool, cache: dict = None):
-    """设置复选框到目标状态(直接 toggle,无需移动鼠标,速度更快)。
+def set_checkbox(main_hwnd, name: str, enable: bool, cache: dict = None, main_win=None):
+    """设置复选框到目标状态(用真实鼠标点击切换,确保触发软件逻辑)。
 
     优化点:
-      1. 使用 UIA TogglePattern(cb.toggle())代替 click_input(),避免鼠标移动/点击
-      2. 仅在当前状态与目标不一致时才操作,无冗余动作
-      3. toggle 失效时自动回退到 click_input(),保证可靠性
+      1. 用 win32gui 按控件 ID 定位句柄(快于 UIA 查找)
+      2. 仅在当前状态与目标不一致时才点击,无冗余动作
+      3. 鼠标点击失效时回退到 BM_CLICK 消息,保证可靠性
     """
     if name not in CHECKBOX_AUTO_IDS:
         raise ValueError(f"未知复选框: {name!r}")
 
-    cb = get_checkbox(win, name, cache)
+    cb = get_checkbox(main_hwnd, name, cache)
     if cb is None:
         print(f"[WARN] 复选框 {name} 未找到(可能受其它选项影响被置灰/隐藏),跳过")
         return
 
     # 检查是否为灰色(不可用)状态
-    if not cb.is_enabled():
+    if not win32gui.IsWindowEnabled(cb):
         if enable:
             print(f"[WARN] 复选框 {name} 为灰色(不可用),无法勾选(可能'自动'已勾选),跳过")
         else:
             print(f"[--] 复选框 {name} 为灰色(不可用),跳过")
         return
 
-    is_checked = cb.get_toggle_state() == 1
+    is_checked = win32gui.SendMessage(cb, win32con.BM_GETCHECK, 0, 0) != 0
     if enable == is_checked:
         print(f"[--] 复选框 {name} 已是{'勾选' if enable else '取消勾选'}状态,跳过")
         return
 
-    # 优先用 UIA TogglePattern 快速切换(不移动鼠标)
+    # 用真实鼠标点击切换(等价于 click_input,确保触发软件逻辑,如"自动"会弹出自动净仓弹窗)
     try:
-        cb.toggle()
+        _mouse_click(cb)
     except Exception:
-        cb.click_input()
+        try:
+            win32gui.SendMessage(cb, win32con.BM_CLICK, 0, 0)
+        except Exception:
+            pass
+    time.sleep(0.08)
 
-    # 验证是否生效,未生效则回退到真实点击
+    # 验证是否生效,未生效则回退到真实鼠标点击
     try:
-        if (cb.get_toggle_state() == 1) != enable:
-            cb.click_input()
+        if (win32gui.SendMessage(cb, win32con.BM_GETCHECK, 0, 0) != 0) != enable:
+            _mouse_click(cb)
     except Exception:
         pass
 
@@ -292,12 +432,12 @@ def set_checkbox(win, name: str, enable: bool, cache: dict = None):
         # 勾选"自动"时会弹出"自动净仓"确认弹窗,需回车确认
         if name == "自动":
             time.sleep(0.2)
-            confirm_auto_dialog(main_win=win)
+            confirm_auto_dialog(main_win=main_win)
     else:
         print(f"[OK] 取消勾选复选框: {name}")
 
 
-def set_all_checkboxes(win, enable_beidui: bool, enable_zidong: bool, enable_fok: bool, cache: dict = None):
+def set_all_checkboxes(main_hwnd, enable_beidui: bool, enable_zidong: bool, enable_fok: bool, cache: dict = None, main_win=None):
     """统一设置备兑、自动、FOK 三个复选框(直接设定到目标状态,无需预重置)。
 
     设置顺序说明:必须先确定"自动"的最终状态,再设"备兑"。
@@ -305,51 +445,56 @@ def set_all_checkboxes(win, enable_beidui: bool, enable_zidong: bool, enable_fok
     上一单遗留的"自动=勾选"会让本单"备兑"一开始就是灰色而设不上去。
     先设"自动":若目标为取消,则"备兑"解冻;若目标为勾选,则"备兑"本就该保持未勾选。
     """
-    set_checkbox(win, "自动", enable_zidong, cache=cache)
-    set_checkbox(win, "备兑", enable_beidui, cache=cache)
-    set_checkbox(win, "FOK", enable_fok, cache=cache)
+    set_checkbox(main_hwnd, "自动", enable_zidong, cache=cache, main_win=main_win)
+    set_checkbox(main_hwnd, "备兑", enable_beidui, cache=cache, main_win=main_win)
+    set_checkbox(main_hwnd, "FOK", enable_fok, cache=cache, main_win=main_win)
 
 
-def select_quote_type(win, option: str, auto_id: str = QUOTE_AUTO_ID):
-    """点击"报价方式"输入框弹出下拉,再从 ListItem 中选中目标项。"""
+def select_quote_type(main_hwnd, option: str, auto_id: str = QUOTE_AUTO_ID):
+    """点击"报价方式"输入框弹出下拉,再点击目标项(按文字定位,直接鼠标点击)。"""
     # 映射: Excel填写值 -> 实际控件文本
     actual_option = QUOTE_TYPE_MAP.get(option, option)
 
-    edit = win.child_window(auto_id=auto_id, control_type="Edit")
-    edit.wait("ready", timeout=5)
-    edit.click_input()
-    time.sleep(0.5)
+    edit = _first_visible(_find_child_by_ctrl_id(main_hwnd, int(auto_id)))
+    if not edit:
+        print(f"[WARN] 未找到报价方式输入框(auto_id={auto_id}),跳过")
+        return
 
-    # 方案 A: 直接定位下拉项
-    try:
-        item = win.child_window(title=actual_option, control_type="ListItem")
-        if item.exists(timeout=1):
-            item.wait("visible", timeout=2)
-            item.click_input()
-            print(f"[OK] 报价方式: {option} -> {actual_option} (ListItem 点击)")
-            return
-    except Exception:
-        pass
+    # 点击输入框弹出下拉
+    _mouse_click(edit)
+    time.sleep(0.4)
 
-    # 方案 B: 键盘导航兜底
-    edit.type_keys("^a", with_spaces=False)
-    time.sleep(0.1)
-    edit.type_keys("{END}", with_spaces=False)
-    time.sleep(0.1)
-    edit.type_keys("{ENTER}", with_spaces=False)
+    # 按文字定位下拉项并点击
+    items = _find_windows_by_text(main_hwnd, actual_option)
+    if items:
+        _mouse_click(items[0])
+        print(f"[OK] 报价方式: {option} -> {actual_option} (下拉项点击)")
+        return
+
+    # 兜底: 键盘确认(沿用原逻辑,仅作保险)
+    _edit_keyboard_confirm(edit)
     print(f"[OK] 报价方式(键盘兜底): {option} -> {actual_option}")
 
 
-def click_action_button(win, action: str):
-    """点击下单动作按钮(买开/卖开/平仓)。"""
+def click_action_button(main_hwnd, action: str):
+    """点击下单动作按钮(买开/卖开/平仓),直接 BM_CLICK,无鼠标移动。"""
     if action not in ACTION_BUTTONS:
         raise ValueError(f"未知动作: {action!r},可选: {list(ACTION_BUTTONS.keys())}")
 
-    auto_id = ACTION_BUTTONS[action]
-    btn = win.child_window(auto_id=auto_id, control_type="Button")
-    btn.wait("ready", timeout=5)
-    btn.click_input()
-    print(f"[OK] 下单动作: {action} (auto_id={auto_id})")
+    ctrl_id = int(ACTION_BUTTONS[action])
+    btn = _first_visible(_find_child_by_ctrl_id(main_hwnd, ctrl_id))
+    if not btn:
+        print(f"[WARN] 未找到动作按钮: {action} (auto_id={ctrl_id}),跳过")
+        return
+    # 用真实鼠标点击(等价于 pywinauto click_input,但省去 UIA 查找开销),确保下单逻辑被触发
+    try:
+        _mouse_click(btn)
+    except Exception:
+        try:
+            win32gui.SendMessage(btn, win32con.BM_CLICK, 0, 0)
+        except Exception:
+            pass
+    print(f"[OK] 下单动作: {action} (auto_id={ctrl_id})")
 
 
 def press_enter_to_confirm(
@@ -466,44 +611,39 @@ def confirm_all_dialogs(
         print(f"[WARN] 达到最大弹窗数量上限({max_dialogs})")
 
 
-def fill_order_quantity(win, value, auto_id: str = QTY_AUTO_ID):
-    """设置委托数量。"""
-    edit = win.child_window(auto_id=auto_id, control_type="Edit")
-    edit.wait("ready", timeout=5)
-
+def fill_order_quantity(main_hwnd, value, auto_id: str = QTY_AUTO_ID):
+    """设置委托数量(数字直写 WM_SETTEXT;百分比/FOK 走下拉项点击)。"""
     str_value = str(value)
 
     # 纯数字路径
     if str_value.isdigit():
-        edit.double_click_input()
-        time.sleep(0.15)
-        edit.type_keys("^a", with_spaces=False)
-        edit.set_edit_text(str_value)
-        print(f"[OK] 委托数量(直写): {str_value}")
-        return
+        edit = _first_visible(_find_child_by_ctrl_id(main_hwnd, int(auto_id)))
+        if edit:
+            _edit_set_text(edit, str_value)
+            print(f"[OK] 委托数量(直写): {str_value}")
+            return
+        print(f"[WARN] 未找到委托数量输入框(auto_id={auto_id}),跳过")
 
-    # 百分比 / FOK 路径
-    edit.click_input()
-    time.sleep(0.5)
+    # 百分比 / FOK 路径(点击输入框弹出下拉,再点对应按钮)
+    edit = _first_visible(_find_child_by_ctrl_id(main_hwnd, int(auto_id)))
+    if not edit:
+        print(f"[WARN] 未找到委托数量输入框(auto_id={auto_id}),跳过")
+        return
+    _mouse_click(edit)
+    time.sleep(0.4)
 
     candidates = [str_value, str_value.replace("%", ""), f"{str_value}%"]
     for title in candidates:
-        try:
-            item = win.child_window(title=title, control_type="Button")
-            if item.exists(timeout=1):
-                item.wait("visible", timeout=2)
-                item.click_input()
-                print(f"[OK] 委托数量(下拉): {title}")
-                return
-        except Exception:
-            continue
+        items = _find_windows_by_text(main_hwnd, title)
+        if items:
+            _mouse_click(items[0])
+            print(f"[OK] 委托数量(下拉): {title}")
+            return
 
     # 兜底:键盘输入
     print(f"[WARN] 下拉未匹配到 {str_value},改用键盘输入")
-    edit.type_keys("^a", with_spaces=False)
-    edit.set_edit_text("")
-    edit.type_keys(str_value, with_spaces=False)
-    edit.type_keys("{ENTER}", with_spaces=False)
+    _edit_set_text(edit, str_value)
+    _press_enter(edit)
 
 
 def countdown(seconds: int):
@@ -556,6 +696,7 @@ def main():
         print(f"[OK] 已找到窗口,句柄 = {hwnd}")
 
         win = activate_window(hwnd)
+        main_hwnd = win.handle  # 取原生句柄,后续操作全部走 win32gui,避免 pywinauto 查找开销
         switch_panel(win, tree_item)
         time.sleep(0.5)
 
@@ -583,25 +724,25 @@ def main():
                 continue
 
             # 录入合约代码
-            fill_contract_code(win, contract_code)
+            fill_contract_code(main_hwnd, contract_code)
             time.sleep(0.3)
 
             # 设置委托数量
-            fill_order_quantity(win, order_qty)
+            fill_order_quantity(main_hwnd, order_qty)
             time.sleep(0.3)
 
             # 选择报价方式
             if quote_type:
-                select_quote_type(win, quote_type)
+                select_quote_type(main_hwnd, quote_type)
                 time.sleep(0.3)
 
             # 直接设置复选框到目标状态(状态比较已保证正确,无需先全部取消)
-            set_all_checkboxes(win, enable_beidui, enable_zidong, enable_fok, cache=cb_cache)
+            set_all_checkboxes(main_hwnd, enable_beidui, enable_zidong, enable_fok, cache=cb_cache, main_win=win)
             time.sleep(0.1)
 
             # 执行下单动作
             if action:
-                click_action_button(win, action)
+                click_action_button(main_hwnd, action)
                 time.sleep(1)
 
                 # 自动确认所有弹窗(无论2个还是3个)
