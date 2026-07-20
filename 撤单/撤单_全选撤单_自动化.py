@@ -6,7 +6,7 @@ for _d in (_here, os.path.dirname(_here), os.path.dirname(os.path.dirname(_here)
     if os.path.isdir(os.path.join(_d, "core")) and _d not in sys.path:
         sys.path.insert(0, _d)
         break
-from core.window import find_window, activate_window
+from core.window import find_window, activate_window, switch_panel
 """
 钱龙期权交易 - 全选撤单自动化
 =====================================
@@ -51,24 +51,6 @@ INTERVAL       = 0.5          # "全选"与"撤单"之间的间隔(秒)
 
 
 
-
-def switch_panel(win, tree_item: str):
-    """点击左侧树节点,切换到指定面板。"""
-    tree = win.child_window(auto_id="1223", control_type="Tree")
-    tree.wait("ready", timeout=10)
-    tree.set_focus()
-
-    # 先滚到顶部
-    tree.type_keys("{HOME}", with_spaces=False)
-    time.sleep(0.2)
-
-    # 直接查找并 select
-    item = tree.child_window(title=tree_item, control_type="TreeItem")
-    item.wait("visible", timeout=10)
-    item.select()
-    time.sleep(0.15)
-    # item.click_input()
-    print(f"[OK] 已切换到面板: {tree_item}")
 
 def click_button(win, auto_id: str, title: str):
     """按 auto_id 点击面板内的按钮(避开 title 漂移问题)。"""

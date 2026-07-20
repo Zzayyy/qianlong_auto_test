@@ -136,11 +136,54 @@ def _load_menu_locator():
     return mod
 
 
-def switch_panel(win, panel_path: str, use_title: bool = False):
-    """切换到指定面板（使用 win32gui 直接定位 TreeView 节点）。
+def _load_uia_locator():
+    """懒加载 uiautomation菜单定位 模块（中文文件名，用 importlib 导入）。
 
-    参考 win32gui菜单定位.py 的方法：通过 TVM_* 消息直接定位并选中左侧菜单树
-    节点，不再依赖屏幕坐标点击，免去分辨率换算与鼠标移动带来的脆弱性。
+    该模块基于 uiautomation，通过 ControlFromHandle + Click 直接选中左侧菜单树
+    节点，不需要管理员权限，也不需要向目标进程注入内存（RemoteMem）。
+    当 win32gui 方案因权限/位数等原因失败时，作为兜底使用。
+    """
+    if getattr(_load_uia_locator, "mod", None) is not None:
+        return _load_uia_locator.mod
+
+    import importlib.util
+    import os
+
+    here = os.path.dirname(os.path.abspath(__file__))
+    loc_path = os.path.abspath(os.path.join(here, "..", "uiautomation菜单定位.py"))
+
+    if not os.path.exists(loc_path):
+        raise RuntimeError(f"未找到 uiautomation菜单定位.py: {loc_path}")
+
+    spec = importlib.util.spec_from_file_location("uiautomation_menu_loc", loc_path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    _load_uia_locator.mod = mod
+    return mod
+
+
+def _parse_panel_path(panel_path: str):
+    """把面板路径字符串解析成层级列表。
+
+    "\\查询\\资金持仓" -> ["查询", "资金持仓"]
+    """
+    path = panel_path.replace("/", "\\")
+    if path.startswith("\\"):
+        path = path[1:]
+    return [p for p in path.split("\\") if p]
+
+
+def switch_panel(win, panel_path: str, use_title: bool = False):
+    """切换到指定面板。
+
+    优先使用 win32gui 方案（参考 win32gui菜单定位.py）：通过 TVM_* 消息直接定位
+    并选中左侧菜单树节点，不依赖屏幕坐标。该方案在部分电脑上需要管理员权限，
+    且即使给了管理员权限仍可能失败（如位数/权限限制）。
+
+    一旦 win32gui 方案抛出异常，自动回退到 uiautomation 方案
+    （参考 uiautomation菜单定位.py）：基于 uiautomation 的 ControlFromHandle + Click，
+    不需要管理员权限，兼容性更好。
 
     Args:
         win: 主窗口（pywinauto 对象或含 handle 属性的对象）
@@ -149,14 +192,34 @@ def switch_panel(win, panel_path: str, use_title: bool = False):
     """
     target_hwnd = getattr(win, "handle", win)
 
-    menu = _load_menu_locator()
-
-    # 先把目标窗口置前，确保 SendMessage 能被正常处理
+    # 先把目标窗口置前，确保消息/UI 自动化能被正常处理
     try:
         win32gui.SetForegroundWindow(target_hwnd)
     except Exception:
         pass
     time.sleep(0.3)
+
+    # 路径字符串 -> 层级列表
+    path_list = _parse_panel_path(panel_path)
+
+    # —— 方案一：win32gui（TVM_* 消息 + RemoteMem），失败则兜底 ——
+    try:
+        _switch_panel_win32(target_hwnd, path_list)
+        panel_name = path_list[-1]
+        print(f"[OK] 已切换到'{panel_name}'面板 (win32gui)")
+        return
+    except Exception as e:
+        print(f"[WARN] win32gui 切换面板失败（{e}），回退到 uiautomation 方案...")
+
+    # —— 兜底方案：uiautomation（ControlFromHandle + Click），无需管理员权限 ——
+    _switch_panel_uia(target_hwnd, path_list)
+    panel_name = path_list[-1]
+    print(f"[OK] 已切换到'{panel_name}'面板 (uiautomation)")
+
+
+def _switch_panel_win32(target_hwnd: int, path_list: list):
+    """win32gui 方案：通过 TVM_* 消息直接定位并选中 TreeView 节点。"""
+    menu = _load_menu_locator()
 
     # 检测目标进程位数（32/64 位结构体布局不同，必须使用对应布局）
     target_bits = menu.detect_target_bitness(target_hwnd)
@@ -169,20 +232,26 @@ def switch_panel(win, panel_path: str, use_title: bool = False):
     # 在目标进程内分配内存，按路径逐级定位并选中节点
     mem = menu.RemoteMem(tree_hwnd, target_bits)
     try:
-        # 路径字符串 -> 层级列表："\查询\资金持仓" -> ["查询", "资金持仓"]
-        path = panel_path.replace("/", "\\")
-        if path.startswith("\\"):
-            path = path[1:]
-        path_list = [p for p in path.split("\\") if p]
-
         h_item = menu.select_node(tree_hwnd, path_list, mem)
         if not h_item:
-            raise RuntimeError(f"未找到面板路径: {panel_path}")
+            raise RuntimeError(f"未找到面板路径: {'\\'.join(path_list)}")
     finally:
         mem.close()
 
-    panel_name = path_list[-1]
-    print(f"[OK] 已切换到'{panel_name}'面板")
+
+def _switch_panel_uia(target_hwnd: int, path_list: list):
+    """uiautomation 兜底方案：ControlFromHandle + Click 选中 TreeView 节点。"""
+    uia = _load_uia_locator()
+
+    tree_hwnd = uia.find_treeview(target_hwnd, control_id=1223)
+    if not tree_hwnd:
+        raise RuntimeError("未找到左侧 TreeView 控件(auto_id=1223)，无法切换面板")
+
+    tree = uia.get_tree(tree_hwnd)
+    # select_node 内部按路径逐级展开并最终 Click 选中最末节点
+    result = uia.select_node(tree, path_list)
+    if not result:
+        raise RuntimeError(f"未找到面板路径: {'\\'.join(path_list)}")
 
 
 def click_output_button(win, button_auto_id: str = "1159") -> bool:
