@@ -190,7 +190,8 @@ SCRIPTS_CONFIG = {
         {"name": "3.自动拆单设置", "path": rf"{PROJECT_ROOT}\交易系统设置\3_自动拆单设置.py"},
         {"name": "4.自动追单设置", "path": rf"{PROJECT_ROOT}\交易系统设置\4_自动追单设置.py"},
         {"name": "5.快捷设置", "path": rf"{PROJECT_ROOT}\交易系统设置\5_快捷设置.py"},
-        {"name": "6.价格提醒设置", "path": rf"{PROJECT_ROOT}\交易系统设置\6_价格提醒设置.py"},
+        {"name": "6.一键炒单设置", "path": rf"{PROJECT_ROOT}\交易系统设置\6_一键炒单设置.py"},
+        {"name": "7.价格提醒设置", "path": rf"{PROJECT_ROOT}\交易系统设置\6_价格提醒设置.py"},
     ],
 }
 

@@ -5,6 +5,7 @@
   - 由环境变量 GUI_QUERY_KEY 指明要执行的具体查询（值为 queries.json 的 key，
     即默认/钱龙菜单路径，如 "\\查询\\资金持仓" 或 "\\组合申报\\组合策略持仓查询"）。
   - 从同目录 queries.json 读取该查询的导出参数（settle_delay / 输出路径 / 是否另存为等）。
+  - 查询项可通过 client_overrides 按 GUI_CLIENT_ID 覆盖参数；覆盖值为 null 时删除基础参数。
   - 客户端差异由 core.runner + clients.json 在运行时按 GUI_CLIENT_ID 自动解析菜单路径，
     本驱动完全不关心客户端。
 
@@ -22,6 +23,23 @@ if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
 from core.runner import run_export_dialog, run_save_as
+
+
+def apply_client_override(entry: dict, client_id: str | None) -> dict:
+    """应用查询项的客户端参数覆盖，并移除仅供解析使用的配置节点。
+
+    覆盖值为 null（Python 中为 None）表示删除基础配置中的同名参数。例如，
+    钱龙资金持仓默认使用 xls_only，国泰海通可删除该参数以恢复普通输出流程。
+    """
+    result = dict(entry)
+    overrides = result.pop("client_overrides", {}) or {}
+    override = overrides.get(client_id, {}) if client_id else {}
+    for key, value in override.items():
+        if value is None:
+            result.pop(key, None)
+        else:
+            result[key] = value
+    return result
 
 
 def main():
@@ -42,7 +60,8 @@ def main():
         print(f"[错误] queries.json 中未找到查询配置: {key}")
         sys.exit(1)
 
-    entry = dict(table[key])
+    client_id = os.environ.get("GUI_CLIENT_ID") or None
+    entry = apply_client_override(table[key], client_id)
     entry["panel_path"] = key
     entry["name"] = key.split("\\")[-1]
 
