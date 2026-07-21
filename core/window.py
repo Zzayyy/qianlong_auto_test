@@ -8,8 +8,13 @@ from win32gui import (
     GetWindowText,
     IsWindowVisible
 )
-from core.clients import get_client
-from pywinauto import Application,findwindows
+from core.clients import get_client, get_clients
+from core.native_tree import (
+    NativeTreeAccessError,
+    select_tree_path,
+    select_tree_path_by_position,
+)
+from pywinauto import Application
 import time
 # -*- coding: utf-8 -*-
 """窗口操作公共模块：查找、激活、倒计时、面板切换"""
@@ -39,10 +44,6 @@ if getattr(sys, 'frozen', False):
 # --- 现在可以正常导入 pywinauto 了 ---
 
 
-import time
-import sys
-import ctypes
-from pywinauto import Application, findwindows, mouse
 from pywinauto.timings import Timings
 
 
@@ -70,22 +71,38 @@ def find_window(keyword: str) -> int:
     if gui_pid and gui_pid.isdigit():
         exclude_pids.add(int(gui_pid))
 
-    elements = findwindows.find_elements(title_re=f".*{keyword}.*")
-    for el in elements:
-        # 兜底：标题含本工具标记的直接跳过
+    candidates = []
+
+    def _enum_top_level(hwnd, _):
         try:
-            if "GUI自动化工具" in (el.name or ""):
-                continue
-        except Exception:
-            pass
-        # 按进程 PID 排除自身
-        try:
-            _, pid = win32process.GetWindowThreadProcessId(el.handle)
+            title = win32gui.GetWindowText(hwnd) or ""
+            if keyword not in title or "GUI自动化工具" in title:
+                return
+            _, pid = win32process.GetWindowThreadProcessId(hwnd)
             if pid in exclude_pids:
-                continue
+                return
+            class_name = win32gui.GetClassName(hwnd)
+            rect = win32gui.GetWindowRect(hwnd)
+            has_area = rect[2] > rect[0] and rect[3] > rect[1]
+            # 国泰海通/钱龙主窗口类优先，其次才按可见性和面积排序。
+            rank = (
+                0 if class_name == "QL_OPTION_MAINWND_CLASS" else 1,
+                0 if win32gui.IsWindowVisible(hwnd) else 1,
+                0 if has_area else 1,
+            )
+            candidates.append((rank, hwnd, pid, class_name, title))
         except Exception:
-            pass
-        return el.handle
+            return
+
+    win32gui.EnumWindows(_enum_top_level, None)
+    if candidates:
+        candidates.sort(key=lambda row: row[0])
+        _, hwnd, pid, class_name, title = candidates[0]
+        print(
+            f"[INFO] 目标窗口: hwnd={hwnd}, pid={pid}, "
+            f"class={class_name}, title={title!r}"
+        )
+        return hwnd
 
     raise RuntimeError(f"未找到包含'{keyword}'的窗口,请确认软件已启动")
 
@@ -93,10 +110,43 @@ def find_window(keyword: str) -> int:
 def activate_window(hwnd: int):
     """连接窗口并置前。"""
     Timings.fast()
+    if win32gui.IsIconic(hwnd):
+        win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+        time.sleep(0.3)
     app = Application(backend="uia").connect(handle=hwnd)
     win = app.window(handle=hwnd)
     win.set_focus()
     return win
+
+
+def _resolve_client_for_window(win):
+    """Resolve the client profile from GUI selection or the live window title.
+
+    GUI-launched tasks always provide ``GUI_CLIENT_ID``.  Directly launched
+    legacy scripts do not, so title inference keeps their original usage while
+    still selecting the correct Win11 positional fingerprint.
+    """
+    client_id = os.environ.get("GUI_CLIENT_ID")
+    client = get_client(client_id) if client_id else None
+    if client is not None:
+        return client
+
+    try:
+        title = win32gui.GetWindowText(int(win.handle)) or ""
+    except Exception:
+        title = ""
+    matches = [
+        candidate for candidate in get_clients()
+        if candidate.get("window_key")
+        and candidate["window_key"] in title
+    ]
+    if len(matches) == 1:
+        print(
+            f"[INFO] 根据目标窗口识别客户端: "
+            f"{matches[0].get('name', matches[0].get('id'))}"
+        )
+        return matches[0]
+    return None
 
 
 def countdown(seconds: int):
@@ -149,95 +199,65 @@ def switch_panel(win, panel_path: str, use_title: bool = False):
         panel_path: 树形面板路径,如 r"\查询\资金持仓" 或 "撤单"
         use_title: 是否用title定位TreeItem(历史委托/历史成交需要)
     """
-    # ── 先激活左侧菜单区域（全局菜单Home功能） ──
-    rect = win.rectangle()
-
-    # 根据屏幕分辨率动态计算水平偏移量
-    screen_width = ctypes.windll.user32.GetSystemMetrics(0)
-    offset_x = int(screen_width * 0.01)
-    if offset_x < 50:
-        offset_x = 50
-    if offset_x > 200:
-        offset_x = 200
-
-    # 菜单位置：窗口最左边 + 偏移量，垂直居中
-    menu_x = rect.left + offset_x 
-    menu_y = rect.top + (rect.bottom - rect.top) // 2
-
-    mouse.move(coords=(menu_x, menu_y))
-    time.sleep(0.3)
-    mouse.click(coords=(menu_x, menu_y))
-    time.sleep(0.5)
-    win.type_keys("{HOME}", with_spaces=False)
-    time.sleep(0.3)
-    # ───────────────────────────────────────────────
-
-    tree = win.child_window(auto_id="1223", control_type="Tree")
-    tree.wait("ready", timeout=10)
-    tree.set_focus()
-
-    # 先滚到顶部
-    tree.type_keys("{HOME}", with_spaces=False)
-    time.sleep(0.2)
-
-    # 右击树控件，选择"全部展开"
-    tree.set_focus()
-    tree.click_input(button="right")
-    time.sleep(0.5)
+    panel_name = panel_path.replace("/", "\\").rsplit("\\", 1)[-1]
+    native_error = None
     try:
-        # 用键盘方向键导航到"全部展开"
-        # 菜单顺序：打开 → 刷新数据 → 在线帮助 → (分隔线) → 全部展开
-        win.type_keys("{DOWN}{DOWN}{DOWN}{DOWN}{ENTER}", with_spaces=False, pause=0)
-        print("[OK] 已右击选择'全部展开'")
-        time.sleep(0.5)
-    except Exception as e:
-        print(f"[WARN] 右击展开菜单操作失败，跳过: {e}")
-    
-    # 获取控件的矩形区域
-    rect = tree.rectangle()
-    print(f"控件位置: left={rect.left}, top={rect.top}, right={rect.right}, bottom={rect.bottom}")
-
-    # 提取最终面板名称
-    panel_name = panel_path.rsplit("\\", 1)[-1]
-
-    # 在控件中心位置滚动
-    center_x = (rect.left + rect.right) // 2
-    center_y = (rect.top + rect.bottom) // 2
-
-    # ── 优化：第一次向下滚动之前，先尝试查找一次 ──
-    # 全部展开后目标节点可能已在可见区域内，可直接命中，避免无谓滚动。
-    try:
-        item = _select_tree_item_by_path(tree, panel_path)
-        print(f"[OK] 已切换到'{panel_name}'面板（首次查找命中，无需滚动）")
+        info = select_tree_path(win.handle, panel_path, control_id=1223)
+        print(
+            f"[OK] 已切换到'{panel_name}'面板（原生 Win32 TreeView，"
+            f"节点={info['node_count']}，目标={info['target_bits']}位）"
+        )
         return
+    except NativeTreeAccessError as e:
+        native_error = e
+        print(f"[INFO] 客户端不允许读取菜单文字: {e}")
+        print("[INFO] 改用经过节点总数校验的原生位置定位...")
     except Exception as e:
-        print(f"[INFO] 首次查找未命中，开始向下滚动查找 '{panel_name}'...")
+        native_error = e
+        print(f"[WARN] 原生 TreeView 定位失败: {e}")
 
-    # 第一次向下滚动
-    mouse.scroll(coords=(center_x, center_y), wheel_dist=-7)
-    time.sleep(0.3)
+    client = _resolve_client_for_window(win)
+    position_profile = (client or {}).get("native_tree_profile")
+    position_error = None
+    if position_profile:
+        for attempt in range(3):
+            try:
+                info = select_tree_path_by_position(
+                    win.handle, panel_path, position_profile, control_id=1223
+                )
+                print(
+                    f"[OK] 已切换到'{panel_name}'面板（原生位置指纹，"
+                    f"节点={info['node_count']}，位置={info['position']}）"
+                )
+                return
+            except Exception as error:
+                position_error = error
+                if attempt < 2:
+                    print(
+                        f"[INFO] 原生位置定位暂时失败，正在重试"
+                        f"（{attempt + 2}/3）: {error}"
+                    )
+                    time.sleep(0.6)
+        print(f"[WARN] 原生位置定位失败: {position_error}")
+    else:
+        position_error = "当前客户端未配置原生位置指纹"
 
-    # 第一次滚动后查找
+    print("[INFO] 尝试 UI Automation 兼容路径...")
+
     try:
+        tree = win.child_window(auto_id="1223", control_type="Tree")
+        tree.wait("ready", timeout=5)
+        tree.set_focus()
         item = _select_tree_item_by_path(tree, panel_path)
-    except Exception as e:
-        # 如果第一次滚动后找不到，再滚动一次
-        print(f"[WARN] 第一次滚动后未找到目标节点，再滚动一次...")
-        mouse.scroll(coords=(center_x, center_y), wheel_dist=-7)
-        time.sleep(0.3)
-        try:
-            item = _select_tree_item_by_path(tree, panel_path)
-        except Exception as e2:
-            # 如果第二次滚动后还找不到，直接查找最终面板名称
-            print(f"[WARN] 第二次滚动后仍未找到，尝试直接查找面板: {panel_name}")
-            item = tree.child_window(title=panel_name, control_type="TreeItem")
-            item.wait("visible", timeout=5)
-            item.select()
-            time.sleep(0.15)
-
-    # 最后 click_input 确保触发点击事件
-    # item.click_input()
-    print(f"[OK] 已切换到'{panel_name}'面板")
+        print(f"[OK] 已切换到'{panel_name}'面板（UI Automation）")
+        return
+    except Exception as uia_error:
+        raise RuntimeError(
+            f"无法切换到菜单 {panel_path!r}。"
+            f"原生文本定位失败: {native_error}；"
+            f"原生位置定位失败: {position_error}；"
+            f"UIA 定位失败: {uia_error}"
+        ) from uia_error
 
 
 

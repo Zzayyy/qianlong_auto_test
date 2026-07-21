@@ -17,11 +17,62 @@
 
 import sys
 import os
+import ctypes
+import subprocess
 
 import tkinter as tk
 
-from config import IS_FROZEN, BASE_DIR
+from config import IS_FROZEN, BASE_DIR, get_client, load_user_config
 from gui.main_window import AutomationGUI
+
+
+def _is_admin() -> bool:
+    """Whether this process can cross the integrity boundary of the client."""
+    try:
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except Exception:
+        return False
+
+
+def _relaunch_as_admin_if_required() -> bool:
+    """Relaunch GUI with UAC consent for clients that run elevated.
+
+    Child script-runner processes inherit the GUI token, so elevation is done
+    once at GUI startup instead of once per task.
+    """
+    user_config = load_user_config()
+    client = get_client(user_config.get("client")) or {}
+    if not client.get("requires_elevation") or _is_admin():
+        return False
+
+    if IS_FROZEN:
+        executable = sys.executable
+        arguments = subprocess.list2cmdline(sys.argv[1:])
+    else:
+        executable = sys.executable
+        arguments = subprocess.list2cmdline(
+            [os.path.abspath(__file__), *sys.argv[1:]]
+        )
+
+    shell_execute = ctypes.windll.shell32.ShellExecuteW
+    shell_execute.restype = ctypes.c_ssize_t
+    result = shell_execute(
+        None,
+        "runas",
+        executable,
+        arguments,
+        os.getcwd(),
+        1,  # SW_SHOWNORMAL
+    )
+    if result <= 32:
+        ctypes.windll.user32.MessageBoxW(
+            None,
+            f"管理员权限启动失败（错误码 {result}）。\n"
+            "请右键自动化工具，选择“以管理员身份运行”。",
+            "无法启动自动化工具",
+            0x00000010,  # MB_ICONERROR
+        )
+    return True
 
 
 # ====================== 脚本运行器模式 ======================
@@ -99,4 +150,6 @@ def main():
 if __name__ == "__main__":
     # 脚本运行器模式优先：若收到 --_run_script 参数则执行子脚本后直接退出
     _run_script_mode()
+    if _relaunch_as_admin_if_required():
+        sys.exit(0)
     main()

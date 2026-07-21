@@ -2,16 +2,34 @@
 """交易系统设置 - 一键炒单设置自动化检查。
 
 打开“交易系统设置”，进入“一键炒单设置”，读取快捷键方案、沪深期权下单
-价格类型和默认期权合约，与国泰海通界面截图确认的标准值比对并保存报告/截图。
+价格类型、默认期权合约和完整快捷键表格，与独立标准配置比对并保存报告/截图。
 
-快捷键表格（auto_id=2216）是自绘 List，UI Automation 当前只暴露表头、不暴露
-数据行，因此本脚本采集其可访问文本并在完整截图中留档，不点击表格或“恢复默认”。
+快捷键表格（auto_id=2216）是自绘 ListView。脚本优先用原生控件读取，失败时
+分页截图并结构化 OCR；全程不发送快捷键、不点击“应用”或“恢复默认”。
 """
 
 import os
 import sys
 import time
+import ctypes
+import json
+import struct
+
+# 国泰海通在高分屏上混用了逻辑坐标和物理坐标。必须在导入 pywinauto
+# 之前声明 DPI 感知，否则菜单、导航项和截图都会发生坐标偏移。
+try:
+    ctypes.windll.shcore.SetProcessDpiAwareness(2)
+except Exception:
+    try:
+        ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass
+
+import win32gui
+import win32con
+from collections import Counter
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -19,6 +37,18 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pywinauto import Application, findwindows
 
 from core.window import find_window, activate_window, countdown, close_settings_dialog
+from core.settings_window import (
+    open_settings_dialog as open_settings_dialog_compat,
+    switch_settings_panel as switch_settings_panel_compat,
+)
+from core.one_click_settings import (
+    canonical_hotkey,
+    evaluate_shortcuts,
+    merge_shortcut_pages,
+    normalize_text,
+    parse_shortcut_ocr_tokens,
+)
+from core.native_tree import RemoteProcessMemory
 
 
 # GUI 启动时 core.window 会按 GUI_CLIENT_ID 覆盖此值；直接运行本脚本时，
@@ -29,18 +59,15 @@ SETTINGS_MENU_ITEM_AUTO_ID = "20025"
 SETTINGS_DIALOG_TITLE = "交易系统设置"
 PANEL_NAME = "一键炒单设置"
 
-# 首版标准值来自用户提供的国泰海通完整截图。
+PROFILE_PATH = Path(__file__).with_name("一键炒单设置标准.json")
+with PROFILE_PATH.open("r", encoding="utf-8-sig") as profile_file:
+    VALIDATION_PROFILE = json.load(profile_file)
+
 STANDARD_VALUES = {
-    "快捷键方案": "钱龙推荐快捷键方案",
-    "上海期权_买入开仓": "对手价",
-    "上海期权_卖出开仓": "对手价",
-    "上海期权_平仓": "对手价",
-    "深圳期权_买入开仓": "对手价",
-    "深圳期权_卖出开仓": "对手价",
-    "深圳期权_平仓": "对手价",
-    "默认期权合约1": "默认当前标的的当月认购平值期权",
-    "默认期权合约2": "默认当前标的的当月认沽平值期权",
+    key: value["selected"]
+    for key, value in VALIDATION_PROFILE["dropdowns"].items()
 }
+STANDARD_VALUES.update(VALIDATION_PROFILE["default_contracts"])
 
 AUTO_ID = {
     "快捷键方案": "2100",
@@ -68,55 +95,87 @@ class SettingsTestResult:
     def __init__(self):
         self.results: List[Dict[str, Any]] = []
         self.differences: List[Dict[str, Any]] = []
+        self.unverified: List[Dict[str, Any]] = []
         self.observations: List[Dict[str, Any]] = []
 
-    def add_result(self, name: str, actual_value: Any, expected_value: Any):
-        matched = actual_value == expected_value
+    def add_result(self, name: str, actual_value: Any, expected_value: Any,
+                   detail: str = ""):
+        matched = normalize_text(actual_value) == normalize_text(expected_value)
+        self.add_status(
+            name, actual_value, expected_value,
+            "通过" if matched else "差异", detail
+        )
+
+    def add_status(self, name: str, actual_value: Any, expected_value: Any,
+                   status: str, detail: str = ""):
         row = {
             "名称": name,
             "期望值": expected_value,
             "实际值": actual_value,
-            "是否一致": "✓" if matched else "✗ 差异",
+            "状态": status,
+            "说明": detail,
         }
         self.results.append(row)
-        if not matched:
+        if status in {"差异", "新增", "冲突"}:
             self.differences.append(row)
+        elif status == "未验证":
+            self.unverified.append(row)
+
+    def add_unverified(self, name: str, expected_value: Any, detail: str,
+                       actual_value: Any = "(无法确认)"):
+        self.add_status(name, actual_value, expected_value, "未验证", detail)
 
     def add_observation(self, name: str, value: Any, detail: str):
         self.observations.append({"名称": name, "采集值": value, "说明": detail})
 
     def print_summary(self):
+        counts = Counter(row["状态"] for row in self.results)
         print(f"\n{'=' * 60}")
         print("测试结果汇总")
         print(f"{'=' * 60}")
         print(f"总比对项: {len(self.results)}")
-        print(f"通过: {len(self.results) - len(self.differences)}")
-        print(f"差异: {len(self.differences)}")
+        print(f"通过: {counts['通过']}")
+        print(f"差异/新增/冲突: {len(self.differences)}")
+        print(f"未验证: {counts['未验证']}")
         print(f"采集项: {len(self.observations)}")
-        for row in self.results:
-            print(
-                f"  {row['是否一致']} {row['名称']}: "
-                f"期望={row['期望值']!r}, 实际={row['实际值']!r}"
-            )
+
+        # 与委托设置、期权设置等模块保持一致：汇总后逐项展示全部
+        # 比对结果。候选项列表在控制台中截断显示，完整内容仍写入报告。
+        if self.results:
+            print(f"\n{'名称':<35} {'期望值':<25} {'实际值':<25} {'状态'}")
+            print(f"{'-' * 100}")
+            for row in self.results:
+                name = str(row["名称"])[:33]
+                expected = str(row["期望值"])[:23]
+                actual = str(row["实际值"])[:23]
+                print(
+                    f"{name:<35} {expected:<25} {actual:<25} "
+                    f"{row['状态']}"
+                )
+
         for row in self.observations:
-            print(f"  ○ {row['名称']}: {row['采集值']}（{row['说明']}）")
+            print(f"  采集项 {row['名称']}: {row['说明']}")
 
     def to_file(self, filepath: str):
+        counts = Counter(row["状态"] for row in self.results)
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         with open(filepath, "w", encoding="utf-8") as f:
             f.write(f"{PANEL_NAME}测试报告\n")
             f.write(f"生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
             f.write(f"{'=' * 60}\n\n")
             f.write(f"总比对项: {len(self.results)}\n")
-            f.write(f"通过: {len(self.results) - len(self.differences)}\n")
-            f.write(f"差异: {len(self.differences)}\n")
+            f.write(f"通过: {counts['通过']}\n")
+            f.write(f"差异/新增/冲突: {len(self.differences)}\n")
+            f.write(f"未验证: {counts['未验证']}\n")
             f.write(f"采集项: {len(self.observations)}\n\n")
             for row in self.results:
                 f.write(
-                    f"[{row['是否一致']}] {row['名称']}\n"
+                    f"[{row['状态']}] {row['名称']}\n"
                     f"  期望值: {row['期望值']}\n"
                     f"  实际值: {row['实际值']}\n"
                 )
+                if row["说明"]:
+                    f.write(f"  说明: {row['说明']}\n")
             if self.observations:
                 f.write("\n采集项（不计入差异）:\n")
                 for row in self.observations:
@@ -196,20 +255,57 @@ def open_settings_dialog(win):
     end = time.time() + 4
     clicked = False
     while time.time() < end and not clicked:
-        for elem in findwindows.find_elements(top_level_only=True):
+        # 国泰海通的设置菜单是原生 #32768 弹出窗口。若先枚举并连接其他
+        # 顶级窗口，菜单会因失去焦点而关闭，因此先用 Win32 直接锁定它。
+        menu_handles = []
+
+        def _collect_popup_menu(hwnd, _):
+            try:
+                if (
+                    win32gui.IsWindowVisible(hwnd)
+                    and win32gui.GetClassName(hwnd) == "#32768"
+                ):
+                    menu_handles.append(hwnd)
+            except Exception:
+                pass
+
+        win32gui.EnumWindows(_collect_popup_menu, None)
+        for handle in menu_handles:
             try:
                 menu = Application(backend="uia").connect(
-                    handle=elem.handle, timeout=0.5
-                ).window(handle=elem.handle)
+                    handle=handle, timeout=0.5
+                ).window(handle=handle)
                 item = menu.child_window(
                     auto_id=SETTINGS_MENU_ITEM_AUTO_ID, control_type="MenuItem"
                 )
                 if item.exists(timeout=0.2):
-                    item.click_input()
+                    # 高 DPI 下该原生菜单的 UIA 坐标可能按逻辑像素返回，
+                    # click_input 会点击到错误位置；Invoke 不依赖屏幕坐标。
+                    item.invoke()
                     clicked = True
                     break
             except Exception:
                 continue
+
+        # 兼容少数将菜单实现为普通顶级窗口的旧版本。
+        if not clicked:
+            for elem in findwindows.find_elements(top_level_only=True):
+                try:
+                    if elem.class_name == "#32768":
+                        continue
+                    menu = Application(backend="uia").connect(
+                        handle=elem.handle, timeout=0.5
+                    ).window(handle=elem.handle)
+                    item = menu.child_window(
+                        auto_id=SETTINGS_MENU_ITEM_AUTO_ID,
+                        control_type="MenuItem",
+                    )
+                    if item.exists(timeout=0.2):
+                        item.click_input()
+                        clicked = True
+                        break
+                except Exception:
+                    continue
         if not clicked:
             time.sleep(0.15)
 
@@ -228,8 +324,29 @@ def switch_to_settings_panel(dlg) -> bool:
         nav.wait("ready", timeout=5)
         item = nav.child_window(title=PANEL_NAME, control_type="ListItem")
         item.wait("visible", timeout=3)
-        item.click_input()
-        time.sleep(0.6)
+        # 直接向原生 ListBox 设置选择并发送 LBN_SELCHANGE。该方式与用户
+        # 选择列表项触发相同通知，同时绕开 QLOption 的 DPI 坐标虚拟化。
+        items = nav.descendants(control_type="ListItem")
+        target_index = next(
+            i for i, ctrl in enumerate(items)
+            if (ctrl.window_text() or "").strip() == PANEL_NAME
+        )
+        nav_wrapper = nav.wrapper_object()
+        list_hwnd = int(nav_wrapper.handle)
+        parent_hwnd = win32gui.GetParent(list_hwnd)
+        control_id = win32gui.GetDlgCtrlID(list_hwnd)
+        win32gui.SendMessage(list_hwnd, 0x0186, target_index, 0)  # LB_SETCURSEL
+        win32gui.SendMessage(
+            parent_hwnd,
+            win32con.WM_COMMAND,
+            control_id | (1 << 16),  # LBN_SELCHANGE == 1
+            list_hwnd,
+        )
+        time.sleep(0.8)
+        # 用本面板的唯一控件确认页面确实完成切换，避免只记录“点击成功”。
+        dlg.child_window(
+            auto_id=AUTO_ID["快捷键方案"], control_type="ComboBox"
+        ).wait("exists", timeout=5)
         print(f"[OK] 已切换到'{PANEL_NAME}'面板")
         return True
     except Exception as e:
@@ -259,6 +376,90 @@ def get_combobox_value(dlg, auto_id: str) -> Optional[str]:
         return None
 
 
+def _find_visible_native_child(dlg, auto_id: str, class_name: str) -> int:
+    matches: List[int] = []
+
+    def _enum(hwnd, _):
+        try:
+            if (
+                win32gui.GetDlgCtrlID(hwnd) == int(auto_id)
+                and win32gui.GetClassName(hwnd) == class_name
+                and win32gui.IsWindowVisible(hwnd)
+            ):
+                matches.append(hwnd)
+        except Exception:
+            pass
+
+    win32gui.EnumChildWindows(int(dlg.handle), _enum, None)
+    if len(matches) != 1:
+        raise RuntimeError(
+            f"控件(auto_id={auto_id}, class={class_name})匹配数量为 {len(matches)}"
+        )
+    return matches[0]
+
+
+def _native_combobox_snapshot(dlg, auto_id: str) -> Dict[str, Any]:
+    """Read selection and every candidate without opening or changing the combo."""
+    hwnd = _find_visible_native_child(dlg, auto_id, "ComboBox")
+    count = win32gui.SendMessage(hwnd, win32con.CB_GETCOUNT, 0, 0)
+    selected_index = win32gui.SendMessage(hwnd, win32con.CB_GETCURSEL, 0, 0)
+    if count < 0:
+        raise RuntimeError(f"下拉框(auto_id={auto_id})返回无效项目数 {count}")
+
+    from ctypes import wintypes
+
+    user32 = ctypes.windll.user32
+    user32.SendMessageW.argtypes = [
+        wintypes.HWND, wintypes.UINT, ctypes.c_size_t, ctypes.c_ssize_t
+    ]
+    user32.SendMessageW.restype = ctypes.c_ssize_t
+    items: List[str] = []
+    for index in range(count):
+        length = user32.SendMessageW(hwnd, win32con.CB_GETLBTEXTLEN, index, 0)
+        if length < 0:
+            raise RuntimeError(f"无法读取下拉框(auto_id={auto_id})第 {index} 项长度")
+        buffer = ctypes.create_unicode_buffer(max(int(length) + 1, 2))
+        copied = user32.SendMessageW(
+            hwnd, win32con.CB_GETLBTEXT, index, ctypes.addressof(buffer)
+        )
+        if copied < 0:
+            raise RuntimeError(f"无法读取下拉框(auto_id={auto_id})第 {index} 项")
+        items.append(normalize_text(buffer.value))
+
+    current = items[selected_index] if 0 <= selected_index < len(items) else ""
+    selected_after = win32gui.SendMessage(hwnd, win32con.CB_GETCURSEL, 0, 0)
+    if selected_after != selected_index:
+        raise RuntimeError("只读采集前后下拉框选择发生变化，已拒绝继续")
+    return {
+        "current": current,
+        "items": items,
+        "selected_index": selected_index,
+        "source": "原生ComboBox消息（未展开、未修改）",
+    }
+
+
+def get_combobox_snapshot(dlg, auto_id: str) -> Dict[str, Any]:
+    try:
+        return _native_combobox_snapshot(dlg, auto_id)
+    except Exception as native_error:
+        # 旧版非标准 ComboBox 兜底；仅读取，不调用 select()。
+        try:
+            combo = dlg.child_window(auto_id=auto_id, control_type="ComboBox")
+            combo.wait("ready", timeout=3)
+            current = get_combobox_value(dlg, auto_id) or ""
+            items = [normalize_text(value) for value in combo.item_texts() if value]
+            return {
+                "current": current,
+                "items": items,
+                "selected_index": None,
+                "source": f"UIA只读兜底；原生失败: {native_error}",
+            }
+        except Exception as uia_error:
+            raise RuntimeError(
+                f"原生读取失败: {native_error}；UIA读取失败: {uia_error}"
+            ) from uia_error
+
+
 def get_edit_value(dlg, auto_id: str) -> Optional[str]:
     try:
         edit = dlg.child_window(auto_id=auto_id, control_type="Edit")
@@ -272,79 +473,299 @@ def get_edit_value(dlg, auto_id: str) -> Optional[str]:
         return None
 
 
-def collect_shortcut_table_text(dlg) -> List[str]:
-    """采集自绘快捷键表格能通过 UIA 暴露的文本，不点击、不滚动、不修改。"""
+def _capture_hwnd_image(hwnd: int):
+    """Capture an HWND with PrintWindow, independent of foreground/DPI coords."""
+    import win32ui
+    from PIL import Image
+
+    left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+    width, height = right - left, bottom - top
+    if width <= 0 or height <= 0:
+        raise RuntimeError(f"控件矩形无效: {(left, top, right, bottom)}")
+    window_dc = win32gui.GetWindowDC(hwnd)
+    source_dc = win32ui.CreateDCFromHandle(window_dc)
+    memory_dc = source_dc.CreateCompatibleDC()
+    bitmap = win32ui.CreateBitmap()
+    try:
+        bitmap.CreateCompatibleBitmap(source_dc, width, height)
+        memory_dc.SelectObject(bitmap)
+        if not ctypes.windll.user32.PrintWindow(hwnd, memory_dc.GetSafeHdc(), 2):
+            raise RuntimeError("PrintWindow 返回失败")
+        info = bitmap.GetInfo()
+        bits = bitmap.GetBitmapBits(True)
+        return Image.frombuffer(
+            "RGB", (info["bmWidth"], info["bmHeight"]),
+            bits, "raw", "BGRX", 0, 1
+        ).copy()
+    finally:
+        win32gui.DeleteObject(bitmap.GetHandle())
+        memory_dc.DeleteDC()
+        source_dc.DeleteDC()
+        win32gui.ReleaseDC(hwnd, window_dc)
+
+
+def _read_listview_native(table_hwnd: int, row_count: int) -> List[Dict[str, Any]]:
+    """Read ListView text with bounded messages when privileges allow it."""
+    lvif_text = 0x0001
+    lvm_getitemw = 0x104B
+
+    def _pack_item(row_index: int, column: int, text_address: int,
+                   target_bits: int) -> bytes:
+        size = 88 if target_bits == 64 else 60
+        package = bytearray(size)
+        struct.pack_into("<IiiII", package, 0, lvif_text, row_index, column, 0, 0)
+        if target_bits == 64:
+            struct.pack_into("<Q", package, 24, text_address)
+            struct.pack_into("<i", package, 32, 1024)
+        else:
+            struct.pack_into("<I", package, 20, text_address & 0xFFFFFFFF)
+            struct.pack_into("<i", package, 24, 1024)
+        return bytes(package)
+
+    rows: List[Dict[str, Any]] = []
+    with RemoteProcessMemory(table_hwnd) as memory:
+        struct_size = 88 if memory.target_bits == 64 else 60
+        text_size = 2048
+        remote_address = memory.allocate(struct_size + text_size)
+        text_address = remote_address + struct_size
+        try:
+            for row_index in range(row_count):
+                values: List[str] = []
+                for column in range(3):
+                    package = bytearray(struct_size + text_size)
+                    item = _pack_item(
+                        row_index, column, text_address, memory.target_bits
+                    )
+                    package[:len(item)] = item
+                    memory.write(remote_address, bytes(package))
+                    response = win32gui.SendMessageTimeout(
+                        table_hwnd, lvm_getitemw, 0, remote_address,
+                        win32con.SMTO_ABORTIFHUNG, 3000
+                    )
+                    result = response[1] if isinstance(response, tuple) else response
+                    if not result:
+                        raise RuntimeError(
+                            f"ListView第{row_index + 1}行第{column + 1}列读取失败"
+                        )
+                    raw = memory.read(text_address, text_size)
+                    values.append(
+                        normalize_text(
+                            raw.decode("utf-16-le", errors="replace").split("\0", 1)[0]
+                        )
+                    )
+                if not values[0].isdigit():
+                    raise RuntimeError(
+                        f"第 {row_index + 1} 行原生文本无效: {values!r}"
+                    )
+                rows.append(
+                    {
+                        "sequence": int(values[0]),
+                        "name": values[1],
+                        "shortcut": canonical_hotkey(values[2]),
+                        "confidence": 1.0,
+                        "source": "原生ListView",
+                    }
+                )
+        finally:
+            memory.free(remote_address)
+    return rows
+
+
+def _ocr_shortcut_pages(table_hwnd: int, row_count: int,
+                        artifact_dir: str, timestamp: str) -> List[Dict[str, Any]]:
+    import numpy as np
+    from rapidocr import RapidOCR
+
+    os.makedirs(artifact_dir, exist_ok=True)
+    profile = VALIDATION_PROFILE["ocr"]
+    original_top = win32gui.SendMessage(table_hwnd, 0x1027, 0, 0)  # LVM_GETTOPINDEX
+    targets = [0]
+    if row_count > 0:
+        targets.append(row_count - 1)
+    ocr = RapidOCR()
+    pages: List[List[Dict[str, Any]]] = []
+    captured_tops = set()
+    try:
+        for page_number, target in enumerate(targets, start=1):
+            win32gui.SendMessage(table_hwnd, 0x1013, target, 0)  # LVM_ENSUREVISIBLE
+            time.sleep(0.5)
+            top_index = win32gui.SendMessage(table_hwnd, 0x1027, 0, 0)
+            if top_index in captured_tops:
+                continue
+            captured_tops.add(top_index)
+            image = _capture_hwnd_image(table_hwnd)
+            image_path = os.path.join(
+                artifact_dir, f"快捷键表格_{timestamp}_页{page_number}.png"
+            )
+            image.save(image_path)
+            output = ocr(np.array(image))
+            tokens: List[Dict[str, Any]] = []
+            if output:
+                for box, text, score in zip(output.boxes, output.txts, output.scores):
+                    tokens.append(
+                        {"box": box.tolist(), "text": text, "score": float(score)}
+                    )
+            pages.append(
+                parse_shortcut_ocr_tokens(
+                    tokens,
+                    column_boundaries=tuple(profile["column_boundaries"]),
+                    y_tolerance=float(profile["row_y_tolerance"]),
+                    name_aliases=profile.get("name_aliases"),
+                )
+            )
+            print(
+                f"[OK] 快捷键表格第{page_number}页OCR完成: "
+                f"top={top_index}, 截图={image_path}"
+            )
+    finally:
+        win32gui.SendMessage(table_hwnd, 0x1013, max(int(original_top), 0), 0)
+        time.sleep(0.2)
+    return merge_shortcut_pages(pages)
+
+
+def collect_shortcut_table(dlg, artifact_dir: str,
+                           timestamp: str) -> Dict[str, Any]:
+    """Read all rows, with native text first and paged OCR as fallback."""
     try:
         table = dlg.child_window(auto_id=AUTO_ID["快捷键表格"], control_type="List")
         table.wait("exists", timeout=3)
-        values: List[str] = []
-        seen = set()
-        for ctrl in table.descendants():
+        table_hwnd = int(table.wrapper_object().handle)
+        row_count = win32gui.SendMessage(table_hwnd, 0x1004, 0, 0)  # LVM_GETITEMCOUNT
+        header_hwnd = win32gui.SendMessage(table_hwnd, 0x101F, 0, 0)  # LVM_GETHEADER
+        column_count = (
+            win32gui.SendMessage(header_hwnd, 0x1200, 0, 0) if header_hwnd else 0
+        )  # HDM_GETITEMCOUNT
+        try:
+            rows = _read_listview_native(table_hwnd, row_count)
+            return {
+                "rows": rows,
+                "source": "原生ListView",
+                "row_count": row_count,
+                "column_count": column_count,
+                "error": "",
+            }
+        except Exception as native_error:
+            print(f"[INFO] 原生ListView文字读取不可用，改用分页OCR: {native_error}")
             try:
-                text = (ctrl.window_text() or "").strip()
-            except Exception:
-                text = ""
-            if text and text not in {"序号", "选项名称", "当前快捷键（点击设置）"}:
-                if text not in seen:
-                    seen.add(text)
-                    values.append(text)
-        return values
+                rows = _ocr_shortcut_pages(
+                    table_hwnd, row_count, artifact_dir, timestamp
+                )
+                return {
+                    "rows": rows,
+                    "source": "OCR分页",
+                    "row_count": row_count,
+                    "column_count": column_count,
+                    "error": "",
+                }
+            except Exception as ocr_error:
+                return {
+                    "rows": [],
+                    "source": "采集失败",
+                    "row_count": row_count,
+                    "column_count": column_count,
+                    "error": f"原生失败: {native_error}；OCR失败: {ocr_error}",
+                }
     except Exception as e:
         print(f"  [WARN] 采集快捷键表格失败: {e}")
-        return []
+        return {
+            "rows": [], "source": "采集失败", "row_count": -1,
+            "column_count": -1, "error": str(e)
+        }
 
 
 def take_screenshot(dlg, save_path: str):
     try:
         os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        rect = dlg.rectangle()
-        from mss import MSS
-        from mss.tools import to_png
-
-        monitor = {
-            "top": int(rect.top),
-            "left": int(rect.left),
-            "width": int(rect.right - rect.left),
-            "height": int(rect.bottom - rect.top),
-        }
-        with MSS() as sct:
-            image = sct.grab(monitor)
-            to_png(image.rgb, image.size, output=save_path)
+        # pywinauto 直接按窗口句柄截图，避免高 DPI 下 UIA 逻辑坐标与
+        # mss 物理坐标不一致而截到其他窗口区域。
+        dlg.capture_as_image().save(save_path)
         print(f"[OK] 截图已保存: {save_path}")
     except Exception as e:
         print(f"[WARN] 截图失败: {e}")
 
 
-def test_one_click_trading(dlg, result: SettingsTestResult):
+def test_one_click_trading(dlg, result: SettingsTestResult,
+                           artifact_dir: str, timestamp: str):
     print("\n--- 一键炒单设置检查 ---")
-    for key in (
-        "快捷键方案",
-        "上海期权_买入开仓",
-        "上海期权_卖出开仓",
-        "上海期权_平仓",
-        "深圳期权_买入开仓",
-        "深圳期权_卖出开仓",
-        "深圳期权_平仓",
-    ):
-        actual = get_combobox_value(dlg, AUTO_ID[key])
-        result.add_result(key, actual if actual is not None else "(无法读取)", STANDARD_VALUES[key])
+    for key, expected in VALIDATION_PROFILE["dropdowns"].items():
+        try:
+            snapshot = get_combobox_snapshot(dlg, AUTO_ID[key])
+            result.add_result(
+                f"{key}_当前值", snapshot["current"], expected["selected"],
+                snapshot["source"]
+            )
+            result.add_result(
+                f"{key}_候选项列表",
+                "、".join(snapshot["items"]),
+                "、".join(expected["items"]),
+                snapshot["source"]
+            )
+        except Exception as error:
+            result.add_unverified(
+                f"{key}_当前值", expected["selected"], str(error)
+            )
+            result.add_unverified(
+                f"{key}_候选项列表", "、".join(expected["items"]), str(error)
+            )
 
-    for key in ("默认期权合约1", "默认期权合约2"):
+    for key, expected in VALIDATION_PROFILE["default_contracts"].items():
         actual = get_edit_value(dlg, AUTO_ID[key])
-        result.add_result(key, actual if actual is not None else "(无法读取)", STANDARD_VALUES[key])
+        if actual is None:
+            result.add_unverified(key, expected, "Edit控件无法读取")
+        else:
+            result.add_result(key, actual, expected, "UIA只读")
 
-    shortcut_text = collect_shortcut_table_text(dlg)
+    table = collect_shortcut_table(dlg, artifact_dir, timestamp)
+    fingerprint = VALIDATION_PROFILE["fingerprint"]
+    result.add_result(
+        "快捷键表格_行数", table["row_count"],
+        fingerprint["shortcut_row_count"], table["source"]
+    )
+    result.add_result(
+        "快捷键表格_列数", table["column_count"],
+        fingerprint["shortcut_column_count"], table["source"]
+    )
+    if table["rows"]:
+        checks = evaluate_shortcuts(
+            VALIDATION_PROFILE["shortcuts"], table["rows"],
+            source=table["source"],
+            min_ocr_confidence=float(
+                VALIDATION_PROFILE["ocr"]["minimum_confidence"]
+            ),
+        )
+        for check in checks:
+            result.add_status(
+                check["name"], check["actual"], check["expected"],
+                check["status"], check["detail"]
+            )
+    else:
+        for expected in VALIDATION_PROFILE["shortcuts"]:
+            result.add_unverified(
+                f"快捷键[{expected['sequence']}]_{expected['name']}",
+                expected["shortcut"], table["error"] or "表格未返回数据"
+            )
+
+    rows_text = "；".join(
+        f"{row['sequence']}.{row['name']}={row['shortcut']}"
+        for row in table["rows"]
+    )
     result.add_observation(
         "快捷键表格",
-        "、".join(shortcut_text) if shortcut_text else "UIA未暴露数据行，详见截图",
-        "自绘List仅采集可访问文本，不点击、不修改快捷键",
+        rows_text or "未采集到结构化行",
+        f"来源：{table['source']}；只读采集，不发送快捷键、不修改设置",
     )
+    result.add_observation("校验标准", str(PROFILE_PATH), "独立JSON配置")
 
 
 def main():
     print("=" * 60)
     print("交易系统设置 - 一键炒单设置自动化测试")
     print("=" * 60)
+
+    client_id = os.environ.get("GUI_CLIENT_ID") or ""
+    if client_id == "qianlong":
+        print("[不支持] 钱龙客户端没有'一键炒单设置'页面，已安全跳过。")
+        return
 
     result = SettingsTestResult()
     hwnd = None
@@ -355,16 +776,19 @@ def main():
         print(f"[OK] 已找到主窗口,句柄 = {hwnd}")
         win = activate_window(hwnd)
 
-        dlg = open_settings_dialog(win)
+        dlg = open_settings_dialog_compat(
+            win, SETTINGS_BUTTON_AUTO_ID, SETTINGS_MENU_ITEM_AUTO_ID, SETTINGS_DIALOG_TITLE
+        )
         dlg.wait("ready", timeout=10)
-        if not switch_to_settings_panel(dlg):
+        if not switch_settings_panel_compat(dlg, PANEL_NAME):
             raise RuntimeError(f"无法切换到'{PANEL_NAME}'面板")
 
-        test_one_click_trading(dlg, result)
-
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        artifact_dir = os.path.join(OUTPUT_DIR, RESULT_SUBDIR)
+        test_one_click_trading(dlg, result, artifact_dir, timestamp)
+
         screenshot_path = os.path.join(
-            OUTPUT_DIR, RESULT_SUBDIR, f"{PANEL_NAME}_{timestamp}.png"
+            artifact_dir, f"{PANEL_NAME}_{timestamp}.png"
         )
         take_screenshot(dlg, screenshot_path)
         result.print_summary()

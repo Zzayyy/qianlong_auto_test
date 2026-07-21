@@ -6,7 +6,7 @@ for _d in (_here, os.path.dirname(_here), os.path.dirname(os.path.dirname(_here)
     if os.path.isdir(os.path.join(_d, "core")) and _d not in sys.path:
         sys.path.insert(0, _d)
         break
-from core.window import find_window, activate_window
+from core.window import find_window, activate_window, switch_panel as switch_main_panel
 
 """
 钱龙期权交易 - 下单面板自动化(Excel文件驱动版)
@@ -697,7 +697,7 @@ def main():
 
         win = activate_window(hwnd)
         main_hwnd = win.handle  # 取原生句柄,后续操作全部走 win32gui,避免 pywinauto 查找开销
-        switch_panel(win, tree_item)
+        switch_main_panel(win, tree_item)
         time.sleep(0.5)
 
         cb_cache = {}  # 复选框控件缓存,整个下单过程复用句柄

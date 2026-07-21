@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "client": "guotai_haitong",
+  "description": "国泰海通一键炒单设置只读校验标准；来源为当前客户端控件候选项和已确认界面。",
+  "fingerprint": {
+    "navigation_auto_id": "2210",
+    "navigation_item_count": 8,
+    "shortcut_table_auto_id": "2216",
+    "shortcut_row_count": 12,
+    "shortcut_column_count": 3
+  },
+  "dropdowns": {
+    "快捷键方案": {
+      "selected": "钱龙推荐快捷键方案",
+      "items": ["钱龙推荐快捷键方案"]
+    },
+    "上海期权_买入开仓": {
+      "selected": "对手价",
+      "items": ["对手价", "挂盘价", "涨停价", "跌停价", "限价", "超价", "市价转限", "市价FAK", "市价F0K"]
+    },
+    "上海期权_卖出开仓": {
+      "selected": "对手价",
+      "items": ["对手价", "挂盘价", "涨停价", "跌停价", "限价", "超价", "市价转限", "市价FAK", "市价F0K"]
+    },
+    "上海期权_平仓": {
+      "selected": "对手价",
+      "items": ["对手价", "挂盘价", "涨停价", "跌停价", "限价", "超价", "市价转限", "市价FAK", "市价F0K"]
+    },
+    "深圳期权_买入开仓": {
+      "selected": "对手价",
+      "items": ["对手价", "挂盘价", "涨停价", "跌停价", "限价", "超价", "对方最优价格", "本方最优价格", "即时成交剩余撤销", "五档即成剩撤", "全额成交或撤销"]
+    },
+    "深圳期权_卖出开仓": {
+      "selected": "对手价",
+      "items": ["对手价", "挂盘价", "涨停价", "跌停价", "限价", "超价", "对方最优价格", "本方最优价格", "即时成交剩余撤销", "五档即成剩撤", "全额成交或撤销"]
+    },
+    "深圳期权_平仓": {
+      "selected": "对手价",
+      "items": ["对手价", "挂盘价", "涨停价", "跌停价", "限价", "超价", "对方最优价格", "本方最优价格", "即时成交剩余撤销", "五档即成剩撤", "全额成交或撤销"]
+    }
+  },
+  "default_contracts": {
+    "默认期权合约1": "默认当前标的的当月认购平值期权",
+    "默认期权合约2": "默认当前标的的当月认沽平值期权"
+  },
+  "shortcuts": [
+    {"sequence": 1, "name": "启用一键炒单", "shortcut": "CTRL+S"},
+    {"sequence": 2, "name": "买合约1", "shortcut": "小键盘1"},
+    {"sequence": 3, "name": "卖合约1", "shortcut": "小键盘2"},
+    {"sequence": 4, "name": "平合约1权利仓", "shortcut": "小键盘3"},
+    {"sequence": 5, "name": "平合约1义务仓", "shortcut": "小键盘4"},
+    {"sequence": 6, "name": "买合约2", "shortcut": "小键盘5"},
+    {"sequence": 7, "name": "卖合约2", "shortcut": "小键盘6"},
+    {"sequence": 8, "name": "平合约2权利仓", "shortcut": "小键盘7"},
+    {"sequence": 9, "name": "平合约2义务仓", "shortcut": "小键盘8"},
+    {"sequence": 10, "name": "全撤", "shortcut": "小键盘."},
+    {"sequence": 11, "name": "增加张数", "shortcut": "小键盘+"},
+    {"sequence": 12, "name": "减少张数", "shortcut": "小键盘-"}
+  ],
+  "ocr": {
+    "minimum_confidence": 0.75,
+    "column_boundaries": [50, 165],
+    "row_y_tolerance": 6,
+    "name_aliases": {
+      "全撒": "全撤"
+    }
+  }
+}

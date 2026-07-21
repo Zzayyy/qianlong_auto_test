@@ -6,7 +6,7 @@ for _d in (_here, os.path.dirname(_here), os.path.dirname(os.path.dirname(_here)
     if os.path.isdir(os.path.join(_d, "core")) and _d not in sys.path:
         sys.path.insert(0, _d)
         break
-from core.window import find_window, activate_window
+from core.window import find_window, activate_window, switch_panel as switch_main_panel
 
 """
 Excel驱动 + OCR定位 + 表格平仓操作
@@ -732,7 +732,7 @@ def main():
     hwnd = find_window(WINDOW_KEY)
     print(f"[OK] 已找到窗口,句柄 = {hwnd}")
     win = activate_window(hwnd)
-    switch_panel(win, TREE_ITEM)
+    switch_main_panel(win, TREE_ITEM)
     time.sleep(0.5)
 
     # 3) 获取定位表格区域
