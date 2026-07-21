@@ -55,7 +55,7 @@ class AutomationGUI:
 
     def __init__(self, root):
         self.root = root
-        self.root.geometry("1000x750")
+        self.root.geometry("1000x780")
         self.root.minsize(850, 650)
 
         self.is_running = False
@@ -186,9 +186,11 @@ class AutomationGUI:
         settings_menu.add_separator()
         settings_menu.add_command(label="日志级别说明", command=self._show_log_level_help)
 
-        # 主框架
+        # 主框架：用 grid 布局，row=0 可伸缩收缩，保证底部状态栏始终有空间
+        self.root.grid_rowconfigure(0, weight=1)
+        self.root.grid_columnconfigure(0, weight=1)
         main_frame = ttk.Frame(self.root, padding="10")
-        main_frame.pack(fill=tk.BOTH, expand=True)
+        main_frame.grid(row=0, column=0, sticky="nsew")
 
         # 顶部栏：客户端选择（多客户端支持）
         top_bar = ttk.Frame(main_frame)
@@ -329,26 +331,32 @@ class AutomationGUI:
         self.right_notebook.add(compare_frame, text="结果比对")
         self.compare_panel = ComparePanel(compare_frame, self)
 
-        # 状态栏
-        status_frame = ttk.Frame(self.root)
-        status_frame.pack(side=tk.BOTTOM, fill=tk.X)
-        ttk.Separator(self.root, orient=tk.HORIZONTAL).pack(side=tk.BOTTOM, fill=tk.X)
+        # 状态栏：钉在窗口底部（始终可见，矮窗口也不会被裁切），
+        # 但左右加 10px 内边距与主面板对齐，避免「分层」的割裂感
+        status_outer = ttk.Frame(self.root, padding=(10, 0, 10, 0))
+        status_outer.grid(row=1, column=0, sticky="ew")
+
+        # 顶部细线分隔，替代原先加重的 SUNKEN 立体凹陷，与主面板风格保持一致
+        ttk.Separator(status_outer, orient=tk.HORIZONTAL).pack(side=tk.TOP, fill=tk.X)
+
+        status_frame = ttk.Frame(status_outer, padding=(2, 4))
+        status_frame.pack(side=tk.TOP, fill=tk.X)
 
         self.status_label = ttk.Label(
-            status_frame, text="就绪", anchor=tk.W, relief=tk.SUNKEN, padding=(6, 3)
+            status_frame, text="就绪", anchor=tk.W
         )
         self.status_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         self.level_label = ttk.Label(
             status_frame, text=f"日志: {self.log_level.get()}", anchor=tk.CENTER,
-            relief=tk.SUNKEN, width=12, padding=(6, 3)
+            width=12
         )
-        self.level_label.pack(side=tk.LEFT, padx=(2, 0))
+        self.level_label.pack(side=tk.LEFT, padx=(8, 0))
 
         self.time_label = ttk.Label(
-            status_frame, text="", anchor=tk.E, relief=tk.SUNKEN, width=18, padding=(6, 3)
+            status_frame, text="", anchor=tk.E, width=18
         )
-        self.time_label.pack(side=tk.LEFT, padx=(2, 0))
+        self.time_label.pack(side=tk.LEFT, padx=(8, 0))
 
         # 构建左侧「分类 -> 脚本」树，默认选中「下单」
         self._build_script_tree()
