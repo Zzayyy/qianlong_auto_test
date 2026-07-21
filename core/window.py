@@ -8,7 +8,7 @@ from win32gui import (
     GetWindowText,
     IsWindowVisible
 )
-from core.clients import get_client
+from core.clients import get_client, get_clients, resolve_panel_path
 from pywinauto import Application,findwindows
 import time
 # -*- coding: utf-8 -*-
@@ -174,6 +174,62 @@ def _parse_panel_path(panel_path: str):
     return [p for p in path.split("\\") if p]
 
 
+# —— 菜单名兼容（不同客户端同一功能菜单名不同）——
+# 同一个“期权下单”面板，钱龙模拟期权宝 的菜单叫 "期权下单(新)"，
+# 国泰海通证券期权宝 的菜单叫 "期权下单"。
+# Excel/脚本里写其中任意一个，都通过 clients.json 的 menu_map 自动翻译为
+# 当前客户端真实菜单名，避免找不到节点报错。映射关系全部集中在 clients.json，
+# 新增/修改菜单差异只需改配置，无需改代码。
+
+def _detect_client_id(target_hwnd: int):
+    """确定当前窗口所属客户端 id。
+
+    优先级：
+      1) GUI_CLIENT_ID 环境变量（GUI 启动脚本时注入）；
+      2) 回退按窗口标题匹配 clients.json 中每个客户端的 window_key。
+    都匹配不到时返回 None（保持原有行为，不改动菜单名）。
+    """
+    client_id = os.environ.get("GUI_CLIENT_ID")
+    if client_id:
+        return client_id
+    try:
+        title = win32gui.GetWindowText(target_hwnd)
+    except Exception:
+        title = ""
+    if not title:
+        return None
+    for c in get_clients():
+        wk = c.get("window_key", "")
+        if wk and wk in title:
+            return c.get("id")
+    return None
+
+
+def _resolve_panel_path_for_client(panel_path: str, target_hwnd: int) -> str:
+    """按当前客户端翻译面板路径（读取 clients.json 的 menu_map）。
+
+    menu_map 命中则返回真实菜单路径并打印提示；否则原样返回。
+    """
+    # menu_map 的 key 约定以反斜杠开头（如 "\\期权下单"），统一补上以便匹配
+    if not panel_path.startswith("\\"):
+        panel_path = "\\" + panel_path
+    client_id = _detect_client_id(target_hwnd)
+    if not client_id:
+        return panel_path
+    try:
+        resolved = resolve_panel_path({"panel_path": panel_path}, client_id)
+    except Exception:
+        resolved = None
+    if resolved:
+        if resolved != panel_path:
+            print(
+                f"[INFO] 菜单名兼容(clients.json): '{panel_path}' "
+                f"-> 当前客户端('{client_id}')真实菜单 '{resolved}'"
+            )
+        return resolved
+    return panel_path
+
+
 def switch_panel(win, panel_path: str, use_title: bool = False):
     """切换到指定面板。
 
@@ -199,7 +255,8 @@ def switch_panel(win, panel_path: str, use_title: bool = False):
         pass
     time.sleep(0.3)
 
-    # 路径字符串 -> 层级列表
+    # 兼容不同客户端菜单名差异（如 期权下单 / 期权下单(新)），由 clients.json 的 menu_map 控制
+    panel_path = _resolve_panel_path_for_client(panel_path, target_hwnd)
     path_list = _parse_panel_path(panel_path)
 
     # —— 方案一：win32gui（TVM_* 消息 + RemoteMem），失败则兜底 ——
