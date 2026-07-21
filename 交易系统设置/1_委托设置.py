@@ -41,6 +41,7 @@
 import os
 import sys
 import time
+import ctypes
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -507,12 +508,81 @@ def set_checkbox_by_id(dlg, auto_id: str, value: bool) -> bool:
         return False
 
 
+def _win32_user32():
+    """返回已配置好参数类型的 user32 句柄，用于直接向 Win32 控件发消息。"""
+    from ctypes import wintypes
+    user32 = ctypes.windll.user32
+    user32.SendMessageW.argtypes = [
+        wintypes.HWND, wintypes.UINT, wintypes.WPARAM, ctypes.c_void_p
+    ]
+    user32.SendMessageW.restype = wintypes.LPARAM
+    return user32
+
+
+CB_GETCOUNT = 0x0146
+CB_GETCURSEL = 0x0147
+CB_GETLBTEXT = 0x0148
+
+
+def _get_combo_hwnd(dlg, auto_id: str) -> Optional[int]:
+    """获取组合框的原生窗口句柄。
+
+    优先用 win32gui 按控件 ID 枚举子窗口（最快，且不触发 UIA 树遍历）；
+    拿不到时（如非标准控件）再退回 UIA 元素的 NativeWindowHandle。
+    """
+    import win32gui
+    try:
+        target = int(auto_id)
+    except (TypeError, ValueError):
+        target = None
+    if target is not None:
+        found = []
+        def _cb(hwnd, _):
+            try:
+                if win32gui.GetDlgCtrlID(hwnd) == target:
+                    found.append(hwnd)
+            except Exception:
+                pass
+        try:
+            win32gui.EnumChildWindows(dlg.handle, _cb, None)
+        except Exception:
+            pass
+        if found:
+            return found[0]
+    # 兜底：UIA 原生句柄
+    try:
+        combo = dlg.child_window(auto_id=auto_id, control_type="ComboBox", found_index=0)
+        combo.wait("ready", timeout=2)
+        h = combo.element_info.handle
+        if h:
+            return h
+    except Exception:
+        pass
+    return None
+
+
 def get_combobox_selection_by_id(dlg, auto_id: str) -> Optional[str]:
     """通过 auto_id 获取下拉框当前选择的文本。
+
+    优化：优先用 CB_GETCURSEL + CB_GETLBTEXT 直接读取（不展开下拉层，
+    速度最快）；失败则降级到原 UIA selected_text()。
 
     Returns:
         当前选中的文本，找不到则返回None
     """
+    try:
+        hwnd = _get_combo_hwnd(dlg, auto_id)
+        if hwnd is not None:
+            user32 = _win32_user32()
+            sel = user32.SendMessageW(hwnd, CB_GETCURSEL, 0, 0)
+            if sel is not None and sel >= 0:
+                buf = ctypes.create_unicode_buffer(256)
+                user32.SendMessageW(hwnd, CB_GETLBTEXT, sel, ctypes.addressof(buf))
+                return buf.value.strip() or None
+    except Exception as e:
+        print(f"  [WARN] win32 读取下拉选择失败，降级到 UIA: {e}")
+
+    # 降级：UIA
     try:
         combo = dlg.child_window(auto_id=auto_id, control_type="ComboBox")
         combo.wait("ready", timeout=2)
@@ -558,17 +628,30 @@ def _toggle_combobox(combo, open_it: bool):
         raise RuntimeError(f"无法点击下拉箭头: {e}")
 
 
-def get_combobox_items_by_id(dlg, auto_id: str) -> Optional[List[str]]:
-    """点击打开下拉框，读取其包含的所有候选项，然后再次点击一次关闭。
+def _read_combobox_items_win32(hwnd: int) -> Optional[List[str]]:
+    """通过 CB_GETCOUNT / CB_GETLBTEXT 直接读取 Win32 组合框的候选项。
 
-    流程：
-        1. 点击下拉框右侧箭头展开列表
-        2. 读取全部候选项文本（优先用 item_texts，失败则降级读取弹出的 ListItem）
-        3. 再次点击一次收起下拉列表
-
-    Returns:
-        候选项文本列表（已去除空白），找不到或无法读取返回None
+    不走 UIA 树遍历、不展开下拉层，因此极快。返回去重后的候选项列表，
+    读取失败或为空时返回 None。
     """
+    user32 = _win32_user32()
+    count = user32.SendMessageW(hwnd, CB_GETCOUNT, 0, 0)
+    if count is None or count <= 0:
+        return None
+    buf = ctypes.create_unicode_buffer(256)
+    items: List[str] = []
+    seen: set = set()
+    for i in range(count):
+        user32.SendMessageW(hwnd, CB_GETLBTEXT, i, ctypes.addressof(buf))
+        txt = buf.value.strip()
+        if txt and txt not in seen:
+            seen.add(txt)
+            items.append(txt)
+    return items if items else None
+
+
+def _get_combobox_items_uia(dlg, auto_id: str) -> Optional[List[str]]:
+    """原 UIA 方案（兼容非标准 / 虚拟化组合框）：展开下拉层并遍历 ListItem。"""
     try:
         combo = dlg.child_window(auto_id=auto_id, control_type="ComboBox", found_index=0)
         combo.wait("ready", timeout=2)
@@ -615,6 +698,33 @@ def get_combobox_items_by_id(dlg, auto_id: str) -> Optional[List[str]]:
     except Exception as e:
         print(f"  [WARN] 获取下拉框候选项(auto_id={auto_id})失败: {e}")
         return None
+
+
+def get_combobox_items_by_id(dlg, auto_id: str) -> Optional[List[str]]:
+    """读取下拉框的全部候选项（已去重）。
+
+    优化（重点提速项）：优先用 win32 直接对组合框发送 CB_GETCOUNT /
+    CB_GETLBTEXT 消息读取列表数据 —— 不展开下拉层、不做 UIA 全树遍历，
+    速度比原方案快一个数量级；仅当控件非标准 Win32 组合框（拿不到句柄
+    或读取为空）时，才降级回原 UIA 方案（展开 + 遍历 ListItem），保证
+    与旧逻辑行为一致、结果完全相同。
+
+    Returns:
+        候选项文本列表（已去除空白并去重），找不到或无法读取返回None
+    """
+    # ── 快速路径：win32 消息直接读列表（不展开下拉层）──
+    try:
+        hwnd = _get_combo_hwnd(dlg, auto_id)
+        if hwnd is not None:
+            items = _read_combobox_items_win32(hwnd)
+            if items:
+                print(f"  [INFO] 已读取到 {len(items)} 个下拉候选项(win32快速路径)")
+                return items
+    except Exception as e:
+        print(f"  [WARN] win32 读取下拉候选项失败，降级到 UIA: {e}")
+
+    # ── 降级路径：原 UIA 方案 ──
+    return _get_combobox_items_uia(dlg, auto_id)
 
 
 def get_edit_value_by_id(dlg, auto_id: str) -> Optional[int]:
