@@ -71,6 +71,7 @@ class AutomationGUI:
         self._drag_script = None
         self._drag_category = None   # 拖拽分类根节点时记录分类名
         self._drag_active = False
+        self._drag_occurred = False  # 本次按下是否实际发生了拖拽（用于决定是否跳过展开/折叠）
         self._drag_start_y = 0
 
         # 状态栏状态
@@ -262,6 +263,8 @@ class AutomationGUI:
         self.script_tree.bind('<ButtonPress-1>', self._on_list_drag_start)
         self.script_tree.bind('<B1-Motion>', self._on_list_drag_motion)
         self.script_tree.bind('<ButtonRelease-1>', self._on_list_drag_end)
+        # 鼠标抬起时展开/折叠分类节点（避免按下即触发，与拖拽到队列冲突）
+        self.script_tree.bind('<ButtonRelease-1>', self._on_tree_release)
         # iid -> {"script": 脚本配置, "category": 分类}
         self.tree_script_map = {}
 
@@ -459,7 +462,7 @@ class AutomationGUI:
             self._update_paths_for_selected_script()
             self._update_params_for_selected_script()
         else:
-            # 选中分类节点：设为当前功能并展开/收起
+            # 选中分类节点：设为当前功能（展开/折叠改到鼠标抬起时处理，见 _on_tree_release）
             category = iid.split("::", 1)[1]
             self.current_category = category
             self.category_label.config(text=f"当前功能: {category}")
@@ -468,7 +471,6 @@ class AutomationGUI:
                 self.preview_frame.pack(fill=tk.X, pady=(0, 10))
             else:
                 self.preview_frame.pack_forget()
-            self.script_tree.item(iid, open=not self.script_tree.item(iid, "open"))
 
     def _on_tree_double_click(self, event):
         """双击树：仅当双击具体脚本节点时才执行，双击分类节点只展开/收起"""
@@ -1075,6 +1077,7 @@ class AutomationGUI:
         if self.task_center is None or self.task_center.is_running:
             self._drag_script = None
             self._drag_category = None
+            self._drag_occurred = False
             return
         iid = self.script_tree.identify_row(event.y)
         if not iid:
@@ -1106,6 +1109,7 @@ class AutomationGUI:
         if abs(event.y - self._drag_start_y) < 6:
             return
         self._drag_active = True
+        self._drag_occurred = True
         tc = self.task_center
         if tc is None:
             return
@@ -1155,6 +1159,24 @@ class AutomationGUI:
                 tc.add_category_from_drop(category, event.y_root - ry)
             elif script is not None:
                 tc.add_script_from_drop(script, event.y_root - ry)
+
+    def _on_tree_release(self, event):
+        """鼠标抬起时展开/折叠分类节点
+
+        仅在「本次按下没有发生拖拽」时切换展开状态，
+        避免从脚本列表拖拽到任务队列时误触发展开/折叠。
+        """
+        if getattr(self, "_drag_occurred", False):
+            self._drag_occurred = False
+            return
+        iid = self.script_tree.identify_row(event.y)
+        if not iid or not iid.startswith("cat::"):
+            return
+        # 仅当抬起位置就是当前选中的分类节点时才切换
+        sel = self.script_tree.selection()
+        if not sel or sel[0] != iid:
+            return
+        self.script_tree.item(iid, open=not self.script_tree.item(iid, "open"))
 
     def _execute_script(self):
         """执行脚本"""
