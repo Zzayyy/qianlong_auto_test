@@ -49,6 +49,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from pywinauto import Application, findwindows
 from core.window import find_window, activate_window, countdown, close_settings_dialog
+from core.settings_window import (
+    open_settings_dialog as open_settings_dialog_compat,
+    switch_settings_panel as switch_settings_panel_compat,
+)
 
 
 # ====================== 可配置参数 ======================
@@ -552,11 +556,13 @@ def main():
         win = activate_window(hwnd)
 
         # 3. 自动打开设置对话框
-        dlg = open_settings_dialog(win)
+        dlg = open_settings_dialog_compat(
+            win, SETTINGS_BUTTON_AUTO_ID, SETTINGS_MENU_ITEM_AUTO_ID, SETTINGS_DIALOG_TITLE
+        )
         dlg.wait("ready", timeout=10)
 
         # 4. 切换到自动拆单设置面板
-        if not switch_to_settings_panel(dlg, PANEL_NAME):
+        if not switch_settings_panel_compat(dlg, PANEL_NAME):
             print("[错误] 无法切换到自动拆单设置面板")
             sys.exit(1)
 

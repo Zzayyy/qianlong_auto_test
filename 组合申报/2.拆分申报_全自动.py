@@ -6,7 +6,7 @@ for _d in (_here, os.path.dirname(_here), os.path.dirname(os.path.dirname(_here)
     if os.path.isdir(os.path.join(_d, "core")) and _d not in sys.path:
         sys.path.insert(0, _d)
         break
-from core.window import find_window, activate_window
+from core.window import find_window, activate_window, switch_panel as switch_main_panel
 
 """
 钱龙拆分申报 - 全自动轮询脚本
@@ -278,7 +278,7 @@ def main():
         win = activate_window(hwnd)
 
         # 切换到拆分申报面板
-        switch_to_split_panel(win)
+        switch_main_panel(win, r"\组合申报\拆分申报")
         time.sleep(0.5)
 
         total_executed = 0
