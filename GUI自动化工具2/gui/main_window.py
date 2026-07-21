@@ -69,6 +69,7 @@ class AutomationGUI:
 
         # 脚本列表 -> 任务队列 的拖拽状态
         self._drag_script = None
+        self._drag_category = None   # 拖拽分类根节点时记录分类名
         self._drag_active = False
         self._drag_start_y = 0
 
@@ -1070,23 +1071,37 @@ class AutomationGUI:
 
     # ====================== 脚本列表 -> 任务队列 拖拽 ======================
     def _on_list_drag_start(self, event):
-        """从树中开始拖拽（记录待拖出的脚本）"""
+        """从树中开始拖拽（记录待拖出的脚本或整个分类）"""
         if self.task_center is None or self.task_center.is_running:
             self._drag_script = None
+            self._drag_category = None
             return
         iid = self.script_tree.identify_row(event.y)
-        if not iid or iid not in self.tree_script_map:
+        if not iid:
             self._drag_script = None
+            self._drag_category = None
+            return
+        # 拖拽分类根节点（iid 形如 cat::查询）：记录分类名，落点时加入其下全部脚本
+        if iid.startswith("cat::"):
+            self._drag_category = iid.split("::", 1)[1]
+            self._drag_script = None
+            self._drag_active = False
+            self._drag_start_y = event.y
+            return
+        if iid not in self.tree_script_map:
+            self._drag_script = None
+            self._drag_category = None
             return
         item = self.tree_script_map[iid]
         self._drag_script = dict(item["script"])
         self._drag_script["category"] = item["category"]
+        self._drag_category = None
         self._drag_active = False
         self._drag_start_y = event.y
 
     def _on_list_drag_motion(self, event):
         """拖动过程中：超过阈值视为拖拽，并在悬停于队列时显示落点"""
-        if self._drag_script is None:
+        if self._drag_script is None and self._drag_category is None:
             return
         if abs(event.y - self._drag_start_y) < 6:
             return
@@ -1112,28 +1127,34 @@ class AutomationGUI:
                          and ry <= event.y_root <= ry + tree.winfo_height())
         if not over_tree:
             self._drag_script = None
+            self._drag_category = None
             self._drag_active = False
             if tc is not None:
                 tc._hide_drop_indicator()
         # 在队列上方释放时保留状态，交由 _on_global_drop 处理落点与清理
 
     def _on_global_drop(self, event):
-        """全局捕获释放：处理从脚本列表拖入队列的落点"""
+        """全局捕获释放：处理从脚本列表拖入队列的落点（单个脚本或整个分类）"""
         script = self._drag_script
+        category = self._drag_category
         active = self._drag_active
         self._drag_script = None
+        self._drag_category = None
         self._drag_active = False
         tc = self.task_center
         if tc is not None:
             tc._hide_drop_indicator()
-        if not active or script is None or tc is None:
+        if not active or tc is None:
             return
         if tc.is_running:
             return
         tree = tc.tree
         rx, ry = tree.winfo_rootx(), tree.winfo_rooty()
         if rx <= event.x_root <= rx + tree.winfo_width() and ry <= event.y_root <= ry + tree.winfo_height():
-            tc.add_script_from_drop(script, event.y_root - ry)
+            if category:
+                tc.add_category_from_drop(category, event.y_root - ry)
+            elif script is not None:
+                tc.add_script_from_drop(script, event.y_root - ry)
 
     def _execute_script(self):
         """执行脚本"""
@@ -1251,6 +1272,26 @@ class AutomationGUI:
             "settings_output_dir": self.settings_output_dir.get(),
             "client_id": self.client_id,
         }
+
+    def make_task_params(self, script, category):
+        """为指定脚本生成任务参数快照（路径按脚本自身名称分别生成默认路径）
+
+        用于批量加入整分类时，让每个脚本携带各自的默认输出路径，
+        而非共享拖拽瞬间的同一份界面参数。
+        """
+        params = self.collect_params()
+        # 查询类 / 结算单 / 组合申报中的查询脚本：输出路径按脚本名称分别生成
+        if category in ("查询", "通知查询", "结算单"):
+            output_dir = get_output_dir(self.user_config, category)
+            filename = get_script_filename(script["name"])
+            params["txt_path"] = os.path.join(output_dir, f"{filename}.txt")
+            params["xls_path"] = os.path.join(output_dir, f"{filename}.xls")
+        elif category == "组合申报" and script["name"] not in self.COMBO_AUTO_SCRIPTS:
+            output_dir = get_output_dir(self.user_config, category)
+            filename = get_script_filename(script["name"])
+            params["txt_path"] = os.path.join(output_dir, f"{filename}.txt")
+            params["xls_path"] = os.path.join(output_dir, f"{filename}.xls")
+        return params
 
     # ====================== 客户端切换（多客户端支持） ======================
     def _update_title(self):
