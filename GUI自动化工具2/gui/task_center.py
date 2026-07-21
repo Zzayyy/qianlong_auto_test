@@ -33,6 +33,7 @@ from gui.history import (
     STATUS_ERROR,
     STATUS_STOPPED,
 )
+from config import get_scripts_config
 
 # 编队下拉中的占位项：表示当前队列是用户临时编排，未归入任何编队
 GROUP_PLACEHOLDER = "（自定义队列）"
@@ -545,6 +546,7 @@ class TaskCenter:
             return
         # 重置来自脚本列表的拖入状态，避免误判
         self.controller._drag_script = None
+        self.controller._drag_category = None
         self.controller._drag_active = False
         row = self.tree.identify_row(event.y)
         if not row:
@@ -670,6 +672,54 @@ class TaskCenter:
             return
         target = self._drop_target(tree_y)
         self.add_script(script, self._insert_index_from_target(target))
+
+    def add_category_from_drop(self, category, tree_y):
+        """从脚本列表拖入分类根节点：在 tree_y 对应位置批量插入该分类下全部脚本"""
+        self._hide_drop_indicator()
+        if self.is_running:
+            return
+        target = self._drop_target(tree_y)
+        self.add_category(category, self._insert_index_from_target(target))
+
+    def add_category(self, category, index=None):
+        """把指定分类下的全部脚本加入队列（index 为插入位置，None 则追加到末尾）"""
+        if self.is_running:
+            return
+        scripts_config = get_scripts_config(self.controller.client_id)
+        scripts = scripts_config.get(category, [])
+        if not scripts:
+            return
+        # 先收集本分类下可加入的脚本项（跳过文件不存在 / 缺少 Excel 的下单脚本）
+        items = []
+        for s in scripts:
+            if not os.path.exists(s["path"]):
+                continue
+            if category == "下单" and s["name"] not in ("5.期权下单_一键导出", "6.全选撤单"):
+                if not self.controller.xlsx_file.get():
+                    continue
+            # 每个脚本按其自身默认参数分别快照（路径按各自名称生成）
+            params = self.controller.make_task_params(s, category)
+            items.append({
+                "category": category,
+                "script_name": s["name"],
+                "script_path": s["path"],
+                "query_key": s.get("query_key", ""),
+                "params": params,
+                "status": self.ST_PENDING,
+            })
+        if not items:
+            return
+        if index is None or index >= len(self.tasks):
+            for it in items:
+                self.tasks.append(it)
+        else:
+            for k, it in enumerate(items):
+                self.tasks.insert(index + k, it)
+        self._save()
+        self._refresh()
+        self._dirty = True
+        self._update_group_hint()
+        self.gui._log(f"[任务中心] 已批量加入分类「{category}」共 {len(items)} 个脚本")
 
     def add_script(self, script, index=None):
         """把指定脚本加入队列（index 为插入位置，None 则追加）"""
