@@ -6,7 +6,7 @@ for _d in (_here, os.path.dirname(_here), os.path.dirname(os.path.dirname(_here)
     if os.path.isdir(os.path.join(_d, "core")) and _d not in sys.path:
         sys.path.insert(0, _d)
         break
-from core.window import find_window, activate_window
+from core.window import find_window, activate_window, switch_panel as switch_main_panel
 
 """
 钱龙期权交易 - 三键下单面板自动化(Excel文件驱动版)
@@ -388,12 +388,12 @@ def set_checkbox(main_hwnd, name: str, enable: bool, cache: dict = None, main_wi
         if enable:
             print(f"[WARN] 复选框 {name} 为灰色(不可用),无法勾选(可能'自动'已勾选),跳过")
         else:
-            print(f"[--] 复选框 {name} 为灰色(不可用),跳过")
+            print(f"[WARN] 复选框 {name} 为灰色(不可用),跳过")
         return
 
     is_checked = win32gui.SendMessage(cb, win32con.BM_GETCHECK, 0, 0) != 0
     if enable == is_checked:
-        print(f"[--] 复选框 {name} 已是{'勾选' if enable else '取消勾选'}状态,跳过")
+        print(f"[WARN] 复选框 {name} 已是{'勾选' if enable else '取消勾选'}状态,跳过")
         return
 
     # 用真实鼠标点击切换(等价于 click_input,确保触发软件逻辑,如"自动"会弹出自动净仓弹窗)
@@ -564,7 +564,7 @@ def press_enter_to_confirm(
                 continue
 
         time.sleep(0.15)
-    print(f"[WARN] 等待弹窗超时({timeout}s),匹配: {dialog_patterns}")
+    print(f"[WARN] 等待弹窗({timeout}s),匹配: {dialog_patterns}")
     return False
 
 
@@ -586,7 +586,7 @@ def confirm_all_dialogs(
     """
     count = 0
     for i in range(1, max_dialogs + 1):
-        print(f"[..] 等待第 {i} 个弹窗 (超时{no_dialog_timeout}s无新弹窗则结束)...")
+        print(f"[WARN] 等待第 {i} 个弹窗 ({no_dialog_timeout}s无新弹窗则结束)...")
         ok = press_enter_to_confirm(main_win=main_win, timeout=per_dialog_timeout)
         if ok:
             count += 1
@@ -686,7 +686,7 @@ def main():
 
         win = activate_window(hwnd)
         main_hwnd = win.handle  # 取原生句柄,后续操作全部走 win32gui,避免 pywinauto 查找开销
-        switch_panel(win, tree_item)
+        switch_main_panel(win, tree_item)
         time.sleep(0.5)
 
         cb_cache = {}  # 复选框控件缓存,整个下单过程复用句柄

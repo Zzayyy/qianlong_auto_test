@@ -6,7 +6,7 @@ for _d in (_here, os.path.dirname(_here), os.path.dirname(os.path.dirname(_here)
     if os.path.isdir(os.path.join(_d, "core")) and _d not in sys.path:
         sys.path.insert(0, _d)
         break
-from core.window import find_window, activate_window
+from core.window import find_window, activate_window, switch_panel as switch_main_panel
 
 """
 钱龙期权交易 - 四键下单面板自动化(Excel文件驱动版)
@@ -529,7 +529,7 @@ def press_enter_to_confirm(
                 continue
 
         time.sleep(0.15)
-    print(f"[WARN] 等待弹窗超时({timeout}s),匹配: {dialog_patterns}")
+    print(f"[WARN] 等待弹窗({timeout}s),匹配: {dialog_patterns}")
     return False
 
 
@@ -543,7 +543,7 @@ def confirm_all_dialogs(
     """自动确认所有弹窗，直到一段时间内没有新弹窗出现。"""
     count = 0
     for i in range(1, max_dialogs + 1):
-        print(f"[..] 等待第 {i} 个弹窗 (超时{no_dialog_timeout}s无新弹窗则结束)...")
+        print(f"[WARN] 等待第 {i} 个弹窗 ({no_dialog_timeout}s无新弹窗则结束)...")
         ok = press_enter_to_confirm(main_win=main_win, timeout=per_dialog_timeout)
         if ok:
             count += 1
@@ -640,7 +640,7 @@ def main():
 
         win = activate_window(hwnd)
         main_hwnd = win.handle  # 取原生句柄,后续操作全部走 win32gui,避免 pywinauto 查找开销
-        switch_panel(win, tree_item)
+        switch_main_panel(win, tree_item)
         time.sleep(0.5)
 
         cb_cache = {}  # 复选框控件缓存,整个下单过程复用句柄
