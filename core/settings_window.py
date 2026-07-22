@@ -36,8 +36,35 @@ def _dialog_title(dialog) -> str:
     return ""
 
 
+def _has_settings_nav(hwnd: int) -> bool:
+    """纯 win32 判断：该 #32770 对话框是否含有 auto_id=2210 的导航 ListBox。
+
+    本软件的设置框标题在 GetWindowText 中为空（仅存在于 TitleBar 的 Value），
+    但其必然包含 auto_id=2210 的 ListBox 导航控件。用 GetDlgCtrlID 直接判定
+    即可，避免每一次轮询都走 UIA，显著降低检测开销。
+    """
+    found = []
+    def _enum(child, _):
+        try:
+            if (win32gui.GetClassName(child) == "ListBox"
+                    and win32gui.GetDlgCtrlID(child) == 2210):
+                found.append(child)
+        except Exception:
+            pass
+    try:
+        win32gui.EnumChildWindows(hwnd, _enum, None)
+    except Exception:
+        pass
+    return len(found) > 0
+
+
 def find_settings_dialog(main_window, title: str = "交易系统设置"):
-    """Find only a settings dialog owned by the target trading process."""
+    """Find only a settings dialog owned by the target trading process.
+
+    检测改为纯 win32：先按 #32770 + 进程归属枚举候选窗口，再对每个候选用
+    GetWindowText 标题或“是否含 auto_id=2210 的导航 ListBox”判定，全程不触发
+    UIA 树遍历，因此可在 20s 等待循环里高频轮询而不堆积额外开销。
+    """
     main_hwnd = int(main_window.handle)
     _, target_pid = win32process.GetWindowThreadProcessId(main_hwnd)
     candidates: list[int] = []
@@ -78,7 +105,8 @@ def find_settings_dialog(main_window, title: str = "交易系统设置"):
     )
     for hwnd in candidates:
         native_title = (win32gui.GetWindowText(hwnd) or "").strip()
-        if title in native_title:
+        # 纯 win32 判定：标题文本命中，或含设置框专属导航 ListBox(auto_id=2210)
+        if title in native_title or _has_settings_nav(hwnd):
             try:
                 dialog = main_window.app.window(handle=hwnd)
             except Exception:
@@ -90,25 +118,6 @@ def find_settings_dialog(main_window, title: str = "交易系统设置"):
                 f"title={native_title!r}"
             )
             return dialog
-
-        try:
-            try:
-                # 复用主窗口已经建立的 UIA Application，避免为同一交易进程
-                # 重复 connect（跨完整性级别时可能明显变慢）。
-                dialog = main_window.app.window(handle=hwnd)
-            except Exception:
-                app = Application(backend="uia").connect(handle=hwnd, timeout=1)
-                dialog = app.window(handle=hwnd)
-            actual_title = _dialog_title(dialog)
-            navigation = dialog.child_window(auto_id="2210", control_type="List")
-            if title in actual_title or navigation.exists(timeout=0.3):
-                print(
-                    f"[OK] 已找到'{title}'窗口: hwnd={hwnd}, "
-                    f"title={actual_title!r}"
-                )
-                return dialog
-        except Exception:
-            continue
     return None
 
 
