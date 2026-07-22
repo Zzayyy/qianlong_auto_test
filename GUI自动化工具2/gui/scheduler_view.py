@@ -421,7 +421,7 @@ class SchedulerPanel:
         for c, h in col_defs:
             self.tree.heading(c, text=h)
         self.tree.column("id", width=28, minwidth=26, stretch=False, anchor=tk.CENTER)
-        self.tree.column("name", width=80, minwidth=60, stretch=True)
+        self.tree.column("name", width=60, minwidth=40, stretch=False)
         self.tree.column("target", width=55, minwidth=40, stretch=True)
         self.tree.column("schedule", width=55, minwidth=40, stretch=True)
         self.tree.column("next_run", width=75, minwidth=65, stretch=True)
