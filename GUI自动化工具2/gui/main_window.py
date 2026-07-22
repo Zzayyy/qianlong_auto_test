@@ -1211,26 +1211,6 @@ class AutomationGUI:
             messagebox.showerror("错误", f"脚本文件不存在:\n{script['path']}")
             return
 
-        if (
-            self.current_category == "组合申报"
-            and script["name"] in self.COMBO_AUTO_SCRIPTS
-        ):
-            scope = (
-                "上证/深证 × 全部6种策略"
-                if script["name"] == "1.组合申报_全自动"
-                else "上证/深证两个交易所"
-            )
-            confirmed = messagebox.askyesno(
-                "确认正式申报",
-                f"即将全量运行“{script['name']}”。\n\n"
-                f"遍历范围：{scope}\n"
-                f"委托数量：{self.order_qty.get()}\n"
-                "每个有数据的项目都会提交第一条记录。是否继续？",
-                icon="warning",
-            )
-            if not confirmed:
-                return
-
         # 下单需要检查Excel文件（全选撤单和期权下单_一键导出除外）
         if self.current_category == "下单" and script["name"] not in ("5.期权下单_一键导出", "6.全选撤单") and not self.xlsx_file.get():
             messagebox.showwarning("提示", "请先选择Excel配置文件")
