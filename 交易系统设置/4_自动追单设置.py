@@ -26,6 +26,9 @@
 import os
 import sys
 import time
+import ctypes
+import win32gui
+import win32con
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -333,8 +336,96 @@ def switch_to_settings_panel(dlg, panel_name: str = PANEL_NAME) -> bool:
         return False
 
 
+# ============ Win32 消息加速（与 1_委托设置.py 一致）============
+def _win32_user32():
+    """返回已配置好参数类型的 user32 句柄，用于直接向 Win32 控件发消息。"""
+    from ctypes import wintypes
+    user32 = ctypes.windll.user32
+    user32.SendMessageW.argtypes = [
+        wintypes.HWND, wintypes.UINT, wintypes.WPARAM, ctypes.c_void_p
+    ]
+    user32.SendMessageW.restype = wintypes.LPARAM
+    return user32
+
+
+# ---- Win32 消息常量（来自 win32con）----
+WM_GETTEXT = win32con.WM_GETTEXT
+WM_SETTEXT = win32con.WM_SETTEXT
+BM_GETCHECK = win32con.BM_GETCHECK
+BM_SETCHECK = win32con.BM_SETCHECK
+BM_CLICK = win32con.BM_CLICK
+BST_CHECKED = win32con.BST_CHECKED
+BST_UNCHECKED = win32con.BST_UNCHECKED
+CB_GETCOUNT = win32con.CB_GETCOUNT
+CB_GETCURSEL = win32con.CB_GETCURSEL
+CB_GETLBTEXT = win32con.CB_GETLBTEXT
+
+
+def _get_control_hwnd(dlg, auto_id):
+    """用 win32gui 按控件 ID (DlgCtrlID) 查找子窗口句柄（最快，不触发 UIA 树遍历）。"""
+    try:
+        target = int(auto_id)
+    except (TypeError, ValueError):
+        return None
+    found = []
+    def _cb(hwnd, _):
+        try:
+            if win32gui.GetDlgCtrlID(hwnd) == target:
+                found.append(hwnd)
+        except Exception:
+            pass
+    try:
+        win32gui.EnumChildWindows(dlg.handle, _cb, None)
+    except Exception:
+        pass
+    return found[0] if found else None
+
+
+def _get_window_text(hwnd, maxlen=256):
+    """通过 WM_GETTEXT 读取窗口/控件文本（不展开、不遍历）。"""
+    user32 = _win32_user32()
+    buf = ctypes.create_unicode_buffer(maxlen)
+    user32.SendMessageW(hwnd, WM_GETTEXT, maxlen, ctypes.addressof(buf))
+    return buf.value or ""
+
+
+def _get_combo_hwnd(dlg, auto_id):
+    """获取组合框的原生窗口句柄（直接复用通用定位）。"""
+    return _get_control_hwnd(dlg, auto_id)
+
+
+def _read_combobox_items_win32(hwnd):
+    """通过 CB_GETCOUNT / CB_GETLBTEXT 直接读取 Win32 组合框的候选项（不展开）。"""
+    user32 = _win32_user32()
+    count = user32.SendMessageW(hwnd, CB_GETCOUNT, 0, 0)
+    if count is None or count <= 0:
+        return None
+    buf = ctypes.create_unicode_buffer(256)
+    items = []
+    seen = set()
+    for i in range(count):
+        user32.SendMessageW(hwnd, CB_GETLBTEXT, i, ctypes.addressof(buf))
+        txt = buf.value.strip()
+        if txt and txt not in seen:
+            seen.add(txt)
+            items.append(txt)
+    return items if items else None
+
+
 def get_checkbox_state_by_id(dlg, auto_id: str) -> Optional[bool]:
-    """通过 auto_id 获取复选框的选中状态。"""
+    """通过 auto_id 获取复选框的选中状态（Win32 BM_GETCHECK，速度快）。
+
+    Returns:
+        True=已勾选, False=未勾选, None=找不到控件
+    """
+    try:
+        hwnd = _get_control_hwnd(dlg, auto_id)
+        if hwnd is not None:
+            state = _win32_user32().SendMessageW(hwnd, BM_GETCHECK, 0, 0)
+            return bool(state & 1)
+    except Exception as e:
+        print(f"  [WARN] win32 读取复选框(auto_id={auto_id})失败，降级到 UIA: {e}")
+    # 降级：UIA
     try:
         cb = dlg.child_window(auto_id=auto_id, control_type="CheckBox")
         cb.wait("ready", timeout=2)
@@ -345,7 +436,16 @@ def get_checkbox_state_by_id(dlg, auto_id: str) -> Optional[bool]:
 
 
 def click_checkbox_by_id(dlg, auto_id: str):
-    """通过 auto_id 点击复选框（切换其勾选状态）。"""
+    """通过 auto_id 点击复选框（切换其勾选状态，Win32 BM_CLICK）。"""
+    try:
+        hwnd = _get_control_hwnd(dlg, auto_id)
+        if hwnd is not None:
+            _win32_user32().SendMessageW(hwnd, BM_CLICK, 0, 0)
+            print(f"[OK] 已点击复选框(auto_id={auto_id})(win32)")
+            return
+    except Exception as e:
+        print(f"  [WARN] win32 点击复选框(auto_id={auto_id})失败，降级到 UIA: {e}")
+    # 降级：UIA
     try:
         cb = dlg.child_window(auto_id=auto_id, control_type="CheckBox")
         cb.wait("ready", timeout=3)
@@ -356,7 +456,19 @@ def click_checkbox_by_id(dlg, auto_id: str):
 
 
 def get_combobox_selection_by_id(dlg, auto_id: str) -> Optional[str]:
-    """通过 auto_id 获取下拉框当前选择的文本。"""
+    """通过 auto_id 获取下拉框当前选择的文本（Win32 CB_GETCURSEL/CB_GETLBTEXT）。"""
+    try:
+        hwnd = _get_combo_hwnd(dlg, auto_id)
+        if hwnd is not None:
+            user32 = _win32_user32()
+            sel = user32.SendMessageW(hwnd, CB_GETCURSEL, 0, 0)
+            if sel is not None and sel >= 0:
+                buf = ctypes.create_unicode_buffer(256)
+                user32.SendMessageW(hwnd, CB_GETLBTEXT, sel, ctypes.addressof(buf))
+                return buf.value.strip() or None
+    except Exception as e:
+        print(f"  [WARN] win32 读取下拉选择失败，降级到 UIA: {e}")
+    # 降级：UIA
     try:
         combo = dlg.child_window(auto_id=auto_id, control_type="ComboBox")
         combo.wait("ready", timeout=2)
@@ -375,7 +487,17 @@ _NAV_MENU_ITEMS = {
 
 
 def get_combobox_items_by_id(dlg, auto_id: str) -> Optional[List[str]]:
-    """点击打开下拉框，读取其包含的所有候选项，然后关闭。"""
+    """读取下拉框全部候选项（Win32 CB_GETCOUNT/CB_GETLBTEXT 快速路径，不展开）。"""
+    try:
+        hwnd = _get_combo_hwnd(dlg, auto_id)
+        if hwnd is not None:
+            items = _read_combobox_items_win32(hwnd)
+            if items:
+                print(f"  [INFO] 已读取到 {len(items)} 个下拉候选项(win32快速路径)")
+                return items
+    except Exception as e:
+        print(f"  [WARN] win32 读取下拉候选项失败，降级到 UIA: {e}")
+    # 降级：UIA 展开 + ListItem
     try:
         combo = dlg.child_window(auto_id=auto_id, control_type="ComboBox", found_index=0)
         combo.wait("ready", timeout=2)
@@ -415,7 +537,25 @@ def get_combobox_items_by_id(dlg, auto_id: str) -> Optional[List[str]]:
 
 
 def get_edit_value_by_id(dlg, auto_id: str, as_number: bool = True) -> Optional[Any]:
-    """通过 auto_id 获取数值输入框(Edit)的值。"""
+    """通过 auto_id 获取数值输入框(Edit)的值（Win32 WM_GETTEXT，速度快）。
+
+    as_number=True 时尝试返回 int/float；为字符串值则返回 str。
+    """
+    try:
+        hwnd = _get_control_hwnd(dlg, auto_id)
+        if hwnd is not None:
+            text = _get_window_text(hwnd).strip().replace(",", "")
+            if not as_number:
+                return text
+            if text == "" or text == "-":
+                return None
+            try:
+                return int(text)
+            except ValueError:
+                return float(text)
+    except Exception as e:
+        print(f"  [WARN] win32 读取数值框(auto_id={auto_id})失败，降级到 UIA: {e}")
+    # 降级：UIA
     try:
         edit = dlg.child_window(auto_id=auto_id, control_type="Edit")
         edit.wait("exists", timeout=5)
