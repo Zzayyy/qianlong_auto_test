@@ -867,7 +867,7 @@ class AutomationGUI:
             self._build_combo_query_params()
 
     def _build_combo_auto_params(self):
-        """组合申报/拆分申报 全自动：仅委托数量"""
+        """组合申报/拆分申报全自动：委托数量。"""
         ttk.Label(self.params_frame, text="委托数量:").grid(row=0, column=0, sticky=tk.W, pady=5)
         ttk.Spinbox(self.params_frame, from_=1, to=999, textvariable=self.order_qty, width=10).grid(row=0, column=1, sticky=tk.W, pady=5)
 
@@ -1278,6 +1278,7 @@ class AutomationGUI:
         elif self.current_category == "组合申报":
             if script["name"] in self.COMBO_AUTO_SCRIPTS:
                 self._log(f"委托数量: {self.order_qty.get()}")
+                self._log("运行模式: 正式申报（全量遍历）")
             else:
                 self._log(f"导出格式: {self.export_format.get().upper()}")
                 self._log(f"自动打开: {'是' if self.auto_open.get() else '否'}")

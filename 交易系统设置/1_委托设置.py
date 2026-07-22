@@ -41,6 +41,9 @@
 import os
 import sys
 import time
+import ctypes
+import win32gui
+import win32con
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -450,14 +453,46 @@ def _try_keyboard_select(win):
 
 
 def switch_to_settings_panel(dlg, panel_name: str = PANEL_NAME) -> bool:
-    """在设置对话框中切换到指定标签页（左侧 ListItem 导航菜单）。
+    """在设置对话框中切换到指定标签页（左侧 ListBox 导航菜单）。
 
     控件结构（来自抓取文档）：
         ListBox - '' (auto_id="2210", control_type="List")
            ├── ListItem - '委托设置'
            ├── ListItem - '期权设置'
            └── ...
+
+    优先用 Win32 列表框消息（LB_FINDSTRINGEXACT 定位 + LB_SETCURSEL 选中 +
+    向父窗口发 WM_COMMAND/LBN_SELCHANGE 通知），不依赖 UIA 树遍历与真实点击；
+    失败则降级回 UIA 的 click_input()。
     """
+    # ── 快速路径：Win32 列表框消息 ──
+    try:
+        hwnd = _get_control_hwnd(dlg, "2210")
+        if hwnd is not None:
+            user32 = _win32_user32()
+            buf = ctypes.create_unicode_buffer(256)
+            count = user32.SendMessageW(hwnd, LB_GETCOUNT, 0, 0)
+            target = -1
+            for i in range(count if isinstance(count, int) and count > 0 else 0):
+                user32.SendMessageW(hwnd, LB_GETTEXT, i, ctypes.addressof(buf))
+                if buf.value.strip() == panel_name:
+                    target = i
+                    break
+            if target >= 0:
+                user32.SendMessageW(hwnd, LB_SETCURSEL, target, 0)
+                # 通知父窗口选择已改变，触发面板切换逻辑
+                parent = win32gui.GetParent(hwnd)
+                ctrl_id = win32gui.GetDlgCtrlID(hwnd)
+                wparam = (LBN_SELCHANGE << 16) | ctrl_id
+                win32gui.SendMessage(parent, WM_COMMAND, wparam, hwnd)
+                time.sleep(0.5)
+                print(f"[OK] 已切换到'{panel_name}'面板(win32)")
+                return True
+            print(f"  [WARN] 在列表框中未找到'{panel_name}'项，降级到 UIA")
+    except Exception as e:
+        print(f"  [WARN] win32 切换面板失败，降级到 UIA: {e}")
+
+    # ── 降级路径：原 UIA 方案 ──
     try:
         nav_list = dlg.child_window(auto_id="2210", control_type="List")
         nav_list.wait("ready", timeout=5)
@@ -467,7 +502,7 @@ def switch_to_settings_panel(dlg, panel_name: str = PANEL_NAME) -> bool:
         item.wait("visible", timeout=3)
         item.click_input()
         time.sleep(0.5)
-        print(f"[OK] 已切换到'{panel_name}'面板")
+        print(f"[OK] 已切换到'{panel_name}'面板(UIA)")
         return True
     except Exception as e:
         print(f"[WARN] 切换到'{panel_name}'面板失败: {e}")
@@ -475,11 +510,20 @@ def switch_to_settings_panel(dlg, panel_name: str = PANEL_NAME) -> bool:
 
 
 def get_checkbox_state_by_id(dlg, auto_id: str) -> Optional[bool]:
-    """通过 auto_id 获取复选框的选中状态。
+    """通过 auto_id 获取复选框的选中状态（Win32 BM_GETCHECK，速度快）。
 
     Returns:
         True=已勾选, False=未勾选, None=找不到控件
     """
+    try:
+        hwnd = _get_control_hwnd(dlg, auto_id)
+        if hwnd is not None:
+            state = _win32_user32().SendMessageW(hwnd, BM_GETCHECK, 0, 0)
+            return bool(state & 1)
+    except Exception as e:
+        print(f"  [WARN] win32 读取复选框(auto_id={auto_id})失败，降级到 UIA: {e}")
+
+    # 降级：UIA
     try:
         cb = dlg.child_window(auto_id=auto_id, control_type="CheckBox")
         cb.wait("ready", timeout=2)
@@ -490,7 +534,24 @@ def get_checkbox_state_by_id(dlg, auto_id: str) -> Optional[bool]:
 
 
 def set_checkbox_by_id(dlg, auto_id: str, value: bool) -> bool:
-    """通过 auto_id 设置复选框的状态（点击以切换）。"""
+    """通过 auto_id 设置复选框的状态（Win32 BM_CLICK 切换，触发 BN_CLICKED）。"""
+    try:
+        hwnd = _get_control_hwnd(dlg, auto_id)
+        if hwnd is not None:
+            user32 = _win32_user32()
+            cur = user32.SendMessageW(hwnd, BM_GETCHECK, 0, 0)
+            cur_checked = bool(cur & 1)
+            if cur_checked != value:
+                user32.SendMessageW(hwnd, BM_CLICK, 0, 0)
+                time.sleep(0.2)
+                print(f"  [OK] 复选框(auto_id={auto_id})已设为{value}(win32)")
+            else:
+                print(f"  [INFO] 复选框(auto_id={auto_id})已经是{value}，无需更改")
+            return True
+    except Exception as e:
+        print(f"  [WARN] win32 设置复选框(auto_id={auto_id})失败，降级到 UIA: {e}")
+
+    # 降级：UIA
     try:
         cb = dlg.child_window(auto_id=auto_id, control_type="CheckBox")
         cb.wait("ready", timeout=2)
@@ -505,6 +566,75 @@ def set_checkbox_by_id(dlg, auto_id: str, value: bool) -> bool:
     except Exception as e:
         print(f"  [ERROR] 设置复选框(auto_id={auto_id})失败: {e}")
         return False
+
+
+def _win32_user32():
+    """返回已配置好参数类型的 user32 句柄，用于直接向 Win32 控件发消息。"""
+    from ctypes import wintypes
+    user32 = ctypes.windll.user32
+    user32.SendMessageW.argtypes = [
+        wintypes.HWND, wintypes.UINT, wintypes.WPARAM, ctypes.c_void_p
+    ]
+    user32.SendMessageW.restype = wintypes.LPARAM
+    return user32
+
+
+# ---- Win32 消息常量（来自 win32con）----
+WM_GETTEXT = win32con.WM_GETTEXT
+WM_SETTEXT = win32con.WM_SETTEXT
+WM_COMMAND = win32con.WM_COMMAND
+BM_GETCHECK = win32con.BM_GETCHECK
+BM_SETCHECK = win32con.BM_SETCHECK
+BM_CLICK = win32con.BM_CLICK
+BST_CHECKED = win32con.BST_CHECKED
+BST_UNCHECKED = win32con.BST_UNCHECKED
+CB_GETCOUNT = win32con.CB_GETCOUNT
+CB_GETCURSEL = win32con.CB_GETCURSEL
+CB_GETLBTEXT = win32con.CB_GETLBTEXT
+LB_GETCOUNT = win32con.LB_GETCOUNT
+LB_GETCURSEL = win32con.LB_GETCURSEL
+LB_GETTEXT = win32con.LB_GETTEXT
+LB_GETTEXTLEN = win32con.LB_GETTEXTLEN
+LB_FINDSTRINGEXACT = win32con.LB_FINDSTRINGEXACT
+LB_SETCURSEL = win32con.LB_SETCURSEL
+LBN_SELCHANGE = win32con.LBN_SELCHANGE
+
+
+def _get_control_hwnd(dlg, auto_id: str) -> Optional[int]:
+    """用 win32gui 按控件 ID (DlgCtrlID) 查找子窗口句柄（最快，不触发 UIA 树遍历）。
+
+    本文件所有控件 auto_id 均对应原生对话框控件 ID，故可直接用
+    GetDlgCtrlID 枚举定位。找不到返回 None。
+    """
+    try:
+        target = int(auto_id)
+    except (TypeError, ValueError):
+        return None
+    found = []
+    def _cb(hwnd, _):
+        try:
+            if win32gui.GetDlgCtrlID(hwnd) == target:
+                found.append(hwnd)
+        except Exception:
+            pass
+    try:
+        win32gui.EnumChildWindows(dlg.handle, _cb, None)
+    except Exception:
+        pass
+    return found[0] if found else None
+
+
+def _get_window_text(hwnd: int, maxlen: int = 256) -> str:
+    """通过 WM_GETTEXT 读取窗口/控件文本（不展开、不遍历）。"""
+    user32 = _win32_user32()
+    buf = ctypes.create_unicode_buffer(maxlen)
+    user32.SendMessageW(hwnd, WM_GETTEXT, maxlen, ctypes.addressof(buf))
+    return buf.value or ""
+
+
+def _get_combo_hwnd(dlg, auto_id: str) -> Optional[int]:
+    """获取组合框的原生窗口句柄（直接复用通用定位）。"""
+    return _get_control_hwnd(dlg, auto_id)
 
 
 def get_combobox_selection_by_id(dlg, auto_id: str) -> Optional[str]:
@@ -617,25 +747,58 @@ def get_combobox_items_by_id(dlg, auto_id: str) -> Optional[List[str]]:
         return None
 
 
+def get_combobox_items_by_id(dlg, auto_id: str) -> Optional[List[str]]:
+    """读取下拉框的全部候选项（已去重）。
+
+    优化（重点提速项）：优先用 win32 直接对组合框发送 CB_GETCOUNT /
+    CB_GETLBTEXT 消息读取列表数据 —— 不展开下拉层、不做 UIA 全树遍历，
+    速度比原方案快一个数量级；仅当控件非标准 Win32 组合框（拿不到句柄
+    或读取为空）时，才降级回原 UIA 方案（展开 + 遍历 ListItem），保证
+    与旧逻辑行为一致、结果完全相同。
+
+    Returns:
+        候选项文本列表（已去除空白并去重），找不到或无法读取返回None
+    """
+    # ── 快速路径：win32 消息直接读列表（不展开下拉层）──
+    try:
+        hwnd = _get_combo_hwnd(dlg, auto_id)
+        if hwnd is not None:
+            items = _read_combobox_items_win32(hwnd)
+            if items:
+                print(f"  [INFO] 已读取到 {len(items)} 个下拉候选项(win32快速路径)")
+                return items
+    except Exception as e:
+        print(f"  [WARN] win32 读取下拉候选项失败，降级到 UIA: {e}")
+
+    # ── 降级路径：原 UIA 方案 ──
+    return _get_combobox_items_uia(dlg, auto_id)
+
+
 def get_edit_value_by_id(dlg, auto_id: str) -> Optional[int]:
-    """通过 auto_id 获取数值输入框(Edit)的值。
+    """通过 auto_id 获取数值输入框(Edit)的值（Win32 WM_GETTEXT，速度快）。
 
     Returns:
         整数值，找不到返回None
     """
     try:
+        hwnd = _get_control_hwnd(dlg, auto_id)
+        if hwnd is not None:
+            text = _get_window_text(hwnd).strip().replace(",", "")
+            return int(text) if text.isdigit() else None
+    except Exception as e:
+        print(f"  [WARN] win32 读取数值框(auto_id={auto_id})失败，降级到 UIA: {e}")
+
+    # 降级：UIA
+    try:
         edit = dlg.child_window(auto_id=auto_id, control_type="Edit")
         edit.wait("exists", timeout=5)
-        # 子控件刚随上级开关启用时可能尚未完全就绪，放宽 ready 要求并重试
         for _ in range(2):
             try:
                 edit.wait("ready", timeout=2)
             except Exception:
                 pass
             try:
-                text = edit.get_value().strip()
-                # 清理可能的逗号分隔符
-                text = text.replace(",", "")
+                text = edit.get_value().strip().replace(",", "")
                 return int(text) if text.isdigit() else None
             except Exception:
                 time.sleep(0.5)
@@ -646,52 +809,40 @@ def get_edit_value_by_id(dlg, auto_id: str) -> Optional[int]:
 
 
 def get_radiobutton_state_by_id(dlg, auto_id: str) -> Optional[bool]:
-    """通过 auto_id 获取 RadioButton 的选中状态。
-
-    多策略检测，兼容不同控件实现：
-        1. UIA TogglePattern (get_toggle_state)
-        2. SelectionItemPattern (is_selected / element_info.selection_item_is_selected)
-        3. LegacyAccessible State 文本含 "checked"
-    任一策略命中即返回；全部失败返回 None。
+    """通过 auto_id 获取 RadioButton 的选中状态（Win32 BM_GETCHECK，速度快）。
 
     Returns:
         True=已选中, False=未选中, None=找不到
     """
     try:
+        hwnd = _get_control_hwnd(dlg, auto_id)
+        if hwnd is not None:
+            state = _win32_user32().SendMessageW(hwnd, BM_GETCHECK, 0, 0)
+            return bool(state & 1)
+    except Exception as e:
+        print(f"  [WARN] win32 读取RadioButton(auto_id={auto_id})失败，降级到 UIA: {e}")
+
+    # 降级：UIA（多策略兼容）
+    try:
         rb = dlg.child_window(auto_id=auto_id, control_type="RadioButton")
         rb.wait("exists", timeout=5)
-        # 子控件刚随上级开关启用时可能尚未完全就绪，放宽 ready 要求并重试
         for _ in range(2):
             try:
                 rb.wait("ready", timeout=2)
             except Exception:
                 pass
-
-            # 策略1: UIA TogglePattern
-            try:
-                return bool(rb.get_toggle_state())
-            except Exception:
-                pass
-
-            # 策略2: SelectionItemPattern (is_selected)
-            try:
-                return bool(rb.is_selected())
-            except Exception:
-                pass
-
-            # 策略3: 直接读取 element_info 选中属性
-            try:
-                return bool(rb.element_info.selection_item_is_selected)
-            except Exception:
-                pass
-
-            # 策略4: LegacyAccessible State 文本
+            for fn in (lambda: bool(rb.get_toggle_state()),
+                       lambda: bool(rb.is_selected()),
+                       lambda: bool(rb.element_info.selection_item_is_selected)):
+                try:
+                    return fn()
+                except Exception:
+                    pass
             try:
                 state = rb.legacy_properties().get("State", "") or ""
                 return "checked" in state.lower()
             except Exception:
                 pass
-
             time.sleep(0.5)
         return None
     except Exception as e:
