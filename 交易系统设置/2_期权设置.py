@@ -54,6 +54,9 @@
 import os
 import sys
 import time
+import ctypes
+import win32gui
+import win32con
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -508,8 +511,104 @@ def switch_to_settings_panel(dlg, panel_name: str = PANEL_NAME) -> bool:
         return False
 
 
+# ============ Win32 消息加速（与 1_委托设置.py 一致）============
+def _win32_user32():
+    """返回已配置好参数类型的 user32 句柄，用于直接向 Win32 控件发消息。"""
+    from ctypes import wintypes
+    user32 = ctypes.windll.user32
+    user32.SendMessageW.argtypes = [
+        wintypes.HWND, wintypes.UINT, wintypes.WPARAM, ctypes.c_void_p
+    ]
+    user32.SendMessageW.restype = wintypes.LPARAM
+    return user32
+
+
+# ---- Win32 消息常量（来自 win32con）----
+WM_GETTEXT = win32con.WM_GETTEXT
+WM_SETTEXT = win32con.WM_SETTEXT
+WM_COMMAND = win32con.WM_COMMAND
+BM_GETCHECK = win32con.BM_GETCHECK
+BM_SETCHECK = win32con.BM_SETCHECK
+BM_CLICK = win32con.BM_CLICK
+BST_CHECKED = win32con.BST_CHECKED
+BST_UNCHECKED = win32con.BST_UNCHECKED
+CB_GETCOUNT = win32con.CB_GETCOUNT
+CB_GETCURSEL = win32con.CB_GETCURSEL
+CB_GETLBTEXT = win32con.CB_GETLBTEXT
+LB_GETCOUNT = win32con.LB_GETCOUNT
+LB_GETCURSEL = win32con.LB_GETCURSEL
+LB_GETTEXT = win32con.LB_GETTEXT
+LB_GETTEXTLEN = win32con.LB_GETTEXTLEN
+LB_FINDSTRINGEXACT = win32con.LB_FINDSTRINGEXACT
+LB_SETCURSEL = win32con.LB_SETCURSEL
+LBN_SELCHANGE = win32con.LBN_SELCHANGE
+
+
+def _get_control_hwnd(dlg, auto_id: str):
+    """用 win32gui 按控件 ID (DlgCtrlID) 查找子窗口句柄（最快，不触发 UIA 树遍历）。"""
+    try:
+        target = int(auto_id)
+    except (TypeError, ValueError):
+        return None
+    found = []
+    def _cb(hwnd, _):
+        try:
+            if win32gui.GetDlgCtrlID(hwnd) == target:
+                found.append(hwnd)
+        except Exception:
+            pass
+    try:
+        win32gui.EnumChildWindows(dlg.handle, _cb, None)
+    except Exception:
+        pass
+    return found[0] if found else None
+
+
+def _get_window_text(hwnd: int, maxlen: int = 256) -> str:
+    """通过 WM_GETTEXT 读取窗口/控件文本（不展开、不遍历）。"""
+    user32 = _win32_user32()
+    buf = ctypes.create_unicode_buffer(maxlen)
+    user32.SendMessageW(hwnd, WM_GETTEXT, maxlen, ctypes.addressof(buf))
+    return buf.value or ""
+
+
+def _get_combo_hwnd(dlg, auto_id: str):
+    """获取组合框的原生窗口句柄（直接复用通用定位）。"""
+    return _get_control_hwnd(dlg, auto_id)
+
+
+def _read_combobox_items_win32(hwnd: int):
+    """通过 CB_GETCOUNT / CB_GETLBTEXT 直接读取 Win32 组合框的候选项（不展开）。"""
+    user32 = _win32_user32()
+    count = user32.SendMessageW(hwnd, CB_GETCOUNT, 0, 0)
+    if count is None or count <= 0:
+        return None
+    buf = ctypes.create_unicode_buffer(256)
+    items = []
+    seen = set()
+    for i in range(count):
+        user32.SendMessageW(hwnd, CB_GETLBTEXT, i, ctypes.addressof(buf))
+        txt = buf.value.strip()
+        if txt and txt not in seen:
+            seen.add(txt)
+            items.append(txt)
+    return items if items else None
+
+
 def get_checkbox_state_by_id(dlg, auto_id: str) -> Optional[bool]:
-    """通过 auto_id 获取复选框的选中状态。"""
+    """通过 auto_id 获取复选框的选中状态（Win32 BM_GETCHECK，速度快）。
+
+    Returns:
+        True=已勾选, False=未勾选, None=找不到控件
+    """
+    try:
+        hwnd = _get_control_hwnd(dlg, auto_id)
+        if hwnd is not None:
+            state = _win32_user32().SendMessageW(hwnd, BM_GETCHECK, 0, 0)
+            return bool(state & 1)
+    except Exception as e:
+        print(f"  [WARN] win32 读取复选框(auto_id={auto_id})失败，降级到 UIA: {e}")
+    # 降级：UIA
     try:
         cb = dlg.child_window(auto_id=auto_id, control_type="CheckBox")
         cb.wait("ready", timeout=2)
@@ -520,7 +619,16 @@ def get_checkbox_state_by_id(dlg, auto_id: str) -> Optional[bool]:
 
 
 def click_checkbox_by_id(dlg, auto_id: str):
-    """通过 auto_id 点击复选框（切换其勾选状态）。"""
+    """通过 auto_id 点击复选框（切换其勾选状态，Win32 BM_CLICK）。"""
+    try:
+        hwnd = _get_control_hwnd(dlg, auto_id)
+        if hwnd is not None:
+            _win32_user32().SendMessageW(hwnd, BM_CLICK, 0, 0)
+            print(f"[OK] 已点击复选框(auto_id={auto_id})(win32)")
+            return
+    except Exception as e:
+        print(f"  [WARN] win32 点击复选框(auto_id={auto_id})失败，降级到 UIA: {e}")
+    # 降级：UIA
     try:
         cb = dlg.child_window(auto_id=auto_id, control_type="CheckBox")
         cb.wait("ready", timeout=3)
@@ -531,7 +639,19 @@ def click_checkbox_by_id(dlg, auto_id: str):
 
 
 def get_combobox_selection_by_id(dlg, auto_id: str) -> Optional[str]:
-    """通过 auto_id 获取下拉框当前选择的文本。"""
+    """通过 auto_id 获取下拉框当前选择的文本（Win32 CB_GETCURSEL/CB_GETLBTEXT）。"""
+    try:
+        hwnd = _get_combo_hwnd(dlg, auto_id)
+        if hwnd is not None:
+            user32 = _win32_user32()
+            sel = user32.SendMessageW(hwnd, CB_GETCURSEL, 0, 0)
+            if sel is not None and sel >= 0:
+                buf = ctypes.create_unicode_buffer(256)
+                user32.SendMessageW(hwnd, CB_GETLBTEXT, sel, ctypes.addressof(buf))
+                return buf.value.strip() or None
+    except Exception as e:
+        print(f"  [WARN] win32 读取下拉选择失败，降级到 UIA: {e}")
+    # 降级：UIA
     try:
         combo = dlg.child_window(auto_id=auto_id, control_type="ComboBox")
         combo.wait("ready", timeout=2)
@@ -550,7 +670,17 @@ _NAV_MENU_ITEMS = {
 
 
 def get_combobox_items_by_id(dlg, auto_id: str) -> Optional[List[str]]:
-    """点击打开下拉框，读取其包含的所有候选项，然后关闭。"""
+    """读取下拉框全部候选项（Win32 CB_GETCOUNT/CB_GETLBTEXT 快速路径，不展开）。"""
+    try:
+        hwnd = _get_combo_hwnd(dlg, auto_id)
+        if hwnd is not None:
+            items = _read_combobox_items_win32(hwnd)
+            if items:
+                print(f"  [INFO] 已读取到 {len(items)} 个下拉候选项(win32快速路径)")
+                return items
+    except Exception as e:
+        print(f"  [WARN] win32 读取下拉候选项失败，降级到 UIA: {e}")
+    # 降级：UIA 展开 + ListItem
     try:
         combo = dlg.child_window(auto_id=auto_id, control_type="ComboBox", found_index=0)
         combo.wait("ready", timeout=2)
@@ -593,10 +723,25 @@ def get_combobox_items_by_id(dlg, auto_id: str) -> Optional[List[str]]:
 
 
 def get_edit_value_by_id(dlg, auto_id: str, as_number: bool = True) -> Optional[Any]:
-    """通过 auto_id 获取数值输入框(Edit)的值。
+    """通过 auto_id 获取数值输入框(Edit)的值（Win32 WM_GETTEXT，速度快）。
 
     as_number=True 时尝试返回 int/float；为字符串值则返回 str。
     """
+    try:
+        hwnd = _get_control_hwnd(dlg, auto_id)
+        if hwnd is not None:
+            text = _get_window_text(hwnd).strip().replace(",", "")
+            if not as_number:
+                return text
+            if text == "" or text == "-":
+                return None
+            try:
+                return int(text)
+            except ValueError:
+                return float(text)
+    except Exception as e:
+        print(f"  [WARN] win32 读取数值框(auto_id={auto_id})失败，降级到 UIA: {e}")
+    # 降级：UIA
     try:
         edit = dlg.child_window(auto_id=auto_id, control_type="Edit")
         edit.wait("exists", timeout=5)
@@ -626,14 +771,15 @@ def get_edit_value_by_id(dlg, auto_id: str, as_number: bool = True) -> Optional[
 
 
 def get_radiobutton_state_by_id(dlg, auto_id: str) -> Optional[bool]:
-    """通过 auto_id 获取 RadioButton 的选中状态。
-
-    多策略检测，兼容不同控件实现：
-        1. UIA TogglePattern (get_toggle_state)
-        2. SelectionItemPattern (is_selected / element_info.selection_item_is_selected)
-        3. LegacyAccessible State 文本含 "checked"
-    任一策略命中即返回；全部失败返回 None。
-    """
+    """通过 auto_id 获取 RadioButton 的选中状态（Win32 BM_GETCHECK，速度快）。"""
+    try:
+        hwnd = _get_control_hwnd(dlg, auto_id)
+        if hwnd is not None:
+            state = _win32_user32().SendMessageW(hwnd, BM_GETCHECK, 0, 0)
+            return bool(state & 1)
+    except Exception as e:
+        print(f"  [WARN] win32 读取RadioButton(auto_id={auto_id})失败，降级到 UIA: {e}")
+    # 降级：UIA（多策略兼容）
     try:
         rb = dlg.child_window(auto_id=auto_id, control_type="RadioButton")
         rb.wait("exists", timeout=5)
@@ -642,32 +788,18 @@ def get_radiobutton_state_by_id(dlg, auto_id: str) -> Optional[bool]:
                 rb.wait("ready", timeout=2)
             except Exception:
                 pass
-
-            # 策略1: UIA TogglePattern
-            try:
-                return bool(rb.get_toggle_state())
-            except Exception:
-                pass
-
-            # 策略2: SelectionItemPattern (is_selected)
-            try:
-                return bool(rb.is_selected())
-            except Exception:
-                pass
-
-            # 策略3: 直接读取 element_info 选中属性
-            try:
-                return bool(rb.element_info.selection_item_is_selected)
-            except Exception:
-                pass
-
-            # 策略4: LegacyAccessible State 文本
+            for fn in (lambda: bool(rb.get_toggle_state()),
+                       lambda: bool(rb.is_selected()),
+                       lambda: bool(rb.element_info.selection_item_is_selected)):
+                try:
+                    return fn()
+                except Exception:
+                    pass
             try:
                 state = rb.legacy_properties().get("State", "") or ""
                 return "checked" in state.lower()
             except Exception:
                 pass
-
             time.sleep(0.5)
         return None
     except Exception as e:
@@ -1098,7 +1230,23 @@ def find_popup_combobox(popup, auto_id: str, title_hint: str = "") -> Optional[A
 
 
 def get_popup_combobox_text(cb) -> Optional[str]:
-    """读取弹窗下拉框当前选中文本（多策略容错）。"""
+    """读取弹窗下拉框当前选中文本（Win32 优先，多策略容错）。"""
+    # 策略0：Win32 CB_GETCURSEL + CB_GETLBTEXT（不展开下拉层）
+    try:
+        hwnd = cb.element_info.handle
+        if hwnd:
+            user32 = _win32_user32()
+            sel = user32.SendMessageW(hwnd, CB_GETCURSEL, 0, 0)
+            if sel is not None and sel >= 0:
+                buf = ctypes.create_unicode_buffer(256)
+                user32.SendMessageW(hwnd, CB_GETLBTEXT, sel, ctypes.addressof(buf))
+                s = buf.value.strip()
+                if s:
+                    print(f"  [DEBUG] 读取下拉框当前值: 策略'win32 CB' 生效 -> {s!r}")
+                    return s
+    except Exception as e:
+        print(f"  [DEBUG] 读取下拉框当前值: 策略'win32 CB' 失败: {e}")
+
     getters = [
         ("selected_text()", lambda: cb.selected_text()),
         ("legacy Value", lambda: cb.legacy_properties().get("Value")),
@@ -1118,7 +1266,18 @@ def get_popup_combobox_text(cb) -> Optional[str]:
 
 
 def get_popup_combobox_items(cb) -> Optional[List[str]]:
-    """读取弹窗下拉框候选项：先展开读 ListItem，失败再兜底 item_texts/texts。"""
+    """读取弹窗下拉框候选项（Win32 CB_GETCOUNT/CB_GETLBTEXT 优先，不展开）。"""
+    # 策略0：Win32 直接读列表（不展开下拉层）
+    try:
+        hwnd = cb.element_info.handle
+        if hwnd:
+            items = _read_combobox_items_win32(hwnd)
+            if items:
+                print(f"  [DEBUG] 读取下拉框候选项: 策略'win32 CB' 生效 -> {items}")
+                return items
+    except Exception as e:
+        print(f"  [DEBUG] 读取下拉框候选项: 策略'win32 CB' 失败: {e}")
+
     # 策略1：展开 + ListItem
     try:
         cb.expand()

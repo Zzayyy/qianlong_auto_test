@@ -26,5 +26,6 @@ logs/
 *.log
 
 .codebuddy/
+.workbuddy/
 
 交易系统设置_测试结果/

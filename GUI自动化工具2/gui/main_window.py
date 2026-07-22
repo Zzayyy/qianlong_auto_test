@@ -436,11 +436,8 @@ class AutomationGUI:
         if cur_sel:
             self.script_tree.selection_remove(*cur_sel)
         self._rebuild_params()
-        # 仅下单显示数据预览
-        if category == "下单":
-            self.preview_frame.pack(fill=tk.X, pady=(0, 10))
-        else:
-            self.preview_frame.pack_forget()
+        # 仅下单显示数据预览（其它分类隐藏并清空残留数据）
+        self._update_preview_visibility(category == "下单")
         self._log(f"切换分类: {category}")
         self.logger.info(f"切换分类: {category}")
         # 空闲时同步状态栏（运行中不覆盖）
@@ -467,10 +464,8 @@ class AutomationGUI:
             self.current_category = category
             self.category_label.config(text=f"当前功能: {category}")
             self._rebuild_params()
-            if category == "下单":
-                self.preview_frame.pack(fill=tk.X, pady=(0, 10))
-            else:
-                self.preview_frame.pack_forget()
+            # 仅下单显示数据预览（其它分类隐藏并清空残留数据）
+            self._update_preview_visibility(category == "下单")
 
     def _on_tree_double_click(self, event):
         """双击树：仅当双击具体脚本节点时才执行，双击分类节点只展开/收起"""
@@ -784,6 +779,8 @@ class AutomationGUI:
     def _update_params_for_selected_script(self):
         """根据选中的脚本更新参数面板"""
         if self.current_category not in ("下单", "组合申报"):
+            # 查询/通知查询/结算单/交易系统设置 等：不需要数据预览，隐藏并清空
+            self._update_preview_visibility(False)
             return
         script = self._get_selected_script()
         if not script:
@@ -797,10 +794,10 @@ class AutomationGUI:
             # 根据脚本决定是否显示数据预览
             if script["name"] in ("5.期权下单_一键导出", "6.全选撤单"):
                 # 这两个脚本不需要数据预览
-                self.preview_frame.pack_forget()
+                self._update_preview_visibility(False)
             else:
                 # 其他脚本需要数据预览
-                self.preview_frame.pack(fill=tk.X, pady=(0, 10))
+                self._update_preview_visibility(True)
 
             # 根据脚本更新参数配置面板
             if script["name"] == "6.全选撤单":
@@ -817,6 +814,8 @@ class AutomationGUI:
                 # 其他脚本：显示订单参数配置
                 self._build_order_params()
         elif self.current_category == "组合申报":
+            # 组合申报不需要数据预览，隐藏并清空残留数据
+            self._update_preview_visibility(False)
             # 全自动脚本与查询脚本使用不同参数
             self._build_combo_params()
 
@@ -1062,6 +1061,22 @@ class AutomationGUI:
         except Exception as e:
             self.preview_info.config(text=f"读取失败: {e}", foreground="red")
             self._log(f"[预览] Excel读取失败: {e}")
+
+    def _update_preview_visibility(self, show):
+        """显示/隐藏数据预览面板。
+
+        隐藏时同时清空已加载的预览数据与 Excel 文件选择，
+        避免切换到其它脚本（如查询）时残留旧数据预览。
+        """
+        if show:
+            self.preview_frame.pack(fill=tk.X, pady=(0, 10))
+            return
+        # 隐藏面板并清空残留数据，防止切回其它脚本后旧预览仍可见
+        self.preview_frame.pack_forget()
+        self.preview_tree.delete(*self.preview_tree.get_children())
+        self.preview_tree["columns"] = ()
+        self.preview_info.config(text="选择Excel文件后显示数据预览", foreground="gray")
+        self.xlsx_file.set("")
 
     def _get_selected_script(self):
         """获取选中的脚本（仅当树中选中具体脚本节点时返回）"""
