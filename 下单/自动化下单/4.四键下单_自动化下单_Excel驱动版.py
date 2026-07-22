@@ -539,7 +539,7 @@ def press_enter_to_confirm(
                 continue
 
         time.sleep(0.15)
-    print(f"[WARN] 等待弹窗超时({timeout}s),匹配: {dialog_patterns}")
+    print(f"[WARN] 等待弹窗({timeout}s),匹配: {dialog_patterns}")
     return False
 
 
@@ -553,7 +553,7 @@ def confirm_all_dialogs(
     """自动确认所有弹窗，直到一段时间内没有新弹窗出现。"""
     count = 0
     for i in range(1, max_dialogs + 1):
-        print(f"[..] 等待第 {i} 个弹窗 (超时{no_dialog_timeout}s无新弹窗则结束)...")
+        print(f"[WARN] 等待第 {i} 个弹窗 ({no_dialog_timeout}s无新弹窗则结束)...")
         ok = press_enter_to_confirm(main_win=main_win, timeout=per_dialog_timeout)
         if ok:
             count += 1

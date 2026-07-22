@@ -402,12 +402,12 @@ def set_checkbox(main_hwnd, name: str, enable: bool, cache: dict = None, main_wi
         if enable:
             print(f"[WARN] 复选框 {name} 为灰色(不可用),无法勾选(可能'自动'已勾选),跳过")
         else:
-            print(f"[--] 复选框 {name} 为灰色(不可用),跳过")
+            print(f"[WARN] 复选框 {name} 为灰色(不可用),跳过")
         return
 
     is_checked = win32gui.SendMessage(cb, win32con.BM_GETCHECK, 0, 0) != 0
     if enable == is_checked:
-        print(f"[--] 复选框 {name} 已是{'勾选' if enable else '取消勾选'}状态,跳过")
+        print(f"[WARN] 复选框 {name} 已是{'勾选' if enable else '取消勾选'}状态,跳过")
         return
 
     # 用真实鼠标点击切换(等价于 click_input,确保触发软件逻辑,如"自动"会弹出自动净仓弹窗)
@@ -578,7 +578,7 @@ def press_enter_to_confirm(
                 continue
 
         time.sleep(0.15)
-    print(f"[WARN] 等待弹窗超时({timeout}s),匹配: {dialog_patterns}")
+    print(f"[WARN] 等待弹窗({timeout}s),匹配: {dialog_patterns}")
     return False
 
 
@@ -600,7 +600,7 @@ def confirm_all_dialogs(
     """
     count = 0
     for i in range(1, max_dialogs + 1):
-        print(f"[..] 等待第 {i} 个弹窗 (超时{no_dialog_timeout}s无新弹窗则结束)...")
+        print(f"[WARN] 等待第 {i} 个弹窗 ({no_dialog_timeout}s无新弹窗则结束)...")
         ok = press_enter_to_confirm(main_win=main_win, timeout=per_dialog_timeout)
         if ok:
             count += 1
