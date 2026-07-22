@@ -173,7 +173,7 @@ class TaskCenter:
         self.tree.heading("category", text="分类")
         self.tree.heading("status", text="状态")
         self.tree.column("no", width=34, stretch=False, anchor=tk.CENTER)
-        self.tree.column("task", width=160, stretch=False)
+        self.tree.column("task", width=160, stretch=True)
         self.tree.column("category", width=80, stretch=False)
         self.tree.column("status", width=55, stretch=False, anchor=tk.CENTER)
 
