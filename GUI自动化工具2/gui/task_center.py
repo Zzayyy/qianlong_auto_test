@@ -105,6 +105,7 @@ class TaskCenter:
         self._transient_on_complete = None
         self._transient_on_progress = None
         self._transient_label = ""
+        self._settings_batch = None
 
         # 持久化路径
         self.file_path = os.path.join(self.gui.log_dir, "task_center.json")
@@ -836,6 +837,15 @@ class TaskCenter:
         # 复位所有任务状态
         for t in self.tasks:
             t["status"] = self.ST_PENDING
+            t.pop("_settings_runtime", None)
+        try:
+            self._settings_batch = self.controller.begin_settings_batch(
+                "任务中心", self.tasks
+            )
+        except OSError as exc:
+            self.is_running = False
+            messagebox.showerror("报告中心", f"无法创建报告批次:\n{exc}")
+            return
 
         self._set_running_ui(True)
         self._refresh()
@@ -846,7 +856,14 @@ class TaskCenter:
         # 通过主窗口的执行引擎驱动（复用其回调机制）
         self.controller.run_task_center(self)
 
-    def start_transient(self, tasks, on_complete=None, on_progress=None, label="临时任务"):
+    def start_transient(
+        self,
+        tasks,
+        on_complete=None,
+        on_progress=None,
+        label="临时任务",
+        settings_batch=None,
+    ):
         """执行不落盘的临时队列，供报告中心运行完整设置检查。
 
         临时队列执行期间会显示在任务中心，但不会覆盖 task_center.json，
@@ -869,6 +886,7 @@ class TaskCenter:
         self._transient_on_complete = on_complete
         self._transient_on_progress = on_progress
         self._transient_label = label
+        self._settings_batch = settings_batch
 
         self.is_running = True
         self._stop = False
@@ -930,6 +948,19 @@ class TaskCenter:
         # 把 start_idx 起的未完成任务复位为「等待」后继续
         for t in self.tasks[start_idx:]:
             t["status"] = self.ST_PENDING
+        if self._settings_batch is None:
+            try:
+                self._settings_batch = self.controller.begin_settings_batch(
+                    "任务中心", self.tasks
+                )
+            except OSError as exc:
+                self.is_running = False
+                messagebox.showerror("报告中心", f"无法创建报告批次:\n{exc}")
+                return
+        else:
+            self.controller.resume_settings_batch(
+                self._settings_batch, self.tasks
+            )
 
         self._set_running_ui(True)
         self._refresh()
@@ -1019,6 +1050,9 @@ class TaskCenter:
                 )
             except Exception as exc:
                 self.gui._log(f"[任务中心] 临时队列进度回调异常: {exc}")
+        self.controller.update_settings_batch(
+            self._settings_batch, tasks, final=False
+        )
         self.run_next()
 
     def on_error(self, exc, item):
@@ -1051,6 +1085,9 @@ class TaskCenter:
                 )
             except Exception as callback_exc:
                 self.gui._log(f"[任务中心] 临时队列进度回调异常: {callback_exc}")
+        self.controller.update_settings_batch(
+            self._settings_batch, tasks, final=False
+        )
         self.run_next()
 
     def _finish_all(self, msg):
@@ -1063,12 +1100,20 @@ class TaskCenter:
         on_complete = self._transient_on_complete
         transient_label = self._transient_label
 
+        self.controller.update_settings_batch(
+            self._settings_batch,
+            snapshot,
+            final=True,
+            stopped=stopped,
+        )
+
         self.is_running = False
         if self._transient_tasks is not None:
             self._transient_tasks = None
             self._transient_on_complete = None
             self._transient_on_progress = None
             self._transient_label = ""
+            self._settings_batch = None
         self._set_running_ui(False)
         self._refresh()
         self.gui._log(f"\n{'='*60}")

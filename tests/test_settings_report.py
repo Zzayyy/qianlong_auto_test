@@ -1,16 +1,20 @@
 # -*- coding: utf-8 -*-
 
 import json
+from datetime import datetime
 from pathlib import Path
 import tempfile
 import unittest
 
 from core.settings_report import (
     BATCH_SUMMARY_JSON,
+    BATCH_RUNNING,
     OVERALL_FAIL,
+    OVERALL_RUNNING,
     OVERALL_REVIEW,
     TOTAL_REPORT_TXT,
     TOTAL_REPORT_XLSX,
+    create_run_id,
     discover_batches,
     generate_batch_reports,
 )
@@ -18,6 +22,13 @@ from core.settings_status import STATUS_DIFFERENCE, STATUS_PASS, STATUS_UNVERIFI
 
 
 class SettingsBatchReportTests(unittest.TestCase):
+    def test_run_id_contains_timestamp_and_dedicated_code(self):
+        run_id = create_run_id(
+            datetime(2026, 7, 23, 15, 30, 45),
+            code="a7k9q2",
+        )
+        self.assertEqual("20260723_153045_A7K9Q2", run_id)
+
     def _write_module(self, batch_dir, module, items):
         counts = {
             STATUS_PASS: 0,
@@ -95,6 +106,23 @@ class SettingsBatchReportTests(unittest.TestCase):
             self.assertTrue((batch_dir / TOTAL_REPORT_TXT).is_file())
             self.assertTrue((batch_dir / TOTAL_REPORT_XLSX).is_file())
             self.assertEqual("run-1", discover_batches(output_dir)[0]["run_id"])
+
+    def test_running_summary_records_source_without_marking_pending_failures(self):
+        with tempfile.TemporaryDirectory() as output_dir:
+            batch_dir = Path(output_dir) / "批次" / "running"
+            batch_dir.mkdir(parents=True)
+            summary = generate_batch_reports(
+                run_id="running",
+                batch_dir=str(batch_dir),
+                client_id="client-a",
+                task_records=[],
+                source="任务中心",
+                batch_status=BATCH_RUNNING,
+            )
+            self.assertEqual(OVERALL_RUNNING, summary["overall_status"])
+            self.assertEqual(BATCH_RUNNING, summary["batch_status"])
+            self.assertEqual("任务中心", summary["source"])
+            self.assertEqual(0, summary["totals"]["执行失败"])
 
     def test_unverified_is_review_and_missing_json_is_failure(self):
         with tempfile.TemporaryDirectory() as output_dir:

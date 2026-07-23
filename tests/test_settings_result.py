@@ -102,6 +102,31 @@ class SettingsResultTests(unittest.TestCase):
             self.assertEqual(payload["items"][1]["detail"], "测试说明")
             self.assertEqual(payload["observations"][0]["name"], "来源")
 
+    def test_same_batch_uses_fixed_module_name_and_overwrites(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            environment = {
+                "GUI_SETTINGS_RUN_ID": "20260723_120000_A1B2C3",
+                "GUI_SETTINGS_RUN_DIR": temp_dir,
+            }
+            first = SettingsTestResult("期权设置")
+            first.add_result("测试项", "旧值", "期望值")
+            second = SettingsTestResult("期权设置")
+            second.add_result("测试项", "期望值", "期望值")
+
+            with mock.patch.dict(os.environ, environment):
+                first.to_file(str(Path(temp_dir) / "旧时间报告.txt"))
+                json_path = Path(
+                    second.to_file(str(Path(temp_dir) / "新时间报告.txt"))
+                )
+
+            fixed_text = Path(temp_dir) / "期权设置.txt"
+            self.assertEqual(Path(temp_dir) / "期权设置.json", json_path)
+            self.assertTrue(fixed_text.is_file())
+            self.assertFalse((Path(temp_dir) / "旧时间报告.txt").exists())
+            self.assertFalse((Path(temp_dir) / "新时间报告.txt").exists())
+            payload = json.loads(json_path.read_text(encoding="utf-8"))
+            self.assertEqual(STATUS_PASS, payload["items"][0]["status"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -3,21 +3,23 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 import json
-import os
 from pathlib import Path
+import subprocess
 import tkinter as tk
 from tkinter import ttk, messagebox
 
 from config import get_client_name, get_scripts_config
+from gui.recycle_bin import (
+    move_directory_to_recycle_bin,
+    validate_batch_directory,
+)
 from gui.shell_open import open_path
 from core.settings_report import (
     OVERALL_FAIL,
     OVERALL_PASS,
     OVERALL_REVIEW,
     discover_batches,
-    generate_batch_reports,
 )
 
 
@@ -29,8 +31,8 @@ class SettingsReportPanel:
         self.controller = controller
         self._batch_lookup = {}
         self._current_summary = None
+        self._running_batch = None
         self._running_run_id = ""
-        self._running_batch_dir = ""
 
         self.batch_var = tk.StringVar()
         self.progress_var = tk.StringVar(value="尚未运行完整检查")
@@ -141,6 +143,11 @@ class SettingsReportPanel:
             text="打开总Excel",
             command=lambda: self._open_current_path("xlsx_path"),
         ).pack(side=tk.LEFT, padx=(5, 0))
+        ttk.Button(
+            footer,
+            text="删除选中批次",
+            command=self.delete_selected_batch,
+        ).pack(side=tk.RIGHT)
 
     @staticmethod
     def _make_card(parent, title, variable, column):
@@ -190,27 +197,10 @@ class SettingsReportPanel:
             messagebox.showwarning("报告中心", "请先设置交易系统设置的输出目录")
             return
 
-        run_id = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
-        batch_dir = os.path.abspath(os.path.join(output_dir, "批次", run_id))
-        try:
-            os.makedirs(batch_dir, exist_ok=False)
-        except FileExistsError:
-            messagebox.showerror("报告中心", f"批次目录已存在:\n{batch_dir}")
-            return
-        except OSError as exc:
-            messagebox.showerror("报告中心", f"无法创建批次目录:\n{exc}")
-            return
-
         tasks = []
         base_params = self.controller.collect_params()
         for script in scripts:
             params = dict(base_params)
-            params.update({
-                "settings_output_dir": output_dir,
-                "settings_run_id": run_id,
-                "settings_run_dir": batch_dir,
-                "client_id": self.controller.client_id,
-            })
             tasks.append({
                 "category": "交易系统设置",
                 "script_name": script["name"],
@@ -220,19 +210,33 @@ class SettingsReportPanel:
                 "status": self.controller.task_center.ST_PENDING,
             })
 
-        self._running_run_id = run_id
-        self._running_batch_dir = batch_dir
+        try:
+            batch = self.controller.begin_settings_batch(
+                "报告中心一键运行", tasks
+            )
+        except OSError as exc:
+            messagebox.showerror("报告中心", f"无法创建报告批次:\n{exc}")
+            return
+
+        self._running_batch = batch
+        self._running_run_id = batch["run_id"]
         self.run_button.config(state=tk.DISABLED)
         self.stop_button.config(state=tk.NORMAL)
-        self.progress_var.set(f"批次 {run_id}：准备执行 0/{len(tasks)}")
+        self.progress_var.set(
+            f"批次 {self._running_run_id}：准备执行 0/{len(tasks)}"
+        )
 
         started = self.controller.task_center.start_transient(
             tasks,
             on_complete=self._on_batch_complete,
             on_progress=self._on_batch_progress,
             label="设置完整检查",
+            settings_batch=batch,
         )
         if not started:
+            self.controller.update_settings_batch(
+                batch, tasks, final=True, stopped=True
+            )
             self.run_button.config(state=tk.NORMAL)
             self.stop_button.config(state=tk.DISABLED)
             self.progress_var.set("启动失败：当前执行器正忙")
@@ -249,22 +253,12 @@ class SettingsReportPanel:
 
     def _on_batch_complete(self, task_records, stopped):
         run_id = self._running_run_id
-        batch_dir = self._running_batch_dir
         self.run_button.config(state=tk.NORMAL)
         self.stop_button.config(state=tk.DISABLED)
-        try:
-            summary = generate_batch_reports(
-                run_id=run_id,
-                batch_dir=batch_dir,
-                client_id=self.controller.client_id,
-                task_records=task_records,
-                stopped=stopped,
-            )
-        except Exception as exc:
+        summary = (self._running_batch or {}).get("summary")
+        if not summary:
             self.progress_var.set(f"批次 {run_id}：汇总报告生成失败")
-            self.controller._log(f"[报告中心] 汇总报告生成失败: {exc}")
-            self.controller.logger.exception("设置汇总报告生成失败")
-            messagebox.showerror("报告中心", f"汇总报告生成失败:\n{exc}")
+            messagebox.showerror("报告中心", "汇总报告生成失败，请查看运行日志")
             return
 
         self.controller._log(
@@ -279,6 +273,17 @@ class SettingsReportPanel:
         if summary["problems"]:
             self.detail_notebook.select(1)
         self.controller.show_report_center()
+        self._running_batch = None
+
+    def on_batch_summary(self, summary, final=False):
+        """接收所有入口产生的批次更新，并选中本次运行。"""
+        run_id = summary.get("run_id", "")
+        self.refresh_batches(select_run_id=run_id)
+        if final:
+            self.progress_var.set(
+                f"{summary.get('source', '设置检查')}批次 {run_id}："
+                f"{summary.get('overall_status', '')}"
+            )
 
     def refresh_batches(self, select_run_id=None):
         """重读当前输出目录下的已完成批次。"""
@@ -288,7 +293,12 @@ class SettingsReportPanel:
         for summary in batches:
             run_id = summary.get("run_id", "")
             client_name = get_client_name(summary.get("client_id", "")) or summary.get("client_id", "")
-            display = f"{run_id} | {summary.get('overall_status', '未知')} | {client_name}"
+            source = summary.get("source", "未知来源")
+            batch_status = summary.get("batch_status", "")
+            display = (
+                f"{run_id} | {source} | {batch_status} | "
+                f"{summary.get('overall_status', '未知')} | {client_name}"
+            )
             values.append(display)
             self._batch_lookup[display] = summary
         self.batch_combo["values"] = values
@@ -393,6 +403,52 @@ class SettingsReportPanel:
     def open_batch_dir(self):
         if self._current_summary:
             self._open_path(self._current_summary.get("batch_dir", ""))
+
+    def delete_selected_batch(self):
+        """二次确认后，将当前批次目录整体移动到 Windows 回收站。"""
+        summary = self._current_summary
+        if not summary:
+            messagebox.showwarning("报告中心", "请先选择一个历史批次")
+            return
+        if summary.get("batch_status") == "运行中":
+            messagebox.showwarning("报告中心", "当前批次仍在运行，不能删除")
+            return
+
+        run_id = str(summary.get("run_id", ""))
+        try:
+            target = validate_batch_directory(
+                summary.get("batch_dir", ""),
+                self.controller.settings_output_dir.get().strip(),
+                run_id,
+            )
+        except (OSError, ValueError) as exc:
+            messagebox.showerror("报告中心", f"批次路径校验失败:\n{exc}")
+            return
+
+        confirmed = messagebox.askyesno(
+            "删除选中批次",
+            "确定要将以下批次移入 Windows 回收站吗？\n\n"
+            f"批次号: {run_id}\n"
+            f"运行来源: {summary.get('source', '未知')}\n"
+            f"生成时间: {summary.get('generated_at', '')}\n"
+            f"目录: {target}\n\n"
+            "该操作会移动整个批次目录，可从回收站恢复。",
+            icon=messagebox.WARNING,
+        )
+        if not confirmed:
+            return
+
+        try:
+            move_directory_to_recycle_bin(target)
+        except (OSError, subprocess.SubprocessError) as exc:
+            messagebox.showerror("报告中心", f"移入回收站失败:\n{exc}")
+            return
+
+        self.controller._log(f"[报告中心] 已移入回收站: {target}")
+        self.progress_var.set(f"批次 {run_id} 已移入回收站")
+        self._current_summary = None
+        self.refresh_batches()
+        messagebox.showinfo("报告中心", f"批次 {run_id} 已移入回收站")
 
     def _open_current_path(self, key):
         if self._current_summary:

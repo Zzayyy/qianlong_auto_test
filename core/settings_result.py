@@ -7,6 +7,7 @@ from datetime import datetime
 import json
 import os
 from pathlib import Path
+import re
 from typing import Any, Callable, Dict, List, Optional
 
 from core.settings_status import (
@@ -196,11 +197,18 @@ class SettingsTestResult:
         }
 
     def to_file(self, filepath: str):
+        run_id = os.environ.get("GUI_SETTINGS_RUN_ID", "").strip()
+        run_dir = os.environ.get("GUI_SETTINGS_RUN_DIR", "").strip()
+        if run_id and run_dir:
+            safe_panel_name = re.sub(r'[<>:"/\\|?*]+', "_", self.panel_name).strip()
+            filepath = os.path.join(run_dir, f"{safe_panel_name}.txt")
+
         output_dir = os.path.dirname(os.path.abspath(filepath))
         os.makedirs(output_dir, exist_ok=True)
         generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         summary = self.summary()
-        with open(filepath, "w", encoding="utf-8") as report:
+        text_temp = f"{filepath}.tmp"
+        with open(text_temp, "w", encoding="utf-8") as report:
             report.write(f"{self.panel_name}测试报告\n")
             report.write(f"生成时间: {generated_at}\n")
             report.write(f"{'=' * 60}\n\n")
@@ -210,9 +218,11 @@ class SettingsTestResult:
 
             self._write_summary(write_line, summary)
             self._write_rows(write_line)
+        os.replace(text_temp, filepath)
 
         json_path = str(Path(filepath).with_suffix(".json"))
-        with open(json_path, "w", encoding="utf-8") as structured:
+        json_temp = f"{json_path}.tmp"
+        with open(json_temp, "w", encoding="utf-8") as structured:
             json.dump(
                 self.to_payload(filepath),
                 structured,
@@ -221,6 +231,7 @@ class SettingsTestResult:
                 default=_json_default,
             )
             structured.write("\n")
+        os.replace(json_temp, json_path)
 
         print(f"[OK] 测试报告已保存: {filepath}")
         print(f"[OK] 结构化结果已保存: {json_path}")

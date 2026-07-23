@@ -5,8 +5,10 @@ from __future__ import annotations
 
 from datetime import datetime
 import json
+import os
 from pathlib import Path
 import re
+import secrets
 from typing import Any, Dict, Iterable, List, Mapping
 
 from core.settings_status import (
@@ -25,10 +27,22 @@ from core.settings_status import (
 OVERALL_PASS = "通过"
 OVERALL_REVIEW = "需人工复核"
 OVERALL_FAIL = "不通过"
+OVERALL_RUNNING = "运行中"
+
+BATCH_RUNNING = "运行中"
+BATCH_COMPLETED = "已完成"
+BATCH_STOPPED = "已停止"
 
 BATCH_SUMMARY_JSON = "批次汇总.json"
 TOTAL_REPORT_TXT = "总差异报告.txt"
 TOTAL_REPORT_XLSX = "总差异报告.xlsx"
+
+
+def create_run_id(now: datetime = None, code: str = "") -> str:
+    """生成可排序的“时间_专属代码”批次号。"""
+    current = now or datetime.now()
+    unique_code = (code or secrets.token_hex(3)).upper()
+    return f"{current.strftime('%Y%m%d_%H%M%S')}_{unique_code}"
 
 
 def module_name_from_script(script_name: str) -> str:
@@ -37,7 +51,7 @@ def module_name_from_script(script_name: str) -> str:
 
 
 def discover_batches(output_dir: str) -> List[Dict[str, Any]]:
-    """读取输出目录下已经完成的设置检查批次，最新批次在前。"""
+    """读取输出目录下的设置检查批次（含运行中），最新批次在前。"""
     batch_root = Path(output_dir) / "批次"
     if not batch_root.is_dir():
         return []
@@ -94,6 +108,8 @@ def build_batch_summary(
     client_id: str,
     task_records: Iterable[Mapping[str, Any]],
     stopped: bool = False,
+    source: str = "",
+    batch_status: str = BATCH_COMPLETED,
 ) -> Dict[str, Any]:
     """将任务退出状态和各模块 JSON 合并成批次汇总。"""
     loaded = load_module_results(batch_dir)
@@ -233,7 +249,9 @@ def build_batch_summary(
         modules.append(module_row)
 
     totals["模块数"] = len(modules)
-    if stopped or totals[STATUS_EXECUTION_FAILED] or totals["差异合计"]:
+    if batch_status == BATCH_RUNNING:
+        overall = OVERALL_RUNNING
+    elif stopped or totals[STATUS_EXECUTION_FAILED] or totals["差异合计"]:
         overall = OVERALL_FAIL
     elif totals[STATUS_UNVERIFIED]:
         overall = OVERALL_REVIEW
@@ -244,6 +262,8 @@ def build_batch_summary(
         "schema_version": 1,
         "run_id": run_id,
         "client_id": client_id,
+        "source": source,
+        "batch_status": batch_status,
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "overall_status": overall,
         "stopped": bool(stopped),
@@ -262,15 +282,22 @@ def write_batch_reports(summary: Dict[str, Any]) -> Dict[str, Any]:
     xlsx_path = batch_dir / TOTAL_REPORT_XLSX
     json_path = batch_dir / BATCH_SUMMARY_JSON
 
-    _write_text_report(summary, txt_path)
-    _write_excel_report(summary, xlsx_path)
     summary["txt_path"] = str(txt_path.resolve())
     summary["xlsx_path"] = str(xlsx_path.resolve())
     summary["summary_path"] = str(json_path.resolve())
-    json_path.write_text(
+
+    txt_temp = batch_dir / f".{TOTAL_REPORT_TXT}.tmp"
+    xlsx_temp = batch_dir / f".{TOTAL_REPORT_XLSX}.tmp"
+    json_temp = batch_dir / f".{BATCH_SUMMARY_JSON}.tmp"
+    _write_text_report(summary, txt_temp)
+    _write_excel_report(summary, xlsx_temp)
+    json_temp.write_text(
         json.dumps(summary, ensure_ascii=False, indent=2, default=str) + "\n",
         encoding="utf-8",
     )
+    os.replace(txt_temp, txt_path)
+    os.replace(xlsx_temp, xlsx_path)
+    os.replace(json_temp, json_path)
     return summary
 
 
@@ -284,6 +311,8 @@ def _write_text_report(summary: Mapping[str, Any], path: Path):
         "交易系统设置总差异报告",
         f"批次号: {summary['run_id']}",
         f"客户端: {summary.get('client_id', '')}",
+        f"运行来源: {summary.get('source', '')}",
+        f"批次状态: {summary.get('batch_status', '')}",
         f"生成时间: {summary['generated_at']}",
         f"总体结论: {summary['overall_status']}",
         "=" * 72,
@@ -335,6 +364,8 @@ def _write_excel_report(summary: Mapping[str, Any], path: Path):
 
     overview.append(["批次号", summary["run_id"]])
     overview.append(["客户端", summary.get("client_id", "")])
+    overview.append(["运行来源", summary.get("source", "")])
+    overview.append(["批次状态", summary.get("batch_status", "")])
     overview.append(["生成时间", summary["generated_at"]])
     overview.append(["总体结论", summary["overall_status"]])
     overview.append([])
@@ -376,7 +407,7 @@ def _write_excel_report(summary: Mapping[str, Any], path: Path):
     review_fill = PatternFill("solid", fgColor="FFF2CC")
     pass_fill = PatternFill("solid", fgColor="E2F0D9")
 
-    for sheet, header_row in ((overview, 6), (problem_sheet, 1)):
+    for sheet, header_row in ((overview, 8), (problem_sheet, 1)):
         for cell in sheet[header_row]:
             cell.font = Font(bold=True)
             cell.fill = header_fill
@@ -395,11 +426,12 @@ def _write_excel_report(summary: Mapping[str, Any], path: Path):
                 max(max_length + 2, 10), 42
             )
 
-    overview["B4"].font = Font(bold=True)
-    overview["B4"].fill = {
+    overview["B6"].font = Font(bold=True)
+    overview["B6"].fill = {
         OVERALL_PASS: pass_fill,
         OVERALL_REVIEW: review_fill,
         OVERALL_FAIL: fail_fill,
+        OVERALL_RUNNING: header_fill,
     }[summary["overall_status"]]
     for row in range(2, problem_sheet.max_row + 1):
         status = problem_sheet.cell(row=row, column=1).value
