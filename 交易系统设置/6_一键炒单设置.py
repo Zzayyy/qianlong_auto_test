@@ -4,8 +4,8 @@
 打开“交易系统设置”，进入“一键炒单设置”，读取快捷键方案、沪深期权下单
 价格类型、默认期权合约和完整快捷键表格，与独立标准配置比对并保存报告/截图。
 
-快捷键表格（auto_id=2216）是自绘 ListView。脚本优先用原生控件读取，失败时
-分页截图并结构化 OCR；全程不发送快捷键、不点击“应用”或“恢复默认”。
+快捷键表格（auto_id=2216）是自绘 ListView，通过分页截图并结构化 OCR 读取；
+全程不发送快捷键、不点击“应用”或“恢复默认”。
 """
 
 import os
@@ -13,7 +13,6 @@ import sys
 import time
 import ctypes
 import json
-import struct
 
 # 国泰海通在高分屏上混用了逻辑坐标和物理坐标。必须在导入 pywinauto
 # 之前声明 DPI 感知，否则菜单、导航项和截图都会发生坐标偏移。
@@ -42,13 +41,11 @@ from core.settings_window import (
     switch_settings_panel as switch_settings_panel_compat,
 )
 from core.one_click_settings import (
-    canonical_hotkey,
     evaluate_shortcuts,
     merge_shortcut_pages,
     normalize_text,
     parse_shortcut_ocr_tokens,
 )
-from core.native_tree import RemoteProcessMemory
 
 
 # GUI 启动时 core.window 会按 GUI_CLIENT_ID 覆盖此值；直接运行本脚本时，
@@ -504,73 +501,6 @@ def _capture_hwnd_image(hwnd: int):
         win32gui.ReleaseDC(hwnd, window_dc)
 
 
-def _read_listview_native(table_hwnd: int, row_count: int) -> List[Dict[str, Any]]:
-    """Read ListView text with bounded messages when privileges allow it."""
-    lvif_text = 0x0001
-    lvm_getitemw = 0x104B
-
-    def _pack_item(row_index: int, column: int, text_address: int,
-                   target_bits: int) -> bytes:
-        size = 88 if target_bits == 64 else 60
-        package = bytearray(size)
-        struct.pack_into("<IiiII", package, 0, lvif_text, row_index, column, 0, 0)
-        if target_bits == 64:
-            struct.pack_into("<Q", package, 24, text_address)
-            struct.pack_into("<i", package, 32, 1024)
-        else:
-            struct.pack_into("<I", package, 20, text_address & 0xFFFFFFFF)
-            struct.pack_into("<i", package, 24, 1024)
-        return bytes(package)
-
-    rows: List[Dict[str, Any]] = []
-    with RemoteProcessMemory(table_hwnd) as memory:
-        struct_size = 88 if memory.target_bits == 64 else 60
-        text_size = 2048
-        remote_address = memory.allocate(struct_size + text_size)
-        text_address = remote_address + struct_size
-        try:
-            for row_index in range(row_count):
-                values: List[str] = []
-                for column in range(3):
-                    package = bytearray(struct_size + text_size)
-                    item = _pack_item(
-                        row_index, column, text_address, memory.target_bits
-                    )
-                    package[:len(item)] = item
-                    memory.write(remote_address, bytes(package))
-                    response = win32gui.SendMessageTimeout(
-                        table_hwnd, lvm_getitemw, 0, remote_address,
-                        win32con.SMTO_ABORTIFHUNG, 3000
-                    )
-                    result = response[1] if isinstance(response, tuple) else response
-                    if not result:
-                        raise RuntimeError(
-                            f"ListView第{row_index + 1}行第{column + 1}列读取失败"
-                        )
-                    raw = memory.read(text_address, text_size)
-                    values.append(
-                        normalize_text(
-                            raw.decode("utf-16-le", errors="replace").split("\0", 1)[0]
-                        )
-                    )
-                if not values[0].isdigit():
-                    raise RuntimeError(
-                        f"第 {row_index + 1} 行原生文本无效: {values!r}"
-                    )
-                rows.append(
-                    {
-                        "sequence": int(values[0]),
-                        "name": values[1],
-                        "shortcut": canonical_hotkey(values[2]),
-                        "confidence": 1.0,
-                        "source": "原生ListView",
-                    }
-                )
-        finally:
-            memory.free(remote_address)
-    return rows
-
-
 def _ocr_shortcut_pages(table_hwnd: int, row_count: int,
                         artifact_dir: str, timestamp: str) -> List[Dict[str, Any]]:
     import numpy as np
@@ -625,7 +555,7 @@ def _ocr_shortcut_pages(table_hwnd: int, row_count: int,
 
 def collect_shortcut_table(dlg, artifact_dir: str,
                            timestamp: str) -> Dict[str, Any]:
-    """Read all rows, with native text first and paged OCR as fallback."""
+    """通过分页 OCR 读取快捷键表格全部行。"""
     try:
         table = dlg.child_window(auto_id=AUTO_ID["快捷键表格"], control_type="List")
         table.wait("exists", timeout=3)
@@ -636,35 +566,24 @@ def collect_shortcut_table(dlg, artifact_dir: str,
             win32gui.SendMessage(header_hwnd, 0x1200, 0, 0) if header_hwnd else 0
         )  # HDM_GETITEMCOUNT
         try:
-            rows = _read_listview_native(table_hwnd, row_count)
+            rows = _ocr_shortcut_pages(
+                table_hwnd, row_count, artifact_dir, timestamp
+            )
             return {
                 "rows": rows,
-                "source": "原生ListView",
+                "source": "OCR分页",
                 "row_count": row_count,
                 "column_count": column_count,
                 "error": "",
             }
-        except Exception as native_error:
-            print(f"[INFO] 原生ListView文字读取不可用，改用分页OCR: {native_error}")
-            try:
-                rows = _ocr_shortcut_pages(
-                    table_hwnd, row_count, artifact_dir, timestamp
-                )
-                return {
-                    "rows": rows,
-                    "source": "OCR分页",
-                    "row_count": row_count,
-                    "column_count": column_count,
-                    "error": "",
-                }
-            except Exception as ocr_error:
-                return {
-                    "rows": [],
-                    "source": "采集失败",
-                    "row_count": row_count,
-                    "column_count": column_count,
-                    "error": f"原生失败: {native_error}；OCR失败: {ocr_error}",
-                }
+        except Exception as ocr_error:
+            return {
+                "rows": [],
+                "source": "采集失败",
+                "row_count": row_count,
+                "column_count": column_count,
+                "error": f"OCR失败: {ocr_error}",
+            }
     except Exception as e:
         print(f"  [WARN] 采集快捷键表格失败: {e}")
         return {

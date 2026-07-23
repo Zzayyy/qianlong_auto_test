@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
-"""Pure parsing and validation helpers for one-click trading settings."""
+"""Pure parsing and validation helpers for one-click trading settings.
+    用于交易系统设置的 一键炒单脚本 OCR后解析+比对
+"""
 
 from __future__ import annotations
 
