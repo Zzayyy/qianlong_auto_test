@@ -16,6 +16,7 @@ from gui.recycle_bin import (
 )
 from gui.shell_open import open_path
 from core.settings_report import (
+    DEFAULT_BATCH_LIMIT,
     OVERALL_FAIL,
     OVERALL_PASS,
     OVERALL_REVIEW,
@@ -30,6 +31,7 @@ class SettingsReportPanel:
         self.parent = parent
         self.controller = controller
         self._batch_lookup = {}
+        self._history_batches = []
         self._current_summary = None
         self._running_batch = None
         self._running_run_id = ""
@@ -70,7 +72,10 @@ class SettingsReportPanel:
 
         history = ttk.Frame(self.parent)
         history.pack(fill=tk.X, pady=(0, 6))
-        ttk.Label(history, text="历史批次:").pack(side=tk.LEFT)
+        ttk.Label(
+            history,
+            text=f"历史批次（最近{DEFAULT_BATCH_LIMIT}批）:",
+        ).pack(side=tk.LEFT)
         self.batch_combo = ttk.Combobox(
             history,
             textvariable=self.batch_var,
@@ -267,30 +272,48 @@ class SettingsReportPanel:
         )
         self.progress_var.set(
             f"批次 {run_id}：{summary['overall_status']}，"
-            f"已生成总TXT、总Excel和批次汇总JSON"
+            f"已生成总TXT、总Excel和批次汇总JSON | "
+            f"{summary['batch_dir']}"
         )
-        self.refresh_batches(select_run_id=run_id)
         if summary["problems"]:
             self.detail_notebook.select(1)
         self.controller.show_report_center()
         self._running_batch = None
 
     def on_batch_summary(self, summary, final=False):
-        """接收所有入口产生的批次更新，并选中本次运行。"""
+        """直接接收本次批次结果，不重新扫描输出目录。"""
         run_id = summary.get("run_id", "")
-        self.refresh_batches(select_run_id=run_id)
+        batches = [summary]
+        batches.extend(
+            item
+            for item in self._history_batches
+            if item.get("run_id", "") != run_id
+        )
+        self._render_batch_choices(
+            batches[:DEFAULT_BATCH_LIMIT],
+            select_run_id=run_id,
+        )
         if final:
             self.progress_var.set(
                 f"{summary.get('source', '设置检查')}批次 {run_id}："
-                f"{summary.get('overall_status', '')}"
+                f"{summary.get('overall_status', '')} | "
+                f"{summary.get('batch_dir', '')}"
             )
 
     def refresh_batches(self, select_run_id=None):
-        """重读当前输出目录下的已完成批次。"""
-        batches = discover_batches(self.controller.settings_output_dir.get().strip())
+        """仅扫描并读取当前输出目录中最新的 20 个批次。"""
+        batches = discover_batches(
+            self.controller.settings_output_dir.get().strip(),
+            limit=DEFAULT_BATCH_LIMIT,
+        )
+        self._render_batch_choices(batches, select_run_id=select_run_id)
+
+    def _render_batch_choices(self, batches, select_run_id=None):
+        """用已取得的批次数据更新下拉框和当前报告。"""
+        self._history_batches = list(batches[:DEFAULT_BATCH_LIMIT])
         self._batch_lookup = {}
         values = []
-        for summary in batches:
+        for summary in self._history_batches:
             run_id = summary.get("run_id", "")
             client_name = get_client_name(summary.get("client_id", "")) or summary.get("client_id", "")
             source = summary.get("source", "未知来源")
