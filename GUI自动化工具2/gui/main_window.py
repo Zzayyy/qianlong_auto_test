@@ -45,6 +45,8 @@ from gui.history import (
     STATUS_RUNNING,
 )
 from gui.compare import ComparePanel
+from gui.settings_report import SettingsReportPanel
+from gui.shell_open import open_path
 
 
 class AutomationGUI:
@@ -334,6 +336,12 @@ class AutomationGUI:
         compare_frame = ttk.Frame(self.right_notebook, padding="5")
         self.right_notebook.add(compare_frame, text="结果比对")
         self.compare_panel = ComparePanel(compare_frame, self)
+
+        # —— 交易系统设置报告中心（位于“结果比对”右侧） ——
+        report_frame = ttk.Frame(self.right_notebook, padding="5")
+        self.right_notebook.add(report_frame, text="报告中心")
+        self.report_center = SettingsReportPanel(report_frame, self)
+        self._report_frame = report_frame
 
         # 状态栏：钉在窗口底部（始终可见，矮窗口也不会被裁切），
         # 但左右加 10px 内边距与主面板对齐，避免「分层」的割裂感
@@ -994,6 +1002,8 @@ class AutomationGUI:
             set_output_dir(self.user_config, "交易系统设置", path)
             save_user_config(self.user_config)
             self._log(f"[配置] 已更新交易系统设置输出目录: {path}")
+            if hasattr(self, "report_center"):
+                self.report_center.refresh_batches()
 
     def _preview_excel(self, filepath: str):
         """读取Excel并显示到预览表格"""
@@ -1356,6 +1366,13 @@ class AutomationGUI:
             self.current_category = supported[0] if supported else ""
         if self.current_category:
             self._select_category(self.current_category)
+        if hasattr(self, "report_center"):
+            self.report_center.refresh_batches()
+
+    def show_report_center(self):
+        """切换到交易系统设置报告中心标签页。"""
+        if hasattr(self, "_report_frame"):
+            self.right_notebook.select(self._report_frame)
 
     # ====================== 任务中心：顺序执行驱动 ======================
     def run_task_center(self, task_center):
@@ -1412,7 +1429,10 @@ class AutomationGUI:
 
     def _open_log_dir(self):
         """打开日志目录"""
-        os.startfile(self.log_dir)
+        try:
+            open_path(self.log_dir)
+        except OSError as exc:
+            messagebox.showerror("打开失败", str(exc))
 
     # ====================== 执行结果回调（运行在 runner 线程，统一切回主线程更新 UI） ======================
     def _on_run_finish(self, return_code, elapsed, task):

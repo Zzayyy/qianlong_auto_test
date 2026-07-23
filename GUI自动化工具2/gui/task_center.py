@@ -100,6 +100,11 @@ class TaskCenter:
         self._record_id = None         # 当前任务的 history 记录 id
         self._stop = False             # 用户请求停止（中止后续任务）
         self._has_started = False      # 是否已开始过一次执行（用于决定是否显示「继续执行」）
+        # 报告中心可临时借用同一套串行执行器，但不覆盖用户保存的任务队列。
+        self._transient_tasks = None
+        self._transient_on_complete = None
+        self._transient_on_progress = None
+        self._transient_label = ""
 
         # 持久化路径
         self.file_path = os.path.join(self.gui.log_dir, "task_center.json")
@@ -810,6 +815,10 @@ class TaskCenter:
         self._clear()
 
     # ====================== 执行编排 ======================
+    def _active_tasks(self):
+        """返回当前正在展示/执行的队列。"""
+        return self._transient_tasks if self._transient_tasks is not None else self.tasks
+
     def start(self):
         """开始顺序执行队列"""
         if self.is_running:
@@ -837,6 +846,44 @@ class TaskCenter:
         # 通过主窗口的执行引擎驱动（复用其回调机制）
         self.controller.run_task_center(self)
 
+    def start_transient(self, tasks, on_complete=None, on_progress=None, label="临时任务"):
+        """执行不落盘的临时队列，供报告中心运行完整设置检查。
+
+        临时队列执行期间会显示在任务中心，但不会覆盖 task_center.json，
+        收尾后自动恢复用户原来的队列。
+        """
+        if self.is_running or self.controller.runner.is_running:
+            return False
+        if not tasks:
+            return False
+
+        self._transient_tasks = []
+        for task in tasks:
+            item = dict(task)
+            item["params"] = dict(task.get("params", {}))
+            item["status"] = self.ST_PENDING
+            item.pop("return_code", None)
+            item.pop("elapsed", None)
+            item.pop("error", None)
+            self._transient_tasks.append(item)
+        self._transient_on_complete = on_complete
+        self._transient_on_progress = on_progress
+        self._transient_label = label
+
+        self.is_running = True
+        self._stop = False
+        self._has_started = True
+        self._current_index = -1
+
+        active = self._active_tasks()
+        self._set_running_ui(True)
+        self._refresh()
+        self.gui._log("\n" + "=" * 60)
+        self.gui._log(f"[{label}] 开始顺序执行，共 {len(active)} 个任务")
+        self.gui._set_status(f"{label}: 0/{len(active)} 准备就绪", running=True)
+        self.controller.run_task_center(self)
+        return True
+
     def _on_stop(self):
         if not self.is_running:
             return
@@ -845,9 +892,16 @@ class TaskCenter:
         self.gui._set_status("任务中心: 正在停止...")
         self.controller.stop_task_center()
 
+    def stop(self):
+        """供报告中心等外部面板停止当前队列。"""
+        self._on_stop()
+
     def _has_remaining(self):
         """队列中是否还有未完成任务（等待 / 已停止）"""
-        return any(t["status"] in (self.ST_PENDING, self.ST_STOPPED) for t in self.tasks)
+        return any(
+            t["status"] in (self.ST_PENDING, self.ST_STOPPED)
+            for t in self._active_tasks()
+        )
 
     def resume(self):
         """继续执行：从第一个未完成任务（已停止 / 等待）开始恢复执行"""
@@ -890,32 +944,33 @@ class TaskCenter:
 
     def run_next(self):
         """由 controler 在主线程回调：执行下一个未执行任务；无则收尾"""
+        tasks = self._active_tasks()
         if self._stop:
             self._finish_all("已停止（用户手动）")
             return
 
         self._current_index += 1
-        if self._current_index >= len(self.tasks):
+        if self._current_index >= len(tasks):
             self._finish_all("全部执行完成")
             return
 
-        item = self.tasks[self._current_index]
+        item = tasks[self._current_index]
         item["status"] = self.ST_RUNNING
         self._refresh()
         self.gui._set_status(
-            f"任务中心: {self._current_index + 1}/{len(self.tasks)} 执行 {item['script_name']}",
+            f"任务中心: {self._current_index + 1}/{len(tasks)} 执行 {item['script_name']}",
             running=True
         )
         self.gui._log(f"\n{'='*60}")
-        self.gui._log(f"[任务中心] ({self._current_index + 1}/{len(self.tasks)}) 开始: {item['script_name']}")
+        self.gui._log(f"[任务中心] ({self._current_index + 1}/{len(tasks)}) 开始: {item['script_name']}")
 
         # 写 history 记录
         self._record_id = self.gui.history.add_record(item["script_name"], item["category"])
         self.gui._refresh_history()
 
         # 计算下一个任务的分类（用于决定交易系统设置窗口是否保留）
-        if self._current_index + 1 < len(self.tasks):
-            next_category = self.tasks[self._current_index + 1].get("category", "")
+        if self._current_index + 1 < len(tasks):
+            next_category = tasks[self._current_index + 1].get("category", "")
         else:
             next_category = ""
 
@@ -924,9 +979,10 @@ class TaskCenter:
 
     def on_finish(self, return_code, elapsed, item):
         """单个任务结束回调：更新状态后执行下一个"""
-        if self._current_index < 0 or self._current_index >= len(self.tasks):
+        tasks = self._active_tasks()
+        if self._current_index < 0 or self._current_index >= len(tasks):
             return
-        cur = self.tasks[self._current_index]
+        cur = tasks[self._current_index]
 
         if self._stop:
             cur["status"] = self.ST_STOPPED
@@ -934,6 +990,9 @@ class TaskCenter:
             cur["status"] = self.ST_SUCCESS
         else:
             cur["status"] = self.ST_FAILED
+        cur["return_code"] = return_code
+        cur["elapsed"] = elapsed
+        cur["error"] = ""
 
         detail = f"退出码: {return_code}" if return_code != 0 else ""
         if self._record_id is not None:
@@ -950,16 +1009,28 @@ class TaskCenter:
             self._record_id = None
             self.gui._refresh_history()
 
-        self._save()
+        if self._transient_tasks is None:
+            self._save()
         self._refresh()
+        if self._transient_on_progress:
+            try:
+                self._transient_on_progress(
+                    self._current_index + 1, len(tasks), dict(cur)
+                )
+            except Exception as exc:
+                self.gui._log(f"[任务中心] 临时队列进度回调异常: {exc}")
         self.run_next()
 
     def on_error(self, exc, item):
         """单个任务异常回调"""
-        if self._current_index < 0 or self._current_index >= len(self.tasks):
+        tasks = self._active_tasks()
+        if self._current_index < 0 or self._current_index >= len(tasks):
             return
-        cur = self.tasks[self._current_index]
+        cur = tasks[self._current_index]
         cur["status"] = self.ST_ERROR if not self._stop else self.ST_STOPPED
+        cur["return_code"] = None
+        cur["elapsed"] = 0.0
+        cur["error"] = str(exc)
 
         if self._record_id is not None:
             self.gui.history.update_record(
@@ -970,19 +1041,46 @@ class TaskCenter:
             self._record_id = None
             self.gui._refresh_history()
 
-        self._save()
+        if self._transient_tasks is None:
+            self._save()
         self._refresh()
+        if self._transient_on_progress:
+            try:
+                self._transient_on_progress(
+                    self._current_index + 1, len(tasks), dict(cur)
+                )
+            except Exception as callback_exc:
+                self.gui._log(f"[任务中心] 临时队列进度回调异常: {callback_exc}")
         self.run_next()
 
     def _finish_all(self, msg):
+        active = self._active_tasks()
+        snapshot = [
+            {**task, "params": dict(task.get("params", {}))}
+            for task in active
+        ]
+        stopped = self._stop
+        on_complete = self._transient_on_complete
+        transient_label = self._transient_label
+
         self.is_running = False
+        if self._transient_tasks is not None:
+            self._transient_tasks = None
+            self._transient_on_complete = None
+            self._transient_on_progress = None
+            self._transient_label = ""
         self._set_running_ui(False)
         self._refresh()
         self.gui._log(f"\n{'='*60}")
-        self.gui._log(f"[任务中心] {msg}")
+        self.gui._log(f"[{transient_label or '任务中心'}] {msg}")
         self.gui._log(f"{'='*60}")
-        self.gui._set_status(f"任务中心: {msg}")
+        self.gui._set_status(f"{transient_label or '任务中心'}: {msg}")
         self.gui._reset_running_state_if_idle()
+        if on_complete:
+            try:
+                on_complete(snapshot, stopped)
+            except Exception as exc:
+                self.gui._log(f"[任务中心] 临时队列完成回调异常: {exc}")
 
     # ====================== UI 辅助 ======================
     def _set_running_ui(self, running):
@@ -1016,6 +1114,7 @@ class TaskCenter:
 
     def _refresh(self):
         """刷新队列列表（主线程调用）"""
+        tasks = self._active_tasks()
         self.tree.delete(*self.tree.get_children())
         status_tag = {
             self.ST_PENDING: "pending",
@@ -1026,7 +1125,7 @@ class TaskCenter:
             self.ST_STOPPED: "stopped",
         }
         done = 0
-        for idx, t in enumerate(self.tasks):
+        for idx, t in enumerate(tasks):
             tag = status_tag.get(t["status"], "")
             tree_idx = str(idx)
             self.tree.insert(
@@ -1039,11 +1138,11 @@ class TaskCenter:
 
         if self.is_running:
             self.summary_label.config(
-                text=f"队列: {len(self.tasks)} 项 | 进度 {self._current_index + 1}/{len(self.tasks)}"
+                text=f"队列: {len(tasks)} 项 | 进度 {self._current_index + 1}/{len(tasks)}"
             )
         else:
             self.summary_label.config(
-                text=f"队列: {len(self.tasks)} 项 | 已完成 {done} 项"
+                text=f"队列: {len(tasks)} 项 | 已完成 {done} 项"
             )
 
     # ====================== 持久化 ======================

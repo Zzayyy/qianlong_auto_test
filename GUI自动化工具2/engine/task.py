@@ -45,7 +45,12 @@ class Task:
 
         # 交易系统设置 输出路径
         if self.category == "交易系统设置":
-            env["GUI_OUTPUT_DIR"] = p.get("settings_output_dir", "")
+            # 报告中心运行时把每次完整检查隔离到独立批次目录；
+            # 单独执行脚本时仍沿用原来的设置输出目录。
+            run_dir = p.get("settings_run_dir", "")
+            env["GUI_OUTPUT_DIR"] = run_dir or p.get("settings_output_dir", "")
+            env["GUI_SETTINGS_RUN_ID"] = p.get("settings_run_id", "")
+            env["GUI_SETTINGS_RUN_DIR"] = run_dir
 
         # 下一个任务的分类：交易系统设置脚本据此决定是否保留设置窗口
         env["GUI_NEXT_CATEGORY"] = self.next_category or ""

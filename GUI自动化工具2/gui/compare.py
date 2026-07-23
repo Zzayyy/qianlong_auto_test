@@ -21,6 +21,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 
 from core import compare as cmp
+from gui.shell_open import open_path
 
 
 # ====================== 可选拖入支持（tkinterdnd2） ======================
@@ -451,7 +452,7 @@ class ComparePanel:
             self.gui._log(f"[结果比对] 报告已导出: {path}")
             messagebox.showinfo("成功", f"报告已导出:\n{path}")
             try:
-                os.startfile(path)
+                open_path(path)
             except Exception:
                 pass
         except Exception as e:
