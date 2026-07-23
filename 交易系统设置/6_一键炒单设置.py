@@ -26,7 +26,6 @@ except Exception:
 
 import win32gui
 import win32con
-from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -46,6 +45,7 @@ from core.one_click_settings import (
     normalize_text,
     parse_shortcut_ocr_tokens,
 )
+from core.settings_result import SettingsTestResult
 
 
 # GUI 启动时 core.window 会按 GUI_CLIENT_ID 覆盖此值；直接运行本脚本时，
@@ -86,101 +86,6 @@ _OUTPUT_DIR_DEFAULT = os.path.join(
 OUTPUT_DIR = os.environ.get("GUI_OUTPUT_DIR", "") or _OUTPUT_DIR_DEFAULT
 RESULT_SUBDIR = PANEL_NAME
 COUNTDOWN_SEC = 3
-
-
-class SettingsTestResult:
-    def __init__(self):
-        self.results: List[Dict[str, Any]] = []
-        self.differences: List[Dict[str, Any]] = []
-        self.unverified: List[Dict[str, Any]] = []
-        self.observations: List[Dict[str, Any]] = []
-
-    def add_result(self, name: str, actual_value: Any, expected_value: Any,
-                   detail: str = ""):
-        matched = normalize_text(actual_value) == normalize_text(expected_value)
-        self.add_status(
-            name, actual_value, expected_value,
-            "通过" if matched else "差异", detail
-        )
-
-    def add_status(self, name: str, actual_value: Any, expected_value: Any,
-                   status: str, detail: str = ""):
-        row = {
-            "名称": name,
-            "期望值": expected_value,
-            "实际值": actual_value,
-            "状态": status,
-            "说明": detail,
-        }
-        self.results.append(row)
-        if status in {"差异", "新增", "冲突"}:
-            self.differences.append(row)
-        elif status == "未验证":
-            self.unverified.append(row)
-
-    def add_unverified(self, name: str, expected_value: Any, detail: str,
-                       actual_value: Any = "(无法确认)"):
-        self.add_status(name, actual_value, expected_value, "未验证", detail)
-
-    def add_observation(self, name: str, value: Any, detail: str):
-        self.observations.append({"名称": name, "采集值": value, "说明": detail})
-
-    def print_summary(self):
-        counts = Counter(row["状态"] for row in self.results)
-        print(f"\n{'=' * 60}")
-        print("测试结果汇总")
-        print(f"{'=' * 60}")
-        print(f"总比对项: {len(self.results)}")
-        print(f"通过: {counts['通过']}")
-        print(f"差异/新增/冲突: {len(self.differences)}")
-        print(f"未验证: {counts['未验证']}")
-        print(f"采集项: {len(self.observations)}")
-
-        # 与委托设置、期权设置等模块保持一致：汇总后逐项展示全部
-        # 比对结果。候选项列表在控制台中截断显示，完整内容仍写入报告。
-        if self.results:
-            print(f"\n{'名称':<35} {'期望值':<25} {'实际值':<25} {'状态'}")
-            print(f"{'-' * 100}")
-            for row in self.results:
-                name = str(row["名称"])[:33]
-                expected = str(row["期望值"])[:23]
-                actual = str(row["实际值"])[:23]
-                print(
-                    f"{name:<35} {expected:<25} {actual:<25} "
-                    f"{row['状态']}"
-                )
-
-        for row in self.observations:
-            print(f"  采集项 {row['名称']}: {row['说明']}")
-
-    def to_file(self, filepath: str):
-        counts = Counter(row["状态"] for row in self.results)
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        with open(filepath, "w", encoding="utf-8") as f:
-            f.write(f"{PANEL_NAME}测试报告\n")
-            f.write(f"生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-            f.write(f"{'=' * 60}\n\n")
-            f.write(f"总比对项: {len(self.results)}\n")
-            f.write(f"通过: {counts['通过']}\n")
-            f.write(f"差异/新增/冲突: {len(self.differences)}\n")
-            f.write(f"未验证: {counts['未验证']}\n")
-            f.write(f"采集项: {len(self.observations)}\n\n")
-            for row in self.results:
-                f.write(
-                    f"[{row['状态']}] {row['名称']}\n"
-                    f"  期望值: {row['期望值']}\n"
-                    f"  实际值: {row['实际值']}\n"
-                )
-                if row["说明"]:
-                    f.write(f"  说明: {row['说明']}\n")
-            if self.observations:
-                f.write("\n采集项（不计入差异）:\n")
-                for row in self.observations:
-                    f.write(
-                        f"  - {row['名称']}: {row['采集值']}\n"
-                        f"    说明: {row['说明']}\n"
-                    )
-        print(f"[OK] 测试报告已保存: {filepath}")
 
 
 def _find_existing_settings_dlg(win=None) -> Optional[Any]:
@@ -686,7 +591,7 @@ def main():
         print("[不支持] 钱龙客户端没有'一键炒单设置'页面，已安全跳过。")
         return
 
-    result = SettingsTestResult()
+    result = SettingsTestResult(PANEL_NAME, normalizer=normalize_text)
     hwnd = None
     dlg = None
     try:

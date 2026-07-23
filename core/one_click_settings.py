@@ -10,6 +10,14 @@ import re
 import unicodedata
 from typing import Any, Iterable
 
+from core.settings_status import (
+    STATUS_ADDED,
+    STATUS_CONFLICT,
+    STATUS_DIFFERENCE,
+    STATUS_PASS,
+    STATUS_UNVERIFIED,
+)
+
 
 HEADER_TEXTS = {"序号", "选项名称", "当前快捷键(点击设置)"}
 
@@ -161,7 +169,7 @@ def evaluate_shortcuts(
                     "name": label,
                     "expected": canonical_hotkey(expected["shortcut"]),
                     "actual": "未读取到该行",
-                    "status": "未验证" if is_ocr else "差异",
+                    "status": STATUS_UNVERIFIED if is_ocr else STATUS_DIFFERENCE,
                     "detail": (
                         "OCR分页未能确认该行"
                         if is_ocr else "标准行缺失"
@@ -177,7 +185,7 @@ def evaluate_shortcuts(
                     "name": label,
                     "expected": canonical_hotkey(expected["shortcut"]),
                     "actual": f"{actual.get('name', '')} -> {actual.get('shortcut', '')}",
-                    "status": "未验证",
+                    "status": STATUS_UNVERIFIED,
                     "detail": f"OCR最低置信度 {confidence:.3f}",
                 }
             )
@@ -193,19 +201,19 @@ def evaluate_shortcuts(
                     "name": f"{label}_名称",
                     "expected": expected_name,
                     "actual": actual_name or "(空白)",
-                    "status": "差异",
+                    "status": STATUS_DIFFERENCE,
                     "detail": "快捷键项目名称不一致",
                 }
             )
 
         if not actual_hotkey or actual_hotkey == "小键盘":
-            status = "未验证" if is_ocr else "差异"
+            status = STATUS_UNVERIFIED if is_ocr else STATUS_DIFFERENCE
             detail = "OCR未识别到完整按键" if is_ocr else "快捷键为空或不完整"
         elif actual_hotkey == expected_hotkey:
-            status = "通过"
+            status = STATUS_PASS
             detail = source
         else:
-            status = "差异"
+            status = STATUS_DIFFERENCE
             detail = source
         checks.append(
             {
@@ -224,7 +232,7 @@ def evaluate_shortcuts(
                     "name": f"快捷键[{sequence}]_{actual.get('name', '未知项目')}",
                     "expected": "标准配置中不存在",
                     "actual": canonical_hotkey(actual.get("shortcut")),
-                    "status": "新增",
+                    "status": STATUS_ADDED,
                     "detail": "客户端出现未配置的新项目",
                 }
             )
@@ -242,7 +250,7 @@ def evaluate_shortcuts(
                     "name": f"快捷键冲突_{hotkey}",
                     "expected": "无冲突",
                     "actual": "、".join(names),
-                    "status": "冲突",
+                    "status": STATUS_CONFLICT,
                     "detail": "同一个按键分配给多个项目",
                 }
             )
@@ -252,7 +260,7 @@ def evaluate_shortcuts(
                 "name": "快捷键冲突检查",
                 "expected": "无冲突",
                 "actual": "无冲突",
-                "status": "通过",
+                "status": STATUS_PASS,
                 "detail": source,
             }
         )

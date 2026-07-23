@@ -56,6 +56,7 @@ from core.settings_window import (
     open_settings_dialog as open_settings_dialog_compat,
     switch_settings_panel as switch_settings_panel_compat,
 )
+from core.settings_result import SettingsTestResult
 
 
 # ====================== 可配置参数 ======================
@@ -152,99 +153,6 @@ OUTPUT_DIR = os.environ.get("GUI_OUTPUT_DIR", "") or _OUTPUT_DIR_DEFAULT
 RESULT_SUBDIR = "委托设置"
 COUNTDOWN_SEC = 3  # 倒计时秒数
 # ========================================================
-
-
-class SettingsTestResult:
-    """测试结果收集器"""
-
-    def __init__(self):
-        self.results: List[Dict[str, Any]] = []
-        self.differences: List[Dict[str, Any]] = []
-        self.not_enabled: int = 0          # 因上级开关未启用而未生效的参数数
-
-    def add_result(self, name: str, actual_value: Any, expected_value: Any):
-        """添加一条测试结果"""
-        matched = actual_value == expected_value
-        result = {
-            "名称": name,
-            "期望值": expected_value,
-            "实际值": actual_value,
-            "是否一致": "✓" if matched else "✗ 差异"
-        }
-        self.results.append(result)
-        if not matched:
-            self.differences.append(result)
-
-    def add_not_enabled(self, name: str, detail: str = "(未启用)"):
-        """记录一个因上级开关未启用而未生效的参数。
-
-        属于默认预期，不计入差异，仅在报告中以“○ 未启用”提示。
-        """
-        self.results.append({
-            "名称": name,
-            "期望值": "—",
-            "实际值": detail,
-            "是否一致": "○ 未启用"
-        })
-        self.not_enabled += 1
-
-    def print_summary(self):
-        """打印测试摘要"""
-        total = len(self.results)
-        diff = len(self.differences)
-        passed = total - diff - self.not_enabled
-        print(f"\n{'='*60}")
-        print(f"测试结果汇总")
-        print(f"{'='*60}")
-        print(f"总项目数: {total}")
-        print(f"通过: {passed}")
-        print(f"差异: {diff}")
-        print(f"未启用(默认预期，不计差异): {self.not_enabled}")
-
-        if self.results:
-            print(f"\n{'名称':<30} {'期望值':<30} {'实际值':<30} {'状态'}")
-            print(f"{'-'*100}")
-            for r in self.results:
-                name = r["名称"][:28]
-                # 列宽30，超出时完整显示（下拉候选项等长文本不再截断）
-                exp = str(r["期望值"])[:60]
-                act = str(r["实际值"])[:60]
-                status = r["是否一致"]
-                print(f"{name:<30} {exp:<30} {act:<30} {status}")
-
-    def to_file(self, filepath: str):
-        """将结果写入文件"""
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        with open(filepath, "w", encoding="utf-8") as f:
-            f.write(f"委托设置测试报告\n")
-            f.write(f"生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-            f.write(f"{'='*60}\n\n")
-
-            total = len(self.results)
-            diff = len(self.differences)
-            passed = total - diff - self.not_enabled
-            f.write(f"总项目数: {total}\n")
-            f.write(f"通过: {passed}\n")
-            f.write(f"差异: {diff}\n")
-            f.write(f"未启用(默认预期，不计差异): {self.not_enabled}\n\n")
-
-            f.write(f"{'名称':<35} {'期望值':<30} {'实际值':<30} {'状态'}\n")
-            f.write(f"{'-'*100}\n")
-            for r in self.results:
-                name = r["名称"][:33]
-                # 列宽30，超出时完整显示（下拉候选项等长文本不再截断）
-                exp = str(r["期望值"])[:60]
-                act = str(r["实际值"])[:60]
-                status = r["是否一致"]
-                f.write(f"{name:<35} {exp:<30} {act:<30} {status}\n")
-
-            if self.differences:
-                f.write(f"\n{'='*60}\n")
-                f.write("差异详情:\n")
-                for d in self.differences:
-                    f.write(f"  - {d['名称']}: 期望={d['期望值']}, 实际={d['实际值']}\n")
-
-        print(f"[OK] 测试报告已保存: {filepath}")
 
 
 def open_settings_dialog(win) -> Any:
@@ -1092,7 +1000,7 @@ def test_quantity_settings(dlg, result: SettingsTestResult):
 
     本组四项（股票买入/卖出自动填入数量、期权交易/期货交易自动填入数量）
     默认均为未启用，其下方参数（RadioButton、数值）也随之不可检测（检测到则记为
-    “○ 未启用”）。为能验证默认参数，采取与自动追单类似的策略：
+    “未启用”）。为能验证默认参数，采取与自动追单类似的策略：
         1. 检测开关初始状态
         2. 若未启用 → 先点击启用以暴露下方参数，检测完后再恢复为未启用
         3. 在启用状态下逐项检测下方参数
@@ -1198,7 +1106,7 @@ def main():
     print("交易系统设置 - 委托设置自动化测试")
     print("=" * 60)
 
-    result = SettingsTestResult()
+    result = SettingsTestResult(PANEL_NAME)
     hwnd = None
     dlg = None
 
