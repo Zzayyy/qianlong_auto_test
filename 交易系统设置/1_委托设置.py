@@ -52,6 +52,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from pywinauto import Application, findwindows, mouse
 from core.window import find_window, activate_window, countdown, close_settings_dialog
+from core.settings_window import (
+    open_settings_dialog as open_settings_dialog_compat,
+    switch_settings_panel as switch_settings_panel_compat,
+)
 
 
 # ====================== 可配置参数 ======================
@@ -640,9 +644,25 @@ def _get_combo_hwnd(dlg, auto_id: str) -> Optional[int]:
 def get_combobox_selection_by_id(dlg, auto_id: str) -> Optional[str]:
     """通过 auto_id 获取下拉框当前选择的文本。
 
+    优化：优先用 CB_GETCURSEL + CB_GETLBTEXT 直接读取（不展开下拉层，
+    速度最快）；失败则降级到原 UIA selected_text()。
+
     Returns:
         当前选中的文本，找不到则返回None
     """
+    try:
+        hwnd = _get_combo_hwnd(dlg, auto_id)
+        if hwnd is not None:
+            user32 = _win32_user32()
+            sel = user32.SendMessageW(hwnd, CB_GETCURSEL, 0, 0)
+            if sel is not None and sel >= 0:
+                buf = ctypes.create_unicode_buffer(256)
+                user32.SendMessageW(hwnd, CB_GETLBTEXT, sel, ctypes.addressof(buf))
+                return buf.value.strip() or None
+    except Exception as e:
+        print(f"  [WARN] win32 读取下拉选择失败，降级到 UIA: {e}")
+
+    # 降级：UIA
     try:
         combo = dlg.child_window(auto_id=auto_id, control_type="ComboBox")
         combo.wait("ready", timeout=2)
@@ -688,17 +708,30 @@ def _toggle_combobox(combo, open_it: bool):
         raise RuntimeError(f"无法点击下拉箭头: {e}")
 
 
-def get_combobox_items_by_id(dlg, auto_id: str) -> Optional[List[str]]:
-    """点击打开下拉框，读取其包含的所有候选项，然后再次点击一次关闭。
+def _read_combobox_items_win32(hwnd: int) -> Optional[List[str]]:
+    """通过 CB_GETCOUNT / CB_GETLBTEXT 直接读取 Win32 组合框的候选项。
 
-    流程：
-        1. 点击下拉框右侧箭头展开列表
-        2. 读取全部候选项文本（优先用 item_texts，失败则降级读取弹出的 ListItem）
-        3. 再次点击一次收起下拉列表
-
-    Returns:
-        候选项文本列表（已去除空白），找不到或无法读取返回None
+    不走 UIA 树遍历、不展开下拉层，因此极快。返回去重后的候选项列表，
+    读取失败或为空时返回 None。
     """
+    user32 = _win32_user32()
+    count = user32.SendMessageW(hwnd, CB_GETCOUNT, 0, 0)
+    if count is None or count <= 0:
+        return None
+    buf = ctypes.create_unicode_buffer(256)
+    items: List[str] = []
+    seen: set = set()
+    for i in range(count):
+        user32.SendMessageW(hwnd, CB_GETLBTEXT, i, ctypes.addressof(buf))
+        txt = buf.value.strip()
+        if txt and txt not in seen:
+            seen.add(txt)
+            items.append(txt)
+    return items if items else None
+
+
+def _get_combobox_items_uia(dlg, auto_id: str) -> Optional[List[str]]:
+    """原 UIA 方案（兼容非标准 / 虚拟化组合框）：展开下拉层并遍历 ListItem。"""
     try:
         combo = dlg.child_window(auto_id=auto_id, control_type="ComboBox", found_index=0)
         combo.wait("ready", timeout=2)
@@ -1179,11 +1212,13 @@ def main():
         win = activate_window(hwnd)
 
         # 3. 自动打开设置对话框
-        dlg = open_settings_dialog(win)
+        dlg = open_settings_dialog_compat(
+            win, SETTINGS_BUTTON_AUTO_ID, SETTINGS_MENU_ITEM_AUTO_ID, SETTINGS_DIALOG_TITLE
+        )
         dlg.wait("ready", timeout=10)
 
         # 4. 切换到委托设置面板
-        if not switch_to_settings_panel(dlg, PANEL_NAME):
+        if not switch_settings_panel_compat(dlg, PANEL_NAME):
             print("[错误] 无法切换到委托设置面板")
             sys.exit(1)
 
