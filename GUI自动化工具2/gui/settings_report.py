@@ -20,8 +20,16 @@ from core.settings_report import (
     OVERALL_FAIL,
     OVERALL_PASS,
     OVERALL_REVIEW,
+    OVERALL_RUNNING,
     discover_batches,
 )
+
+# 结论/状态语义色（与模块明细树、Excel 报告保持一致）
+COLOR_PASS = "#067647"
+COLOR_REVIEW = "#9a6700"
+COLOR_FAIL = "#b42318"
+COLOR_RUNNING = "#175cd3"
+COLOR_NEUTRAL = "#333333"
 
 
 class SettingsReportPanel:
@@ -35,6 +43,7 @@ class SettingsReportPanel:
         self._current_summary = None
         self._running_batch = None
         self._running_run_id = ""
+        self._card_labels = {}
 
         self.batch_var = tk.StringVar()
         self.progress_var = tk.StringVar(value="尚未运行完整检查")
@@ -48,6 +57,18 @@ class SettingsReportPanel:
         self.refresh_batches()
 
     def _build_ui(self):
+        client_name = get_client_name(self.controller.client_id) or self.controller.client_id or "未设置"
+        header = tk.Frame(self.parent)
+        header.pack(fill=tk.X, pady=(0, 8))
+        tk.Label(
+            header,
+            text="交易系统设置 · 差异报告中心",
+            anchor=tk.W,
+            font=("Microsoft YaHei UI", 15, "bold"),
+            foreground="#1f2d3d",
+        ).pack(fill=tk.X)
+
+
         toolbar = ttk.Frame(self.parent)
         toolbar.pack(fill=tk.X, pady=(0, 6))
 
@@ -119,7 +140,7 @@ class SettingsReportPanel:
                 "模块", "结论", "检查项", "通过", "差异",
                 "待复核", "未启用", "耗时(秒)",
             ),
-            widths=(130, 85, 65, 55, 55, 65, 65, 70),
+            widths=(80, 60, 65, 55, 55, 65, 65, 70),
         )
         self.module_tree.bind("<Double-1>", self._open_selected_module_report)
 
@@ -154,16 +175,18 @@ class SettingsReportPanel:
             command=self.delete_selected_batch,
         ).pack(side=tk.RIGHT)
 
-    @staticmethod
-    def _make_card(parent, title, variable, column):
+    def _make_card(self, parent, title, variable, column):
         frame = ttk.LabelFrame(parent, text=title, padding=(5, 3))
         frame.grid(row=0, column=column, sticky="nsew", padx=(0 if column == 0 else 3, 0))
-        ttk.Label(
+        label = tk.Label(
             frame,
             textvariable=variable,
             anchor=tk.CENTER,
-            font=("Microsoft YaHei UI", 10, "bold"),
-        ).pack(fill=tk.X)
+            font=("Microsoft YaHei UI", 13, "bold"),
+            foreground=COLOR_NEUTRAL,
+        )
+        label.pack(fill=tk.X, ipady=2)
+        self._card_labels[title] = label
 
     @staticmethod
     def _make_tree(parent, columns, headings, widths):
@@ -277,7 +300,7 @@ class SettingsReportPanel:
         )
         if summary["problems"]:
             self.detail_notebook.select(1)
-        self.controller.show_report_center()
+        self.controller.show_report_center(auto_clear=False)
         self._running_batch = None
 
     def on_batch_summary(self, summary, final=False):
@@ -326,20 +349,19 @@ class SettingsReportPanel:
             self._batch_lookup[display] = summary
         self.batch_combo["values"] = values
 
-        selected = None
         if select_run_id:
-            selected = next((value for value in values if value.startswith(f"{select_run_id} |")), None)
-        if selected is None and self.batch_var.get() in self._batch_lookup:
-            selected = self.batch_var.get()
-        if selected is None and values:
-            selected = values[0]
+            selected = next(
+                (value for value in values if value.startswith(f"{select_run_id} |")),
+                None,
+            )
+            if selected:
+                self.batch_var.set(selected)
+                self._load_summary(self._batch_lookup[selected])
+                return
 
-        if selected:
-            self.batch_var.set(selected)
-            self._load_summary(self._batch_lookup[selected])
-        else:
-            self.batch_var.set("")
-            self._clear_summary()
+        # 普通刷新（打开报告中心、切换输出目录等）不自动展示历史批次，保持清空
+        self.batch_var.set("")
+        self._clear_summary()
 
     def _on_batch_selected(self, event=None):
         summary = self._batch_lookup.get(self.batch_var.get())
@@ -356,7 +378,10 @@ class SettingsReportPanel:
             totals.get("执行失败", 0) or 0
         )
         self.diff_count_var.set(str(diff_or_fail))
-        self.review_count_var.set(str(totals.get("未验证", 0)))
+        review_count = int(totals.get("未验证", 0) or 0)
+        self.review_count_var.set(str(review_count))
+
+        self._color_cards(summary.get("overall_status", ""), diff_or_fail, review_count)
 
         self.module_tree.delete(*self.module_tree.get_children())
         for index, module in enumerate(summary.get("modules", [])):
@@ -396,6 +421,10 @@ class SettingsReportPanel:
                 tags=(self._status_tag(problem.get("status", "")),),
             )
 
+    def clear_view(self):
+        """清空当前展示的批次总结（保留历史下拉列表）。"""
+        self._clear_summary()
+
     def _clear_summary(self):
         self._current_summary = None
         for variable in (
@@ -406,8 +435,30 @@ class SettingsReportPanel:
             self.review_count_var,
         ):
             variable.set("—" if variable is self.overall_var else "0")
+        for label in self._card_labels.values():
+            label.config(foreground=COLOR_NEUTRAL)
+        self._card_labels["通过项"].config(foreground=COLOR_PASS)
+        if getattr(self, "batch_combo", None) is not None:
+            self.batch_combo.set("")
         self.module_tree.delete(*self.module_tree.get_children())
         self.problem_tree.delete(*self.problem_tree.get_children())
+
+    def _color_cards(self, overall_status, diff_or_fail, review_count):
+        """按结论与计数给卡片数值设置语义色。"""
+        overall_color = {
+            OVERALL_PASS: COLOR_PASS,
+            OVERALL_REVIEW: COLOR_REVIEW,
+            OVERALL_FAIL: COLOR_FAIL,
+            OVERALL_RUNNING: COLOR_RUNNING,
+        }.get(overall_status, COLOR_NEUTRAL)
+        self._card_labels["总体结论"].config(foreground=overall_color)
+        self._card_labels["通过项"].config(foreground=COLOR_PASS)
+        self._card_labels["差异/失败"].config(
+            foreground=COLOR_FAIL if diff_or_fail else COLOR_PASS
+        )
+        self._card_labels["待复核"].config(
+            foreground=COLOR_REVIEW if review_count else COLOR_PASS
+        )
 
     @staticmethod
     def _status_tag(status):
