@@ -1050,9 +1050,6 @@ class TaskCenter:
                 )
             except Exception as exc:
                 self.gui._log(f"[任务中心] 临时队列进度回调异常: {exc}")
-        self.controller.update_settings_batch(
-            self._settings_batch, tasks, final=False
-        )
         self.run_next()
 
     def on_error(self, exc, item):
@@ -1085,9 +1082,6 @@ class TaskCenter:
                 )
             except Exception as callback_exc:
                 self.gui._log(f"[任务中心] 临时队列进度回调异常: {callback_exc}")
-        self.controller.update_settings_batch(
-            self._settings_batch, tasks, final=False
-        )
         self.run_next()
 
     def _finish_all(self, msg):

@@ -49,7 +49,6 @@ from gui.settings_report import SettingsReportPanel
 from gui.shell_open import open_path
 from core.settings_report import (
     BATCH_COMPLETED,
-    BATCH_RUNNING,
     BATCH_STOPPED,
     create_run_id,
     generate_batch_reports,
@@ -1437,30 +1436,22 @@ class AutomationGUI:
             f"[报告中心] 已创建{source}批次: {run_id} | "
             f"设置模块 {len(settings_tasks)} 个"
         )
-        self.update_settings_batch(context, [], final=False)
         return context
 
     def update_settings_batch(self, context, task_records, final=False, stopped=False):
-        """覆盖更新同一批次的总报告，并同步刷新报告中心。"""
+        """任务结束时生成一次总报告，并把完整批次信息直接交给报告中心。"""
         if not context:
+            return None
+        if not final:
             return None
         records = [
             {**item, "params": dict(item.get("params", {}))}
             for item in task_records
             if item.get("category") == "交易系统设置"
         ]
-        if not final:
-            terminal = {
-                TaskCenter.ST_SUCCESS,
-                TaskCenter.ST_FAILED,
-                TaskCenter.ST_ERROR,
-                TaskCenter.ST_STOPPED,
-            }
-            records = [item for item in records if item.get("status") in terminal]
         batch_status = (
             BATCH_STOPPED if stopped
-            else BATCH_COMPLETED if final
-            else BATCH_RUNNING
+            else BATCH_COMPLETED
         )
         try:
             summary = generate_batch_reports(
@@ -1493,9 +1484,7 @@ class AutomationGUI:
         for item in task_records:
             if item.get("category") == "交易系统设置":
                 item["_settings_runtime"] = dict(runtime)
-        return self.update_settings_batch(
-            context, task_records, final=False, stopped=False
-        )
+        return None
 
     # ====================== 任务中心：顺序执行驱动 ======================
     def run_task_center(self, task_center):

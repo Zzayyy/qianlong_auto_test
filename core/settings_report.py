@@ -36,6 +36,7 @@ BATCH_STOPPED = "已停止"
 BATCH_SUMMARY_JSON = "批次汇总.json"
 TOTAL_REPORT_TXT = "总差异报告.txt"
 TOTAL_REPORT_XLSX = "总差异报告.xlsx"
+DEFAULT_BATCH_LIMIT = 20
 
 
 def create_run_id(now: datetime = None, code: str = "") -> str:
@@ -50,30 +51,48 @@ def module_name_from_script(script_name: str) -> str:
     return re.sub(r"^\s*\d+\.\s*", "", script_name or "").strip()
 
 
-def discover_batches(output_dir: str) -> List[Dict[str, Any]]:
-    """读取输出目录下的设置检查批次（含运行中），最新批次在前。"""
+def discover_batches(
+    output_dir: str,
+    limit: int = DEFAULT_BATCH_LIMIT,
+) -> List[Dict[str, Any]]:
+    """读取最新的设置检查批次。
+
+    先使用目录项和 ``批次汇总.json`` 的修改时间排序，再只解析需要显示
+    的 JSON，避免历史批次较多时逐个加载全部汇总内容。
+    """
     batch_root = Path(output_dir) / "批次"
     if not batch_root.is_dir():
         return []
+    candidates = []
+    try:
+        entries = list(os.scandir(batch_root))
+    except OSError:
+        return []
+    for entry in entries:
+        try:
+            if not entry.is_dir(follow_symlinks=False):
+                continue
+            summary_path = Path(entry.path) / BATCH_SUMMARY_JSON
+            stat = summary_path.stat()
+        except OSError:
+            continue
+        candidates.append((stat.st_mtime_ns, entry.name, summary_path))
+    candidates.sort(key=lambda row: (row[0], row[1]), reverse=True)
+
     batches = []
-    for child in batch_root.iterdir():
-        if not child.is_dir():
-            continue
-        summary_path = child / BATCH_SUMMARY_JSON
-        if not summary_path.is_file():
-            continue
+    max_count = max(0, int(limit)) if limit is not None else None
+    for _, _, summary_path in candidates:
+        if max_count is not None and len(batches) >= max_count:
+            break
         try:
             payload = json.loads(summary_path.read_text(encoding="utf-8-sig"))
         except Exception:
             continue
+        child = summary_path.parent
         payload["_batch_dir"] = str(child.resolve())
         payload["_summary_path"] = str(summary_path.resolve())
         batches.append(payload)
-    return sorted(
-        batches,
-        key=lambda row: (row.get("generated_at", ""), row.get("run_id", "")),
-        reverse=True,
-    )
+    return batches
 
 
 def load_module_results(batch_dir: str) -> Dict[str, Dict[str, Any]]:
