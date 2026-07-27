@@ -1,0 +1,1021 @@
+Control Identifiers:
+
+Dialog - '钱龙模拟期权宝 　　当前账号 | 期权：20241216003(20241216003) | 股票：20241216003(20241216003)'    (L-8, T-8, R1928, B1049)
+['Dialog', '钱龙模拟期权宝 \u3000\u3000当前账号 | 期权：20241216003(20241216003) | 股票：20241216003(20241216003)Dialog', '钱龙模拟期权宝 \u3000\u3000当前账号 | 期权：20241216003(20241216003) | 股票：20241216003(20241216003)']
+child_window(title="钱龙模拟期权宝 　　当前账号 | 期权：20241216003(20241216003) | 股票：20241216003(20241216003)", control_type="Window")
+   | 
+   | Pane - ''    (L1, T24, R1919, B1040)
+   | ['Pane', 'Pane0', 'Pane1']
+   | child_window(auto_id="59648", control_type="Pane")
+   |    | 
+   |    | Button - ''    (L7, T29, R88, B50)
+   |    | ['Button', 'Button0', 'Button1']
+   |    | child_window(auto_id="1001", control_type="Button")
+   |    | 
+   |    | Button - ''    (L93, T29, R174, B50)
+   |    | ['Button2']
+   |    | child_window(auto_id="1002", control_type="Button")
+   |    | 
+   |    | Button - ''    (L179, T29, R260, B50)
+   |    | ['Button3']
+   |    | child_window(auto_id="1023", control_type="Button")
+   |    | 
+   |    | Button - ''    (L265, T29, R346, B50)
+   |    | ['Button4']
+   |    | child_window(auto_id="1019", control_type="Button")
+   |    | 
+   |    | Button - ''    (L351, T29, R432, B50)
+   |    | ['Button5']
+   |    | child_window(auto_id="1022", control_type="Button")
+   |    | 
+   |    | Button - ''    (L437, T29, R518, B50)
+   |    | ['Button6']
+   |    | child_window(auto_id="1021", control_type="Button")
+   |    | 
+   |    | Button - ''    (L523, T29, R604, B50)
+   |    | ['Button7']
+   |    | child_window(auto_id="1038", control_type="Button")
+   |    | 
+   |    | Button - ''    (L609, T29, R690, B50)
+   |    | ['Button8']
+   |    | child_window(auto_id="1027", control_type="Button")
+   |    | 
+   |    | Button - ''    (L695, T29, R776, B50)
+   |    | ['Button9']
+   |    | child_window(auto_id="1031", control_type="Button")
+   |    | 
+   |    | Button - ''    (L781, T29, R862, B50)
+   |    | ['Button10']
+   |    | child_window(auto_id="1032", control_type="Button")
+   |    | 
+   |    | Button - ''    (L867, T29, R948, B50)
+   |    | ['Button11']
+   |    | child_window(auto_id="1030", control_type="Button")
+   |    | 
+   |    | Button - ''    (L953, T29, R1034, B50)
+   |    | ['Button12']
+   |    | child_window(auto_id="1033", control_type="Button")
+   |    | 
+   |    | Button - ''    (L1039, T29, R1120, B50)
+   |    | ['Button13']
+   |    | child_window(auto_id="1036", control_type="Button")
+   |    | 
+   |    | Button - ''    (L1125, T29, R1206, B50)
+   |    | ['Button14']
+   |    | child_window(auto_id="1037", control_type="Button")
+   |    | 
+   |    | Button - ''    (L1211, T29, R1292, B50)
+   |    | ['Button15']
+   |    | child_window(auto_id="2001", control_type="Button")
+   |    | 
+   |    | Button - ''    (L1297, T29, R1378, B50)
+   |    | ['Button16']
+   |    | child_window(auto_id="2002", control_type="Button")
+   |    | 
+   |    | Button - ''    (L1383, T29, R1464, B50)
+   |    | ['Button17']
+   |    | child_window(auto_id="2003", control_type="Button")
+   |    | 
+   |    | Button - ''    (L1619, T30, R1678, B51)
+   |    | ['Button18']
+   |    | child_window(auto_id="1016", control_type="Button")
+   |    | 
+   |    | Edit - ''    (L1683, T31, R1847, B48)
+   |    | ['Edit', 'Edit0', 'Edit1']
+   |    | child_window(auto_id="1000", control_type="Edit")
+   |    | 
+   |    | Button - ''    (L1885, T26, R1913, B54)
+   |    | ['Button19']
+   |    | child_window(auto_id="1008", control_type="Button")
+   |    | 
+   |    | Button - ''    (L1855, T26, R1883, B54)
+   |    | ['Button20']
+   |    | child_window(auto_id="1026", control_type="Button")
+   |    | 
+   |    | Pane - ''    (L2, T55, R1918, B1011)
+   |    | ['Pane2']
+   |    | child_window(auto_id="342461800", control_type="Pane")
+   |    |    | 
+   |    |    | Static - ''    (L18, T63, R164, B83)
+   |    |    | ['Static', 'Static0', 'Static1']
+   |    |    | child_window(auto_id="100", control_type="Text")
+   |    |    | 
+   |    |    | Static - ''    (L18, T91, R164, B111)
+   |    |    | ['Static2']
+   |    |    | child_window(auto_id="101", control_type="Text")
+   |    |    | 
+   |    |    | Pane - 'TacticsPanel'    (L2, T119, R180, B1011)
+   |    |    | ['TacticsPanelPane', 'TacticsPanel', 'Pane3']
+   |    |    | child_window(title="TacticsPanel", auto_id="103", control_type="Pane")
+   |    |    |    | 
+   |    |    |    | Pane - ''    (L162, T119, R180, B981)
+   |    |    |    | ['Pane4']
+   |    |    |    | child_window(auto_id="104", control_type="Pane")
+   |    |    | 
+   |    |    | Pane - ''    (L181, T55, R1611, B107)
+   |    |    | ['Pane5']
+   |    |    | child_window(auto_id="102", control_type="Pane")
+   |    |    | 
+   |    |    | Pane - ''    (L181, T107, R1611, B484)
+   |    |    | ['Pane6']
+   |    |    | child_window(auto_id="105", control_type="Pane")
+   |    |    |    | 
+   |    |    |    | Pane - ''    (L1594, T107, R1611, B484)
+   |    |    |    | ['Pane7']
+   |    |    |    | child_window(auto_id="108", control_type="Pane")
+   |    |    |    | 
+   |    |    |    | Static - ''    (L755, T110, R881, B129)
+   |    |    |    | ['Static3']
+   |    |    |    | child_window(auto_id="106", control_type="Text")
+   |    |    |    | 
+   |    |    |    | Static - ''    (L893, T110, R1019, B129)
+   |    |    |    | ['Static4']
+   |    |    |    | child_window(auto_id="107", control_type="Text")
+   |    |    | 
+   |    |    | Pane - ''    (L181, T484, R1611, B733)
+   |    |    | ['Pane8']
+   |    |    | child_window(auto_id="128", control_type="Pane")
+   |    |    |    | 
+   |    |    |    | Pane - ''    (L1593, T484, R1611, B707)
+   |    |    |    | ['Pane9']
+   |    |    |    | child_window(auto_id="108", control_type="Pane")
+   |    |    |    | 
+   |    |    |    | Pane - 'spinedit_multiple'    (L1330, T712, R1367, B728)
+   |    |    |    | ['spinedit_multiplePane', 'spinedit_multiple', 'Pane10']
+   |    |    |    | child_window(title="spinedit_multiple", auto_id="129", control_type="Pane")
+   |    |    |    |    | 
+   |    |    |    |    | Edit - ''    (L1334, T714, R1351, B726)
+   |    |    |    |    | ['Edit2']
+   |    |    |    |    | child_window(auto_id="2000", control_type="Edit")
+   |    |    |    | 
+   |    |    |    | Static - ''    (L313, T518, R381, B534)
+   |    |    |    | ['Static5']
+   |    |    |    | child_window(auto_id="1152", control_type="Text")
+   |    |    |    | 
+   |    |    |    | Static - ''    (L413, T518, R459, B534)
+   |    |    |    | ['Static6']
+   |    |    |    | child_window(auto_id="1408", control_type="Text")
+   |    |    |    | 
+   |    |    |    | Static - ''    (L463, T518, R535, B534)
+   |    |    |    | ['Static7']
+   |    |    |    | child_window(auto_id="1664", control_type="Text")
+   |    |    |    | 
+   |    |    |    | Pane - 'prelst_spin_price0'    (L561, T518, R625, B534)
+   |    |    |    | ['prelst_spin_price0', 'prelst_spin_price0Pane', 'Pane11']
+   |    |    |    | child_window(title="prelst_spin_price0", auto_id="1920", control_type="Pane")
+   |    |    |    |    | 
+   |    |    |    |    | Edit - ''    (L565, T520, R609, B532)
+   |    |    |    |    | ['Edit3']
+   |    |    |    |    | child_window(auto_id="2000", control_type="Edit")
+   |    |    |    | 
+   |    |    |    | Pane - 'prelst_spin_unit0'    (L629, T518, R689, B534)
+   |    |    |    | ['prelst_spin_unit0Pane', 'prelst_spin_unit0', 'Pane12']
+   |    |    |    | child_window(title="prelst_spin_unit0", auto_id="2176", control_type="Pane")
+   |    |    |    |    | 
+   |    |    |    |    | Edit - ''    (L633, T520, R673, B532)
+   |    |    |    |    | ['Edit4']
+   |    |    |    |    | child_window(auto_id="2000", control_type="Edit")
+   |    |    |    | 
+   |    |    |    | Static - ''    (L313, T542, R381, B558)
+   |    |    |    | ['Static8']
+   |    |    |    | child_window(auto_id="1153", control_type="Text")
+   |    |    |    | 
+   |    |    |    | Static - ''    (L413, T542, R459, B558)
+   |    |    |    | ['Static9']
+   |    |    |    | child_window(auto_id="1409", control_type="Text")
+   |    |    |    | 
+   |    |    |    | Static - ''    (L463, T542, R535, B558)
+   |    |    |    | ['Static10']
+   |    |    |    | child_window(auto_id="1665", control_type="Text")
+   |    |    |    | 
+   |    |    |    | Pane - 'prelst_spin_price1'    (L561, T542, R625, B558)
+   |    |    |    | ['prelst_spin_price1Pane', 'prelst_spin_price1', 'Pane13']
+   |    |    |    | child_window(title="prelst_spin_price1", auto_id="1921", control_type="Pane")
+   |    |    |    |    | 
+   |    |    |    |    | Edit - ''    (L565, T544, R609, B556)
+   |    |    |    |    | ['Edit5']
+   |    |    |    |    | child_window(auto_id="2000", control_type="Edit")
+   |    |    |    | 
+   |    |    |    | Pane - 'prelst_spin_unit1'    (L629, T542, R689, B558)
+   |    |    |    | ['prelst_spin_unit1', 'Pane14', 'prelst_spin_unit1Pane']
+   |    |    |    | child_window(title="prelst_spin_unit1", auto_id="2177", control_type="Pane")
+   |    |    |    |    | 
+   |    |    |    |    | Edit - ''    (L633, T544, R673, B556)
+   |    |    |    |    | ['Edit6']
+   |    |    |    |    | child_window(auto_id="2000", control_type="Edit")
+   |    |    | 
+   |    |    | Pane - 'RiskList'    (L1611, T849, R1918, B1011)
+   |    |    | ['RiskListPane', 'RiskList', 'Pane15']
+   |    |    | child_window(title="RiskList", auto_id="109", control_type="Pane")
+   |    |    |    | 
+   |    |    |    | Pane - 'rank_price_spin0'    (L1753, T898, R1821, B915)
+   |    |    |    | ['rank_price_spin0', 'rank_price_spin0Pane', 'Pane16']
+   |    |    |    | child_window(title="rank_price_spin0", auto_id="110", control_type="Pane")
+   |    |    |    |    | 
+   |    |    |    |    | Edit - ''    (L1757, T900, R1804, B912)
+   |    |    |    |    | ['Edit7', '共4条Edit', '共4条Edit0', '共4条Edit1']
+   |    |    |    |    | child_window(auto_id="2000", control_type="Edit")
+   |    |    |    | 
+   |    |    |    | Pane - 'rank_price_spin1'    (L1753, T921, R1821, B938)
+   |    |    |    | ['rank_price_spin1Pane', 'Pane17', 'rank_price_spin1']
+   |    |    |    | child_window(title="rank_price_spin1", auto_id="111", control_type="Pane")
+   |    |    |    |    | 
+   |    |    |    |    | Edit - ''    (L1757, T923, R1804, B935)
+   |    |    |    |    | ['Edit8', '共4条Edit2']
+   |    |    |    |    | child_window(auto_id="2000", control_type="Edit")
+   |    |    |    | 
+   |    |    |    | Pane - 'rank_price_spin2'    (L1753, T944, R1821, B961)
+   |    |    |    | ['rank_price_spin2Pane', 'rank_price_spin2', 'Pane18']
+   |    |    |    | child_window(title="rank_price_spin2", auto_id="112", control_type="Pane")
+   |    |    |    |    | 
+   |    |    |    |    | Edit - ''    (L1757, T946, R1804, B958)
+   |    |    |    |    | ['Edit9', '共4条Edit3']
+   |    |    |    |    | child_window(auto_id="2000", control_type="Edit")
+   |    |    |    | 
+   |    |    |    | Pane - 'rank_price_spin3'    (L1753, T967, R1821, B984)
+   |    |    |    | ['rank_price_spin3Pane', 'rank_price_spin3', 'Pane19']
+   |    |    |    | child_window(title="rank_price_spin3", auto_id="113", control_type="Pane")
+   |    |    |    |    | 
+   |    |    |    |    | Edit - ''    (L1757, T969, R1804, B981)
+   |    |    |    |    | ['Edit10']
+   |    |    |    |    | child_window(auto_id="2000", control_type="Edit")
+   |    |    |    | 
+   |    |    |    | Pane - 'rank_price_spin4'    (L1753, T990, R1821, B1007)
+   |    |    |    | ['rank_price_spin4', 'rank_price_spin4Pane', 'Pane20']
+   |    |    |    | child_window(title="rank_price_spin4", auto_id="114", control_type="Pane")
+   |    |    |    |    | 
+   |    |    |    |    | Edit - ''    (L1757, T992, R1804, B1004)
+   |    |    |    |    | ['Edit11']
+   |    |    |    |    | child_window(auto_id="2000", control_type="Edit")
+   |    |    | 
+   |    |    | Pane - ''    (L181, T733, R1611, B1011)
+   |    |    | ['共4条Pane', 'Pane21']
+   |    |    | child_window(auto_id="342489976", control_type="Pane")
+   |    |    |    | 
+   |    |    |    | Static - ''    (L181, T733, R201, B942)
+   |    |    |    | ['Static11']
+   |    |    |    | child_window(auto_id="8022", control_type="Text")
+   |    |    |    | 
+   |    |    |    | Button - ''    (L1555, T735, R1585, B760)
+   |    |    |    | ['共4条Button', 'Button21']
+   |    |    |    | child_window(auto_id="9036", control_type="Button")
+   |    |    |    | 
+   |    |    |    | Button - 'Button1'    (L201, T733, R581, B760)
+   |    |    |    | ['Button22', 'Button1Button', 'Button110']
+   |    |    |    | child_window(title="Button1", auto_id="1191", control_type="Button")
+   |    |    |    | 
+   |    |    |    | Button - '刷新'    (L1304, T735, R1349, B758)
+   |    |    |    | ['Button23', '刷新Button', '刷新']
+   |    |    |    | child_window(title="刷新", auto_id="1157", control_type="Button")
+   |    |    |    | 
+   |    |    |    | Button - '输出'    (L1349, T735, R1394, B758)
+   |    |    |    | ['Button24', '输出', '输出Button']
+   |    |    |    | child_window(title="输出", auto_id="1159", control_type="Button")
+   |    |    |    | 
+   |    |    |    | Static - '共4条'    (L929, T735, R989, B758)
+   |    |    |    | ['共4条Static', 'Static12', '共4条', '共4条Static0', '共4条Static1']
+   |    |    |    | child_window(title="共4条", auto_id="1059", control_type="Text")
+   |    |    |    | 
+   |    |    |    | Button - '全选'    (L1214, T735, R1259, B758)
+   |    |    |    | ['全选', 'Button25', '全选Button']
+   |    |    |    | child_window(title="全选", auto_id="1165", control_type="Button")
+   |    |    |    | 
+   |    |    |    | Button - '重置'    (L1259, T735, R1304, B758)
+   |    |    |    | ['Button26', '重置', '重置Button']
+   |    |    |    | child_window(title="重置", auto_id="1153", control_type="Button")
+   |    |    |    | 
+   |    |    |    | Button - '×'    (L1587, T737, R1607, B757)
+   |    |    |    | ['×Button', '×', 'Button27']
+   |    |    |    | child_window(title="×", auto_id="9035", control_type="Button")
+   |    |    |    | 
+   |    |    |    | ComboBox - ''    (L1394, T735, R1555, B759)
+   |    |    |    | ['ComboBoxProgram Manager', 'ComboBox任务栏', 'ComboBoxLocalSend', 'ComboBoxZzayyy/qianlong_auto_test - Google Chrome', 'ComboBox国泰海通证券期权宝(仿真行情) \u3000\u3000当前账号 | 期权：章绍龙1(130375)', 'ComboBox钱龙模拟期权宝 \u3000\u3000当前账号 | 期权：20241216003(20241216003) | 股票：20241216003(20241216003)', 'ComboBoxv2rayN - V7.22.5 - X64 - 以管理员身份运行', 'ComboBox微信', '共4条ComboBox', 'ComboBox6.GUI模块化 - 获取组件.py - CodeBuddy CN [管理员]', 'ComboBox', 'ComboBoxNVIDIA GeForce Overlay', 'ComboBox总结', 'ComboBoxProgram Manager0', 'ComboBoxProgram Manager1', 'ComboBox任务栏0', 'ComboBox任务栏1', 'ComboBoxLocalSend0', 'ComboBoxLocalSend1', 'ComboBoxZzayyy/qianlong_auto_test - Google Chrome0', 'ComboBoxZzayyy/qianlong_auto_test - Google Chrome1', 'ComboBox国泰海通证券期权宝(仿真行情) \u3000\u3000当前账号 | 期权：章绍龙1(130375)0', 'ComboBox国泰海通证券期权宝(仿真行情) \u3000\u3000当前账号 | 期权：章绍龙1(130375)1', 'ComboBox钱龙模拟期权宝 \u3000\u3000当前账号 | 期权：20241216003(20241216003) | 股票：20241216003(20241216003)0', 'ComboBox钱龙模拟期权宝 \u3000\u3000当前账号 | 期权：20241216003(20241216003) | 股票：20241216003(20241216003)1', 'ComboBoxv2rayN - V7.22.5 - X64 - 以管理员身份运行0', 'ComboBoxv2rayN - V7.22.5 - X64 - 以管理员身份运行1', 'ComboBox微信0', 'ComboBox微信1', '共4条ComboBox0', '共4条ComboBox1', 'ComboBox6.GUI模块化 - 获取组件.py - CodeBuddy CN [管理员]0', 'ComboBox6.GUI模块化 - 获取组件.py - CodeBuddy CN [管理员]1', 'ComboBox0', 'ComboBox1', 'ComboBoxNVIDIA GeForce Overlay0', 'ComboBoxNVIDIA GeForce Overlay1', 'ComboBox总结0', 'ComboBox总结1']
+   |    |    |    | child_window(auto_id="1126", control_type="ComboBox")
+   |    |    |    |    | 
+   |    |    |    |    | Static - ''    (L3, T3, R141, B21)
+   |    |    |    |    | ['Static13']
+   |    |    |    |    | 
+   |    |    |    |    | Button - '打开'    (L1536, T737, R1553, B757)
+   |    |    |    |    | ['打开', 'Button28', '打开Button', '打开0', '打开1', '打开Button0', '打开Button1']
+   |    |    |    |    | child_window(title="打开", auto_id="DropDown", control_type="Button")
+   |    |    |    | 
+   |    |    |    | ComboBox - ''    (L989, T735, R1133, B755)
+   |    |    |    | ['ComboBoxProgram Manager2', 'ComboBox任务栏2', 'ComboBoxLocalSend2', 'ComboBoxZzayyy/qianlong_auto_test - Google Chrome2', 'ComboBox国泰海通证券期权宝(仿真行情) \u3000\u3000当前账号 | 期权：章绍龙1(130375)2', 'ComboBox钱龙模拟期权宝 \u3000\u3000当前账号 | 期权：20241216003(20241216003) | 股票：20241216003(20241216003)2', 'ComboBoxv2rayN - V7.22.5 - X64 - 以管理员身份运行2', 'ComboBox微信2', '共4条ComboBox2', 'ComboBox6.GUI模块化 - 获取组件.py - CodeBuddy CN [管理员]2', 'ComboBox2', 'ComboBoxNVIDIA GeForce Overlay2', 'ComboBox总结2']
+   |    |    |    | child_window(auto_id="9040", control_type="ComboBox")
+   |    |    |    |    | 
+   |    |    |    |    | Static - ''    (L3, T3, R124, B17)
+   |    |    |    |    | ['Static14']
+   |    |    |    |    | 
+   |    |    |    |    | Button - '打开'    (L1114, T737, R1131, B753)
+   |    |    |    |    | ['打开2', 'Button29', '打开Button2']
+   |    |    |    |    | child_window(title="打开", auto_id="DropDown", control_type="Button")
+   |    |    |    | 
+   |    |    |    | ComboBox - ''    (L1133, T735, R1214, B755)
+   |    |    |    | ['ComboBoxProgram Manager3', 'ComboBox任务栏3', 'ComboBoxLocalSend3', 'ComboBoxZzayyy/qianlong_auto_test - Google Chrome3', 'ComboBox国泰海通证券期权宝(仿真行情) \u3000\u3000当前账号 | 期权：章绍龙1(130375)3', 'ComboBox钱龙模拟期权宝 \u3000\u3000当前账号 | 期权：20241216003(20241216003) | 股票：20241216003(20241216003)3', 'ComboBoxv2rayN - V7.22.5 - X64 - 以管理员身份运行3', 'ComboBox微信3', '共4条ComboBox3', 'ComboBox6.GUI模块化 - 获取组件.py - CodeBuddy CN [管理员]3', 'ComboBox3', 'ComboBoxNVIDIA GeForce Overlay3', 'ComboBox总结3']
+   |    |    |    | child_window(auto_id="941", control_type="ComboBox")
+   |    |    |    |    | 
+   |    |    |    |    | Static - ''    (L3, T3, R61, B17)
+   |    |    |    |    | ['Static15']
+   |    |    |    |    | 
+   |    |    |    |    | Button - '打开'    (L1195, T737, R1212, B753)
+   |    |    |    |    | ['打开3', 'Button30', '打开Button3']
+   |    |    |    |    | child_window(title="打开", auto_id="DropDown", control_type="Button")
+   |    |    |    | 
+   |    |    |    | ListBox - ''    (L201, T760, R1611, B1011)
+   |    |    |    | ['共4条ListBox', 'ListBox']
+   |    |    |    | child_window(auto_id="1229", control_type="List")
+   |    |    |    |    | 
+   |    |    |    |    | Header - ''    (L201, T760, R1611, B776)
+   |    |    |    |    | ['Header', '共4条Header']
+   |    |    |    |    | child_window(auto_id="Header", control_type="Header")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | HeaderItem - '序号'    (L201, T760, R235, B776)
+   |    |    |    |    |    | ['HeaderItem', '序号', '序号HeaderItem', 'HeaderItem0', 'HeaderItem1']
+   |    |    |    |    |    | child_window(title="序号", control_type="HeaderItem")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | HeaderItem - '自定序号'    (L235, T760, R300, B776)
+   |    |    |    |    |    | ['HeaderItem2', '自定序号', '自定序号HeaderItem']
+   |    |    |    |    |    | child_window(title="自定序号", control_type="HeaderItem")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | HeaderItem - '合约代码'    (L300, T760, R360, B776)
+   |    |    |    |    |    | ['HeaderItem3', '合约代码HeaderItem', '合约代码']
+   |    |    |    |    |    | child_window(title="合约代码", control_type="HeaderItem")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | HeaderItem - '合约名称'    (L360, T760, R480, B776)
+   |    |    |    |    |    | ['HeaderItem4', '合约名称HeaderItem', '合约名称']
+   |    |    |    |    |    | child_window(title="合约名称", control_type="HeaderItem")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | HeaderItem - '期权类别'    (L480, T760, R540, B776)
+   |    |    |    |    |    | ['HeaderItem5', '期权类别HeaderItem', '期权类别']
+   |    |    |    |    |    | child_window(title="期权类别", control_type="HeaderItem")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | HeaderItem - '持仓类别'    (L540, T760, R600, B776)
+   |    |    |    |    |    | ['HeaderItem6', '持仓类别HeaderItem', '持仓类别']
+   |    |    |    |    |    | child_window(title="持仓类别", control_type="HeaderItem")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | HeaderItem - '昨日余额'    (L600, T760, R665, B776)
+   |    |    |    |    |    | ['HeaderItem7', '昨日余额', '昨日余额HeaderItem']
+   |    |    |    |    |    | child_window(title="昨日余额", control_type="HeaderItem")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | HeaderItem - '可用数量'    (L665, T760, R730, B776)
+   |    |    |    |    |    | ['HeaderItem8', '可用数量', '可用数量HeaderItem']
+   |    |    |    |    |    | child_window(title="可用数量", control_type="HeaderItem")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | HeaderItem - '实际持仓'    (L730, T760, R795, B776)
+   |    |    |    |    |    | ['HeaderItem9', '实际持仓HeaderItem', '实际持仓']
+   |    |    |    |    |    | child_window(title="实际持仓", control_type="HeaderItem")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | HeaderItem - '组合冻结数'    (L795, T760, R867, B776)
+   |    |    |    |    |    | ['HeaderItem10', '组合冻结数HeaderItem', '组合冻结数']
+   |    |    |    |    |    | child_window(title="组合冻结数", control_type="HeaderItem")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | HeaderItem - '最新价'    (L867, T760, R927, B776)
+   |    |    |    |    |    | ['HeaderItem11', '最新价HeaderItem', '最新价']
+   |    |    |    |    |    | child_window(title="最新价", control_type="HeaderItem")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | HeaderItem - '成本价'    (L927, T760, R1027, B776)
+   |    |    |    |    |    | ['HeaderItem12', '成本价', '成本价HeaderItem']
+   |    |    |    |    |    | child_window(title="成本价", control_type="HeaderItem")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | HeaderItem - '市值'    (L1027, T760, R1097, B776)
+   |    |    |    |    |    | ['HeaderItem13', '市值HeaderItem', '市值']
+   |    |    |    |    |    | child_window(title="市值", control_type="HeaderItem")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | HeaderItem - '浮动盈亏'    (L1097, T760, R1177, B776)
+   |    |    |    |    |    | ['HeaderItem14', '浮动盈亏HeaderItem', '浮动盈亏']
+   |    |    |    |    |    | child_window(title="浮动盈亏", control_type="HeaderItem")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | HeaderItem - '义务仓占用保证金'    (L1177, T760, R1277, B776)
+   |    |    |    |    |    | ['HeaderItem15', '义务仓占用保证金', '义务仓占用保证金HeaderItem']
+   |    |    |    |    |    | child_window(title="义务仓占用保证金", control_type="HeaderItem")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | HeaderItem - 'Delta'    (L1277, T760, R1327, B776)
+   |    |    |    |    |    | ['HeaderItem16', 'Delta', 'DeltaHeaderItem']
+   |    |    |    |    |    | child_window(title="Delta", control_type="HeaderItem")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | HeaderItem - 'Gamma'    (L1327, T760, R1377, B776)
+   |    |    |    |    |    | ['HeaderItem17', 'Gamma', 'GammaHeaderItem']
+   |    |    |    |    |    | child_window(title="Gamma", control_type="HeaderItem")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | HeaderItem - 'Vega'    (L1377, T760, R1427, B776)
+   |    |    |    |    |    | ['HeaderItem18', 'VegaHeaderItem', 'Vega']
+   |    |    |    |    |    | child_window(title="Vega", control_type="HeaderItem")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | HeaderItem - 'Theta'    (L1427, T760, R1477, B776)
+   |    |    |    |    |    | ['HeaderItem19', 'ThetaHeaderItem', 'Theta']
+   |    |    |    |    |    | child_window(title="Theta", control_type="HeaderItem")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | HeaderItem - 'Rho'    (L1477, T760, R1527, B776)
+   |    |    |    |    |    | ['HeaderItem20', 'RhoHeaderItem', 'Rho']
+   |    |    |    |    |    | child_window(title="Rho", control_type="HeaderItem")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | HeaderItem - '￥Delta'    (L1527, T760, R1607, B776)
+   |    |    |    |    |    | ['HeaderItem21', '￥Delta', '￥DeltaHeaderItem']
+   |    |    |    |    |    | child_window(title="￥Delta", control_type="HeaderItem")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | HeaderItem - '￥Gamma'    (L1607, T760, R1687, B776)
+   |    |    |    |    |    | ['HeaderItem22', '￥Gamma', '￥GammaHeaderItem']
+   |    |    |    |    |    | child_window(title="￥Gamma", control_type="HeaderItem")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | HeaderItem - '￥Vega'    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['HeaderItem23', '￥VegaHeaderItem', '￥Vega']
+   |    |    |    |    |    | child_window(title="￥Vega", control_type="HeaderItem")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | HeaderItem - '￥Theta'    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['HeaderItem24', '￥ThetaHeaderItem', '￥Theta']
+   |    |    |    |    |    | child_window(title="￥Theta", control_type="HeaderItem")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | HeaderItem - '￥Rho'    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['HeaderItem25', '￥Rho', '￥RhoHeaderItem']
+   |    |    |    |    |    | child_window(title="￥Rho", control_type="HeaderItem")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | HeaderItem - '今开仓持仓量'    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['HeaderItem26', '今开仓持仓量', '今开仓持仓量HeaderItem']
+   |    |    |    |    |    | child_window(title="今开仓持仓量", control_type="HeaderItem")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | HeaderItem - '今平仓持仓量'    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['HeaderItem27', '今平仓持仓量HeaderItem', '今平仓持仓量']
+   |    |    |    |    |    | child_window(title="今平仓持仓量", control_type="HeaderItem")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | HeaderItem - '今平仓委托量'    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['HeaderItem28', '今平仓委托量HeaderItem', '今平仓委托量']
+   |    |    |    |    |    | child_window(title="今平仓委托量", control_type="HeaderItem")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | HeaderItem - '股东账号'    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['HeaderItem29', '股东账号HeaderItem', '股东账号']
+   |    |    |    |    |    | child_window(title="股东账号", control_type="HeaderItem")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | HeaderItem - '交易市场'    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['HeaderItem30', '交易市场', '交易市场HeaderItem']
+   |    |    |    |    |    | child_window(title="交易市场", control_type="HeaderItem")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | HeaderItem - '盈损'    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['HeaderItem31', '盈损HeaderItem', '盈损']
+   |    |    |    |    |    | child_window(title="盈损", control_type="HeaderItem")
+   |    |    |    |    | 
+   |    |    |    |    | ScrollBar - '水平滚动条'    (L201, T994, R1611, B1011)
+   |    |    |    |    | ['水平滚动条', '水平滚动条ScrollBar', 'ScrollBar']
+   |    |    |    |    | child_window(title="水平滚动条", auto_id="NonClientHorizontalScrollBar", control_type="ScrollBar")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Button - '左移一列'    (L201, T994, R218, B1011)
+   |    |    |    |    |    | ['Button31', '左移一列Button', '左移一列']
+   |    |    |    |    |    | child_window(title="左移一列", auto_id="UpButton", control_type="Button")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Thumb - '位置'    (L218, T994, R1093, B1011)
+   |    |    |    |    |    | ['位置Thumb', '位置', 'Thumb']
+   |    |    |    |    |    | child_window(title="位置", auto_id="ScrollbarThumb", control_type="Thumb")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Button - '向右翻页'    (L1093, T994, R1594, B1011)
+   |    |    |    |    |    | ['Button32', '向右翻页', '向右翻页Button']
+   |    |    |    |    |    | child_window(title="向右翻页", auto_id="DownPageButton", control_type="Button")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Button - '右移一列'    (L1594, T994, R1611, B1011)
+   |    |    |    |    |    | ['右移一列Button', 'Button33', '右移一列']
+   |    |    |    |    |    | child_window(title="右移一列", auto_id="DownButton", control_type="Button")
+   |    |    |    |    | 
+   |    |    |    |    | ListItem - ''    (L201, T778, R1611, B795)
+   |    |    |    |    | ['共4条ListItem', 'ListItem', '共4条ListItem0', '共4条ListItem1', 'ListItem0', 'ListItem1']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L201, T778, R1611, B795)
+   |    |    |    |    |    | ['共4条Static2', 'Static16']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L235, T778, R300, B795)
+   |    |    |    |    |    | ['Static17']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L300, T778, R360, B795)
+   |    |    |    |    |    | ['Static18']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L360, T778, R480, B795)
+   |    |    |    |    |    | ['Static19']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L480, T778, R540, B795)
+   |    |    |    |    |    | ['Static20']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L540, T778, R600, B795)
+   |    |    |    |    |    | ['Static21']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L600, T778, R665, B795)
+   |    |    |    |    |    | ['Static22']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L665, T778, R730, B795)
+   |    |    |    |    |    | ['Static23']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L730, T778, R795, B795)
+   |    |    |    |    |    | ['Static24']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L795, T778, R867, B795)
+   |    |    |    |    |    | ['Static25']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L867, T778, R927, B795)
+   |    |    |    |    |    | ['Static26']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L927, T778, R1027, B795)
+   |    |    |    |    |    | ['共4条Static3', 'Static27']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1027, T778, R1097, B795)
+   |    |    |    |    |    | ['共4条Static4', 'Static28']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1097, T778, R1177, B795)
+   |    |    |    |    |    | ['共4条Static5', 'Static29']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1177, T778, R1277, B795)
+   |    |    |    |    |    | ['共4条Static6', 'Static30']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1277, T778, R1327, B795)
+   |    |    |    |    |    | ['共4条Static7', 'Static31']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1327, T778, R1377, B795)
+   |    |    |    |    |    | ['共4条Static8', 'Static32']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1377, T778, R1427, B795)
+   |    |    |    |    |    | ['共4条Static9', 'Static33']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1427, T778, R1477, B795)
+   |    |    |    |    |    | ['共4条Static10', 'Static34']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1477, T778, R1527, B795)
+   |    |    |    |    |    | ['共4条Static11', 'Static35']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1527, T778, R1607, B795)
+   |    |    |    |    |    | ['共4条Static12', 'Static36']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1607, T778, R1611, B795)
+   |    |    |    |    |    | ['共4条Static13', 'Static37']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static38']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static39']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static40']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static41']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static42']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static43']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static44']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static45']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static46']
+   |    |    |    |    | 
+   |    |    |    |    | ListItem - ''    (L201, T795, R1611, B812)
+   |    |    |    |    | ['共4条ListItem2', 'ListItem2']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L201, T795, R1611, B812)
+   |    |    |    |    |    | ['共4条Static14', 'Static47']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L235, T795, R300, B812)
+   |    |    |    |    |    | ['Static48']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L300, T795, R360, B812)
+   |    |    |    |    |    | ['Static49']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L360, T795, R480, B812)
+   |    |    |    |    |    | ['Static50']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L480, T795, R540, B812)
+   |    |    |    |    |    | ['Static51']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L540, T795, R600, B812)
+   |    |    |    |    |    | ['Static52']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L600, T795, R665, B812)
+   |    |    |    |    |    | ['Static53']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L665, T795, R730, B812)
+   |    |    |    |    |    | ['Static54']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L730, T795, R795, B812)
+   |    |    |    |    |    | ['Static55']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L795, T795, R867, B812)
+   |    |    |    |    |    | ['Static56']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L867, T795, R927, B812)
+   |    |    |    |    |    | ['Static57']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L927, T795, R1027, B812)
+   |    |    |    |    |    | ['共4条Static15', 'Static58']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1027, T795, R1097, B812)
+   |    |    |    |    |    | ['共4条Static16', 'Static59']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1097, T795, R1177, B812)
+   |    |    |    |    |    | ['共4条Static17', 'Static60']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1177, T795, R1277, B812)
+   |    |    |    |    |    | ['共4条Static18', 'Static61']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1277, T795, R1327, B812)
+   |    |    |    |    |    | ['共4条Static19', 'Static62']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1327, T795, R1377, B812)
+   |    |    |    |    |    | ['共4条Static20', 'Static63']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1377, T795, R1427, B812)
+   |    |    |    |    |    | ['共4条Static21', 'Static64']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1427, T795, R1477, B812)
+   |    |    |    |    |    | ['共4条Static22', 'Static65']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1477, T795, R1527, B812)
+   |    |    |    |    |    | ['共4条Static23', 'Static66']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1527, T795, R1607, B812)
+   |    |    |    |    |    | ['共4条Static24', 'Static67']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1607, T795, R1611, B812)
+   |    |    |    |    |    | ['共4条Static25', 'Static68']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static69']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static70']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static71']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static72']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static73']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static74']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static75']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static76']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static77']
+   |    |    |    |    | 
+   |    |    |    |    | ListItem - ''    (L201, T812, R1611, B829)
+   |    |    |    |    | ['共4条ListItem3', 'ListItem3']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L201, T812, R1611, B829)
+   |    |    |    |    |    | ['共4条Static26', 'Static78']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L235, T812, R300, B829)
+   |    |    |    |    |    | ['Static79']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L300, T812, R360, B829)
+   |    |    |    |    |    | ['Static80']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L360, T812, R480, B829)
+   |    |    |    |    |    | ['Static81']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L480, T812, R540, B829)
+   |    |    |    |    |    | ['Static82']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L540, T812, R600, B829)
+   |    |    |    |    |    | ['Static83']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L600, T812, R665, B829)
+   |    |    |    |    |    | ['Static84']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L665, T812, R730, B829)
+   |    |    |    |    |    | ['Static85']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L730, T812, R795, B829)
+   |    |    |    |    |    | ['Static86']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L795, T812, R867, B829)
+   |    |    |    |    |    | ['Static87']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L867, T812, R927, B829)
+   |    |    |    |    |    | ['Static88']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L927, T812, R1027, B829)
+   |    |    |    |    |    | ['共4条Static27', 'Static89']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1027, T812, R1097, B829)
+   |    |    |    |    |    | ['共4条Static28', 'Static90']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1097, T812, R1177, B829)
+   |    |    |    |    |    | ['共4条Static29', 'Static91']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1177, T812, R1277, B829)
+   |    |    |    |    |    | ['共4条Static30', 'Static92']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1277, T812, R1327, B829)
+   |    |    |    |    |    | ['共4条Static31', 'Static93']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1327, T812, R1377, B829)
+   |    |    |    |    |    | ['共4条Static32', 'Static94']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1377, T812, R1427, B829)
+   |    |    |    |    |    | ['共4条Static33', 'Static95']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1427, T812, R1477, B829)
+   |    |    |    |    |    | ['共4条Static34', 'Static96']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1477, T812, R1527, B829)
+   |    |    |    |    |    | ['共4条Static35', 'Static97']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1527, T812, R1607, B829)
+   |    |    |    |    |    | ['共4条Static36', 'Static98']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1607, T812, R1611, B829)
+   |    |    |    |    |    | ['共4条Static37', 'Static99']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static100']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static101']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static102']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static103']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static104']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static105']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static106']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static107']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static108']
+   |    |    |    |    | 
+   |    |    |    |    | ListItem - ''    (L201, T829, R1611, B846)
+   |    |    |    |    | ['共4条ListItem4', 'ListItem4']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L201, T829, R1611, B846)
+   |    |    |    |    |    | ['共4条Static38', 'Static109']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L235, T829, R300, B846)
+   |    |    |    |    |    | ['Static110']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L300, T829, R360, B846)
+   |    |    |    |    |    | ['Static111']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L360, T829, R480, B846)
+   |    |    |    |    |    | ['Static112']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L480, T829, R540, B846)
+   |    |    |    |    |    | ['Static113']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L540, T829, R600, B846)
+   |    |    |    |    |    | ['Static114']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L600, T829, R665, B846)
+   |    |    |    |    |    | ['Static115']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L665, T829, R730, B846)
+   |    |    |    |    |    | ['Static116']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L730, T829, R795, B846)
+   |    |    |    |    |    | ['Static117']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L795, T829, R867, B846)
+   |    |    |    |    |    | ['Static118']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L867, T829, R927, B846)
+   |    |    |    |    |    | ['Static119']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L927, T829, R1027, B846)
+   |    |    |    |    |    | ['共4条Static39', 'Static120']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1027, T829, R1097, B846)
+   |    |    |    |    |    | ['共4条Static40', 'Static121']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1097, T829, R1177, B846)
+   |    |    |    |    |    | ['共4条Static41', 'Static122']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1177, T829, R1277, B846)
+   |    |    |    |    |    | ['共4条Static42', 'Static123']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1277, T829, R1327, B846)
+   |    |    |    |    |    | ['共4条Static43', 'Static124']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1327, T829, R1377, B846)
+   |    |    |    |    |    | ['共4条Static44', 'Static125']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1377, T829, R1427, B846)
+   |    |    |    |    |    | ['共4条Static45', 'Static126']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1427, T829, R1477, B846)
+   |    |    |    |    |    | ['共4条Static46', 'Static127']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1477, T829, R1527, B846)
+   |    |    |    |    |    | ['共4条Static47', 'Static128']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1527, T829, R1607, B846)
+   |    |    |    |    |    | ['共4条Static48', 'Static129']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1607, T829, R1611, B846)
+   |    |    |    |    |    | ['共4条Static49', 'Static130']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static131']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static132']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static133']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static134']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static135']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static136']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static137']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static138']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static139']
+   |    |    |    |    | 
+   |    |    |    |    | ListItem - ''    (L201, T846, R1611, B863)
+   |    |    |    |    | ['共4条ListItem5', 'ListItem5']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L201, T846, R1611, B863)
+   |    |    |    |    |    | ['共4条Static50', 'Static140']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L235, T846, R300, B863)
+   |    |    |    |    |    | ['Static141']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L300, T846, R360, B863)
+   |    |    |    |    |    | ['Static142']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L360, T846, R480, B863)
+   |    |    |    |    |    | ['Static143']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L480, T846, R540, B863)
+   |    |    |    |    |    | ['Static144']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L540, T846, R600, B863)
+   |    |    |    |    |    | ['Static145']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L600, T846, R665, B863)
+   |    |    |    |    |    | ['Static146']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L665, T846, R730, B863)
+   |    |    |    |    |    | ['Static147']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L730, T846, R795, B863)
+   |    |    |    |    |    | ['Static148']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L795, T846, R867, B863)
+   |    |    |    |    |    | ['Static149']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L867, T846, R927, B863)
+   |    |    |    |    |    | ['Static150']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L927, T846, R1027, B863)
+   |    |    |    |    |    | ['共4条Static51', 'Static151']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1027, T846, R1097, B863)
+   |    |    |    |    |    | ['共4条Static52', 'Static152']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1097, T846, R1177, B863)
+   |    |    |    |    |    | ['共4条Static53', 'Static153']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1177, T846, R1277, B863)
+   |    |    |    |    |    | ['共4条Static54', 'Static154']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1277, T846, R1327, B863)
+   |    |    |    |    |    | ['共4条Static55', 'Static155']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1327, T846, R1377, B863)
+   |    |    |    |    |    | ['共4条Static56', 'Static156']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1377, T846, R1427, B863)
+   |    |    |    |    |    | ['共4条Static57', 'Static157']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1427, T846, R1477, B863)
+   |    |    |    |    |    | ['共4条Static58', 'Static158']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1477, T846, R1527, B863)
+   |    |    |    |    |    | ['共4条Static59', 'Static159']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1527, T846, R1607, B863)
+   |    |    |    |    |    | ['共4条Static60', 'Static160']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1607, T846, R1611, B863)
+   |    |    |    |    |    | ['共4条Static61', 'Static161']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static162']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static163']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static164']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static165']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static166']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static167']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static168']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static169']
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L0, T0, R0, B0)
+   |    |    |    |    |    | ['Static170']
+   |    |    | 
+   |    |    | Pane - 'AnalysisGraph'    (L1611, T55, R1918, B849)
+   |    |    | ['AnalysisGraphPane', 'AnalysisGraph', 'Pane22']
+   |    |    | child_window(title="AnalysisGraph", auto_id="115", control_type="Pane")
+   |    |    |    | 
+   |    |    |    | Pane - 'CProbabilityPanel'    (L1611, T55, R1918, B390)
+   |    |    |    | ['CProbabilityPanel', 'CProbabilityPanelPane', 'Pane23']
+   |    |    |    | child_window(title="CProbabilityPanel", auto_id="116", control_type="Pane")
+   |    |    |    |    | 
+   |    |    |    |    | Pane - 'ProbabilityView'    (L1611, T86, R1918, B390)
+   |    |    |    |    | ['ProbabilityView', 'ProbabilityViewPane', 'Pane24']
+   |    |    |    |    | child_window(title="ProbabilityView", auto_id="118", control_type="Pane")
+   |    |    |    |    | 
+   |    |    |    |    | Pane - ''    (L1611, T55, R1918, B85)
+   |    |    |    |    | ['Pane25']
+   |    |    |    |    | child_window(auto_id="117", control_type="Pane")
+   |    |    |    | 
+   |    |    |    | Pane - 'AdvProfitPanel'    (L1611, T390, R1918, B849)
+   |    |    |    | ['AdvProfitPanel', 'AdvProfitPanelPane', 'Pane26']
+   |    |    |    | child_window(title="AdvProfitPanel", auto_id="120", control_type="Pane")
+   |    |    |    |    | 
+   |    |    |    |    | Pane - ''    (L1611, T390, R1918, B420)
+   |    |    |    |    | ['Pane27']
+   |    |    |    |    | child_window(auto_id="121", control_type="Pane")
+   |    |    |    |    | 
+   |    |    |    |    | Pane - 'ProfitChartList'    (L1611, T420, R1918, B801)
+   |    |    |    |    | ['ProfitChartList', 'Pane28', 'ProfitChartListPane']
+   |    |    |    |    | child_window(title="ProfitChartList", auto_id="122", control_type="Pane")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1619, T779, R1691, B797)
+   |    |    |    |    |    | ['共4条Static62', 'Static171']
+   |    |    |    |    |    | child_window(auto_id="123", control_type="Text")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Static - ''    (L1729, T779, R1819, B797)
+   |    |    |    |    |    | ['共4条Static63', 'Static172']
+   |    |    |    |    |    | child_window(auto_id="124", control_type="Text")
+   |    |    |    |    |    | 
+   |    |    |    |    |    | Pane - 'QlSpinEditExVola'    (L1827, T779, R1879, B797)
+   |    |    |    |    |    | ['QlSpinEditExVolaPane', 'Pane29', 'QlSpinEditExVola']
+   |    |    |    |    |    | child_window(title="QlSpinEditExVola", auto_id="125", control_type="Pane")
+   |    |    |    |    |    |    | 
+   |    |    |    |    |    |    | Edit - ''    (L1831, T782, R1861, B794)
+   |    |    |    |    |    |    | ['Edit12', '共4条Edit4']
+   |    |    |    |    |    |    | child_window(auto_id="2000", control_type="Edit")
+   | 
+   | TitleBar - ''    (L18, T-5, R1918, B25)
+   | ['TitleBar']
+   |    | 
+   |    | Menu - '系统'    (L0, T0, R22, B22)
+   |    | ['Menu', '系统Menu', '系统', '系统0', '系统1']
+   |    | child_window(title="系统", auto_id="MenuBar", control_type="MenuBar")
+   |    |    | 
+   |    |    | MenuItem - '系统'    (L0, T0, R22, B22)
+   |    |    | ['系统MenuItem', '系统2', 'MenuItem']
+   |    |    | child_window(title="系统", control_type="MenuItem")
+   |    | 
+   |    | Button - '最小化'    (L1779, T8, R1826, B24)
+   |    | ['Button34', '最小化', '最小化Button']
+   |    | child_window(title="最小化", control_type="Button")
+   |    | 
+   |    | Button - '还原'    (L1826, T8, R1872, B24)
+   |    | ['还原', '还原Button', 'Button35']
+   |    | child_window(title="还原", control_type="Button")
+   |    | 
+   |    | Button - '关闭'    (L1872, T8, R1936, B307)
+   |    | ['关闭', 'Button36', '关闭Button']
+   |    | child_window(title="关闭", control_type="Button")
