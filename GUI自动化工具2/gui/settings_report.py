@@ -15,7 +15,7 @@ from gui.recycle_bin import (
     validate_batch_directory,
 )
 from gui.shell_open import open_path
-from core.settings_report import (
+from core.settings import (
     DEFAULT_BATCH_LIMIT,
     OVERALL_FAIL,
     OVERALL_PASS,

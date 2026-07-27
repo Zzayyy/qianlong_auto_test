@@ -32,8 +32,6 @@ from typing import Any, Dict, List, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from pywinauto import Application, findwindows
-
 from core.window import find_window, activate_window, countdown, close_settings_dialog
 from core.settings_window import (
     open_settings_dialog as open_settings_dialog_compat,
@@ -45,7 +43,7 @@ from core.one_click_settings import (
     normalize_text,
     parse_shortcut_ocr_tokens,
 )
-from core.settings_result import SettingsTestResult
+from core.settings import SettingsTestResult
 
 
 # GUI 启动时 core.window 会按 GUI_CLIENT_ID 覆盖此值；直接运行本脚本时，
@@ -88,172 +86,10 @@ RESULT_SUBDIR = PANEL_NAME
 COUNTDOWN_SEC = 3
 
 
-def _find_existing_settings_dlg(win=None) -> Optional[Any]:
-    """兼容顶级窗口、#32770 对话框和主窗口子窗口。"""
-    if win is not None:
-        try:
-            spec = win.child_window(title=SETTINGS_DIALOG_TITLE, control_type="Window")
-            if spec.exists(timeout=0.5):
-                dlg = spec.wrapper_object()
-                dlg.wait("ready", timeout=3)
-                print(f"[OK] 已找到设置对话框(子窗口): {SETTINGS_DIALOG_TITLE}")
-                return dlg
-        except Exception:
-            pass
-
-    try:
-        for elem in findwindows.find_elements(top_level_only=True):
-            try:
-                title = elem.window_text() or ""
-                if SETTINGS_DIALOG_TITLE in title:
-                    dlg = Application(backend="uia").connect(handle=elem.handle).window(
-                        handle=elem.handle
-                    )
-                    dlg.wait("ready", timeout=3)
-                    print(f"[OK] 已找到设置对话框(顶级): {title}")
-                    return dlg
-            except Exception:
-                continue
-    except Exception:
-        pass
-
-    try:
-        for elem in findwindows.find_elements(top_level_only=True, class_name="#32770"):
-            try:
-                dlg = Application(backend="uia").connect(
-                    handle=elem.handle, timeout=1
-                ).window(handle=elem.handle)
-                title_bar = dlg.child_window(control_type="TitleBar")
-                value = ""
-                if title_bar.exists(timeout=0.3):
-                    try:
-                        value = title_bar.legacy_properties().get("Value", "") or ""
-                    except Exception:
-                        value = title_bar.element_info.name or ""
-                if SETTINGS_DIALOG_TITLE in value:
-                    dlg.wait("ready", timeout=3)
-                    print(f"[OK] 已找到设置对话框(#32770): {value}")
-                    return dlg
-            except Exception:
-                continue
-    except Exception:
-        pass
-    return None
 
 
-def open_settings_dialog(win):
-    dlg = _find_existing_settings_dlg(win)
-    if dlg is not None:
-        return dlg
-
-    print("\n正在通过工具栏按钮打开'交易系统设置'...")
-    button = win.child_window(
-        auto_id=SETTINGS_BUTTON_AUTO_ID, control_type="Button"
-    )
-    button.wait("enabled", timeout=5)
-    button.click_input()
-    time.sleep(0.5)
-
-    end = time.time() + 4
-    clicked = False
-    while time.time() < end and not clicked:
-        # 国泰海通的设置菜单是原生 #32768 弹出窗口。若先枚举并连接其他
-        # 顶级窗口，菜单会因失去焦点而关闭，因此先用 Win32 直接锁定它。
-        menu_handles = []
-
-        def _collect_popup_menu(hwnd, _):
-            try:
-                if (
-                    win32gui.IsWindowVisible(hwnd)
-                    and win32gui.GetClassName(hwnd) == "#32768"
-                ):
-                    menu_handles.append(hwnd)
-            except Exception:
-                pass
-
-        win32gui.EnumWindows(_collect_popup_menu, None)
-        for handle in menu_handles:
-            try:
-                menu = Application(backend="uia").connect(
-                    handle=handle, timeout=0.5
-                ).window(handle=handle)
-                item = menu.child_window(
-                    auto_id=SETTINGS_MENU_ITEM_AUTO_ID, control_type="MenuItem"
-                )
-                if item.exists(timeout=0.2):
-                    # 高 DPI 下该原生菜单的 UIA 坐标可能按逻辑像素返回，
-                    # click_input 会点击到错误位置；Invoke 不依赖屏幕坐标。
-                    item.invoke()
-                    clicked = True
-                    break
-            except Exception:
-                continue
-
-        # 兼容少数将菜单实现为普通顶级窗口的旧版本。
-        if not clicked:
-            for elem in findwindows.find_elements(top_level_only=True):
-                try:
-                    if elem.class_name == "#32768":
-                        continue
-                    menu = Application(backend="uia").connect(
-                        handle=elem.handle, timeout=0.5
-                    ).window(handle=elem.handle)
-                    item = menu.child_window(
-                        auto_id=SETTINGS_MENU_ITEM_AUTO_ID,
-                        control_type="MenuItem",
-                    )
-                    if item.exists(timeout=0.2):
-                        item.click_input()
-                        clicked = True
-                        break
-                except Exception:
-                    continue
-        if not clicked:
-            time.sleep(0.15)
-
-    end = time.time() + 10
-    while time.time() < end:
-        dlg = _find_existing_settings_dlg(win)
-        if dlg is not None:
-            return dlg
-        time.sleep(0.3)
-    raise RuntimeError("无法打开'交易系统设置'对话框")
 
 
-def switch_to_settings_panel(dlg) -> bool:
-    try:
-        nav = dlg.child_window(auto_id="2210", control_type="List")
-        nav.wait("ready", timeout=5)
-        item = nav.child_window(title=PANEL_NAME, control_type="ListItem")
-        item.wait("visible", timeout=3)
-        # 直接向原生 ListBox 设置选择并发送 LBN_SELCHANGE。该方式与用户
-        # 选择列表项触发相同通知，同时绕开 QLOption 的 DPI 坐标虚拟化。
-        items = nav.descendants(control_type="ListItem")
-        target_index = next(
-            i for i, ctrl in enumerate(items)
-            if (ctrl.window_text() or "").strip() == PANEL_NAME
-        )
-        nav_wrapper = nav.wrapper_object()
-        list_hwnd = int(nav_wrapper.handle)
-        parent_hwnd = win32gui.GetParent(list_hwnd)
-        control_id = win32gui.GetDlgCtrlID(list_hwnd)
-        win32gui.SendMessage(list_hwnd, 0x0186, target_index, 0)  # LB_SETCURSEL
-        win32gui.SendMessage(
-            parent_hwnd,
-            win32con.WM_COMMAND,
-            control_id | (1 << 16),  # LBN_SELCHANGE == 1
-            list_hwnd,
-        )
-        time.sleep(0.8)
-        # 用本面板的唯一控件确认页面确实完成切换，避免只记录“点击成功”。
-        dlg.child_window(
-            auto_id=AUTO_ID["快捷键方案"], control_type="ComboBox"
-        ).wait("exists", timeout=5)
-        print(f"[OK] 已切换到'{PANEL_NAME}'面板")
-        return True
-    except Exception as e:
-        print(f"[WARN] 切换到'{PANEL_NAME}'面板失败: {e}")
-        return False
 
 
 def get_combobox_value(dlg, auto_id: str) -> Optional[str]:

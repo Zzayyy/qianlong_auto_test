@@ -7,14 +7,14 @@ import tempfile
 import unittest
 from unittest import mock
 
-from core.settings_result import SettingsTestResult
-from core.settings_status import (
+from core.settings import (
     STATUS_ADDED,
     STATUS_CONFLICT,
     STATUS_DIFFERENCE,
     STATUS_DISABLED,
     STATUS_PASS,
     STATUS_UNVERIFIED,
+    SettingsTestResult,
 )
 
 

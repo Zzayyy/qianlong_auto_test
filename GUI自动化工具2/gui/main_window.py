@@ -47,7 +47,7 @@ from gui.history import (
 from gui.compare import ComparePanel
 from gui.settings_report import SettingsReportPanel
 from gui.shell_open import open_path
-from core.settings_report import (
+from core.settings import (
     BATCH_COMPLETED,
     BATCH_STOPPED,
     create_run_id,

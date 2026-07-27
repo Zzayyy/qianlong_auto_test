@@ -4,7 +4,7 @@ import ast
 from pathlib import Path
 import unittest
 
-from core.settings_status import (
+from core.settings import (
     STATUS_ADDED,
     STATUS_CONFLICT,
     STATUS_DIFFERENCE,
@@ -72,16 +72,38 @@ class SettingsStatusTests(unittest.TestCase):
     def test_all_settings_scripts_use_the_shared_result_model(self):
         settings_dir = Path(__file__).resolve().parents[1] / "交易系统设置"
         scripts = sorted(settings_dir.glob("*.py"))
+        legacy_window_helpers = {
+            "open_settings_dialog",
+            "_find_existing_settings_dlg",
+            "_click_settings_button",
+            "_click_button_by_auto_id",
+            "_click_context_menu_item",
+            "_try_keyboard_select",
+            "switch_to_settings_panel",
+            "_toggle_combobox",
+        }
         self.assertEqual(len(scripts), 7)
         for script in scripts:
             with self.subTest(script=script.name):
                 tree = ast.parse(script.read_text(encoding="utf-8-sig"))
                 imports_shared_result = any(
                     isinstance(node, ast.ImportFrom)
-                    and node.module == "core.settings_result"
+                    and node.module == "core.settings"
                     for node in ast.walk(tree)
                 )
                 self.assertTrue(imports_shared_result)
+                imports_shared_window = any(
+                    isinstance(node, ast.ImportFrom)
+                    and node.module == "core.settings_window"
+                    for node in ast.walk(tree)
+                )
+                self.assertTrue(imports_shared_window)
+                local_function_names = {
+                    node.name
+                    for node in tree.body
+                    if isinstance(node, ast.FunctionDef)
+                }
+                self.assertFalse(local_function_names & legacy_window_helpers)
                 local_result_classes = [
                     node
                     for node in ast.walk(tree)

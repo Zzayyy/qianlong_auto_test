@@ -10,20 +10,22 @@ import time
 import unittest
 from unittest.mock import patch
 
-from core.settings_report import (
+from core.settings import (
     BATCH_SUMMARY_JSON,
     BATCH_RUNNING,
     DEFAULT_BATCH_LIMIT,
     OVERALL_FAIL,
     OVERALL_RUNNING,
     OVERALL_REVIEW,
+    STATUS_DIFFERENCE,
+    STATUS_PASS,
+    STATUS_UNVERIFIED,
     TOTAL_REPORT_TXT,
     TOTAL_REPORT_XLSX,
     create_run_id,
     discover_batches,
     generate_batch_reports,
 )
-from core.settings_status import STATUS_DIFFERENCE, STATUS_PASS, STATUS_UNVERIFIED
 
 
 class SettingsBatchReportTests(unittest.TestCase):
