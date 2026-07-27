@@ -70,6 +70,26 @@ class QianlongClientProfileTests(unittest.TestCase):
         ]
         self.assertTrue(any("三键下单" in name for name in names))
 
+    def test_gui_registers_quick_order_script(self):
+        config_path = PROJECT_ROOT / "GUI自动化工具2" / "config.py"
+        spec = importlib.util.spec_from_file_location(
+            "gui_automation_config_quick_order_for_test", config_path
+        )
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+        scripts = module.get_scripts_config("qianlong")["下单"]
+        quick_order = next(
+            script for script in scripts if "快速下单_自动化下单" in script["name"]
+        )
+        self.assertTrue(Path(quick_order["path"]).is_file())
+
+        guotai_names = [
+            script["name"]
+            for script in module.get_scripts_config("guotai_haitong")["下单"]
+        ]
+        self.assertTrue(any("快速下单_自动化下单" in name for name in guotai_names))
+
 
 if __name__ == "__main__":
     unittest.main()

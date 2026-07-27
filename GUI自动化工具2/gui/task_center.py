@@ -33,7 +33,7 @@ from gui.history import (
     STATUS_ERROR,
     STATUS_STOPPED,
 )
-from config import get_scripts_config
+from config import get_script_filename, get_scripts_config
 
 # 编队下拉中的占位项：表示当前队列是用户临时编排，未归入任何编队
 GROUP_PLACEHOLDER = "（自定义队列）"
@@ -466,7 +466,7 @@ class TaskCenter:
 
         # 下单需 Excel，但全选撤单/一键导出不需要
         category = self.controller.current_category
-        if category == "下单" and script["name"] not in ("5.期权下单_一键导出", "6.全选撤单"):
+        if category == "下单" and get_script_filename(script["name"]) not in ("期权下单_一键导出", "全选撤单"):
             if not self.controller.xlsx_file.get():
                 messagebox.showwarning("提示", "该下单脚本需要先选择 Excel 配置文件")
                 return
@@ -700,7 +700,7 @@ class TaskCenter:
         for s in scripts:
             if not os.path.exists(s["path"]):
                 continue
-            if category == "下单" and s["name"] not in ("5.期权下单_一键导出", "6.全选撤单"):
+            if category == "下单" and get_script_filename(s["name"]) not in ("期权下单_一键导出", "全选撤单"):
                 if not self.controller.xlsx_file.get():
                     continue
             # 每个脚本按其自身默认参数分别快照（路径按各自名称生成）
@@ -735,7 +735,7 @@ class TaskCenter:
             messagebox.showerror("错误", f"脚本文件不存在:\n{script['path']}")
             return
         category = script.get("category") or self.controller.current_category
-        if category == "下单" and script["name"] not in ("5.期权下单_一键导出", "6.全选撤单"):
+        if category == "下单" and get_script_filename(script["name"]) not in ("期权下单_一键导出", "全选撤单"):
             if not self.controller.xlsx_file.get():
                 messagebox.showwarning("提示", "该下单脚本需要先选择 Excel 配置文件")
                 return

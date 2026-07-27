@@ -810,7 +810,8 @@ class AutomationGUI:
 
         if self.current_category == "下单":
             # 根据脚本决定是否显示数据预览
-            if script["name"] in ("5.期权下单_一键导出", "6.全选撤单"):
+            order_script_name = get_script_filename(script["name"])
+            if order_script_name in ("期权下单_一键导出", "全选撤单"):
                 # 这两个脚本不需要数据预览
                 self._update_preview_visibility(False)
             else:
@@ -818,14 +819,14 @@ class AutomationGUI:
                 self._update_preview_visibility(True)
 
             # 根据脚本更新参数配置面板
-            if script["name"] == "6.全选撤单":
+            if order_script_name == "全选撤单":
                 # 全选撤单：显示提示信息
                 ttk.Label(
                     self.params_frame,
                     text="该功能无需参数配置，点击执行即可。",
                     foreground="gray"
                 ).pack(pady=20)
-            elif script["name"] == "5.期权下单_一键导出":
+            elif order_script_name == "期权下单_一键导出":
                 # 期权下单_一键导出：显示参数配置
                 self._build_export_params()
             else:
@@ -1232,13 +1233,14 @@ class AutomationGUI:
             return
 
         # 下单需要检查Excel文件（全选撤单和期权下单_一键导出除外）
-        if self.current_category == "下单" and script["name"] not in ("5.期权下单_一键导出", "6.全选撤单") and not self.xlsx_file.get():
+        order_script_name = get_script_filename(script["name"])
+        if self.current_category == "下单" and order_script_name not in ("期权下单_一键导出", "全选撤单") and not self.xlsx_file.get():
             messagebox.showwarning("提示", "请先选择Excel配置文件")
             return
 
         # 期权下单_一键导出需要检查导出目标
         export_targets = []
-        if script["name"] == "5.期权下单_一键导出":
+        if order_script_name == "期权下单_一键导出":
             if self.export_target_position.get():
                 export_targets.append("持仓")
             if self.export_target_order.get():
@@ -1306,7 +1308,7 @@ class AutomationGUI:
             self._log(f"TXT路径: {self.txt_path.get()}")
             self._log(f"XLS路径: {self.xls_path.get()}")
         elif self.current_category == "下单":
-            if script["name"] == "5.期权下单_一键导出":
+            if order_script_name == "期权下单_一键导出":
                 self._log(f"导出目标: {', '.join(export_targets)}")
                 self._log(f"输出目录: {self.export_output_dir.get()}")
                 self._log(f"文件名格式: 期权下单(新)-持仓-20260629.xls")
