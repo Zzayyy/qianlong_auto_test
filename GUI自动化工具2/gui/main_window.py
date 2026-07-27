@@ -45,6 +45,14 @@ from gui.history import (
     STATUS_RUNNING,
 )
 from gui.compare import ComparePanel
+from gui.settings_report import SettingsReportPanel
+from gui.shell_open import open_path
+from core.settings_report import (
+    BATCH_COMPLETED,
+    BATCH_STOPPED,
+    create_run_id,
+    generate_batch_reports,
+)
 
 
 class AutomationGUI:
@@ -118,6 +126,8 @@ class AutomationGUI:
         # 任务历史管理器（持久化到日志目录）
         self.history = HistoryManager(self.log_dir)
         self._current_record_id = None  # 当前正在运行的记录 id
+        self._single_settings_batch = None
+        self._single_stop_requested = False
 
         self._build_ui()
         self._update_title()
@@ -334,6 +344,14 @@ class AutomationGUI:
         compare_frame = ttk.Frame(self.right_notebook, padding="5")
         self.right_notebook.add(compare_frame, text="结果比对")
         self.compare_panel = ComparePanel(compare_frame, self)
+
+        # —— 交易系统设置报告中心（位于“结果比对”右侧） ——
+        report_frame = ttk.Frame(self.right_notebook, padding="5")
+        self.right_notebook.add(report_frame, text="报告中心")
+        self.report_center = SettingsReportPanel(report_frame, self)
+        self._report_frame = report_frame
+        self._report_suppress_clear = False
+        self.right_notebook.bind("<<NotebookTabChanged>>", self._on_right_tab_changed)
 
         # 状态栏：钉在窗口底部（始终可见，矮窗口也不会被裁切），
         # 但左右加 10px 内边距与主面板对齐，避免「分层」的割裂感
@@ -994,6 +1012,8 @@ class AutomationGUI:
             set_output_dir(self.user_config, "交易系统设置", path)
             save_user_config(self.user_config)
             self._log(f"[配置] 已更新交易系统设置输出目录: {path}")
+            if hasattr(self, "report_center"):
+                self.report_center.refresh_batches()
 
     def _preview_excel(self, filepath: str):
         """读取Excel并显示到预览表格"""
@@ -1240,6 +1260,23 @@ class AutomationGUI:
 
         # 收集运行时参数，构造任务
         params = self.collect_params(export_targets)
+        if self.current_category == "交易系统设置":
+            batch_item = {
+                "category": "交易系统设置",
+                "script_name": script["name"],
+                "script_path": script["path"],
+                "params": params,
+                "status": TaskCenter.ST_PENDING,
+            }
+            try:
+                self._single_settings_batch = self.begin_settings_batch(
+                    "单独运行", [batch_item]
+                )
+            except OSError as exc:
+                messagebox.showerror("报告中心", f"无法创建报告批次:\n{exc}")
+                return
+            params.update(batch_item.get("_settings_runtime", {}))
+            self._single_stop_requested = False
         task = Task(script, self.current_category, params)
 
         self.is_running = True
@@ -1356,6 +1393,120 @@ class AutomationGUI:
             self.current_category = supported[0] if supported else ""
         if self.current_category:
             self._select_category(self.current_category)
+        if hasattr(self, "report_center"):
+            self.report_center.refresh_batches()
+
+    def show_report_center(self, auto_clear=True):
+        """切换到交易系统设置报告中心标签页。
+
+        auto_clear=False 用于运行完成后自动跳转展示结果，此时不清空。
+        """
+        if not hasattr(self, "_report_frame"):
+            return
+        already = self.right_notebook.select() == str(self._report_frame)
+        if not auto_clear:
+            self._report_suppress_clear = True
+        self.right_notebook.select(self._report_frame)
+        if not auto_clear and already:
+            self._report_suppress_clear = False
+
+    def _on_right_tab_changed(self, event=None):
+        """用户切到报告中心时清空历史展示；运行完成自动跳转则不清空。"""
+        if not hasattr(self, "_report_frame") or not hasattr(self, "report_center"):
+            return
+        if self.right_notebook.select() != str(self._report_frame):
+            return
+        if getattr(self, "_report_suppress_clear", False):
+            self._report_suppress_clear = False
+            return
+        self.report_center.clear_view()
+
+    # ====================== 交易系统设置：统一批次报告 ======================
+    def begin_settings_batch(self, source, task_items):
+        """为一次运行创建批次，并给其中的设置任务附加运行上下文。"""
+        settings_tasks = [
+            item for item in task_items
+            if item.get("category") == "交易系统设置"
+        ]
+        if not settings_tasks:
+            return None
+
+        output_dir = self.settings_output_dir.get().strip()
+        if not output_dir:
+            raise OSError("交易系统设置输出目录为空")
+        run_id = create_run_id()
+        batch_dir = os.path.abspath(os.path.join(output_dir, "批次", run_id))
+        os.makedirs(batch_dir, exist_ok=False)
+        context = {
+            "run_id": run_id,
+            "batch_dir": batch_dir,
+            "output_dir": output_dir,
+            "client_id": self.client_id,
+            "source": source,
+            "summary": None,
+        }
+        runtime = {
+            "settings_output_dir": output_dir,
+            "settings_run_id": run_id,
+            "settings_run_dir": batch_dir,
+            "client_id": self.client_id,
+        }
+        for item in settings_tasks:
+            item["_settings_runtime"] = dict(runtime)
+
+        self._log(
+            f"[报告中心] 已创建{source}批次: {run_id} | "
+            f"设置模块 {len(settings_tasks)} 个"
+        )
+        return context
+
+    def update_settings_batch(self, context, task_records, final=False, stopped=False):
+        """任务结束时生成一次总报告，并把完整批次信息直接交给报告中心。"""
+        if not context:
+            return None
+        if not final:
+            return None
+        records = [
+            {**item, "params": dict(item.get("params", {}))}
+            for item in task_records
+            if item.get("category") == "交易系统设置"
+        ]
+        batch_status = (
+            BATCH_STOPPED if stopped
+            else BATCH_COMPLETED
+        )
+        try:
+            summary = generate_batch_reports(
+                run_id=context["run_id"],
+                batch_dir=context["batch_dir"],
+                client_id=context["client_id"],
+                task_records=records,
+                stopped=stopped,
+                source=context["source"],
+                batch_status=batch_status,
+            )
+        except Exception as exc:
+            self._log(f"[报告中心] 批次报告更新失败: {exc}")
+            self.logger.exception("交易系统设置批次报告更新失败")
+            return None
+
+        context["summary"] = summary
+        if hasattr(self, "report_center"):
+            self.report_center.on_batch_summary(summary, final=final)
+        return summary
+
+    def resume_settings_batch(self, context, task_records):
+        """停止后继续执行时，沿用原批次并恢复为运行中。"""
+        runtime = {
+            "settings_output_dir": context["output_dir"],
+            "settings_run_id": context["run_id"],
+            "settings_run_dir": context["batch_dir"],
+            "client_id": context["client_id"],
+        }
+        for item in task_records:
+            if item.get("category") == "交易系统设置":
+                item["_settings_runtime"] = dict(runtime)
+        return None
 
     # ====================== 任务中心：顺序执行驱动 ======================
     def run_task_center(self, task_center):
@@ -1382,7 +1533,9 @@ class AutomationGUI:
         """
         script = {"name": item["script_name"], "path": item["script_path"],
                   "query_key": item.get("query_key", "")}
-        task = Task(script, item["category"], item["params"], next_category=next_category)
+        params = dict(item["params"])
+        params.update(item.get("_settings_runtime", {}))
+        task = Task(script, item["category"], params, next_category=next_category)
         self.runner.run(task)
 
     def _reset_running_state_if_idle(self):
@@ -1393,6 +1546,8 @@ class AutomationGUI:
     def _stop_script(self):
         """停止脚本"""
         if self.runner.is_running:
+            if not self._task_mode:
+                self._single_stop_requested = True
             self._log("\n[停止] 用户手动停止...")
             self.logger.info("用户手动停止")
             self._set_status("已停止（用户手动）")
@@ -1412,7 +1567,10 @@ class AutomationGUI:
 
     def _open_log_dir(self):
         """打开日志目录"""
-        os.startfile(self.log_dir)
+        try:
+            open_path(self.log_dir)
+        except OSError as exc:
+            messagebox.showerror("打开失败", str(exc))
 
     # ====================== 执行结果回调（运行在 runner 线程，统一切回主线程更新 UI） ======================
     def _on_run_finish(self, return_code, elapsed, task):
@@ -1442,6 +1600,31 @@ class AutomationGUI:
                 self._current_record_id = None
                 self._refresh_history()
 
+            if task.category == "交易系统设置" and self._single_settings_batch:
+                task_status = (
+                    TaskCenter.ST_STOPPED
+                    if self._single_stop_requested
+                    else TaskCenter.ST_SUCCESS if return_code == 0
+                    else TaskCenter.ST_FAILED
+                )
+                self.update_settings_batch(
+                    self._single_settings_batch,
+                    [{
+                        "category": "交易系统设置",
+                        "script_name": task.name,
+                        "script_path": task.path,
+                        "params": task.params,
+                        "status": task_status,
+                        "return_code": return_code,
+                        "elapsed": elapsed,
+                        "error": detail,
+                    }],
+                    final=True,
+                    stopped=self._single_stop_requested,
+                )
+                self._single_settings_batch = None
+                self._single_stop_requested = False
+
             self._reset_running_state()
         self.root.after(0, _apply)
 
@@ -1462,6 +1645,29 @@ class AutomationGUI:
                 self.history.update_record(self._current_record_id, STATUS_ERROR, detail=str(exc))
                 self._current_record_id = None
                 self._refresh_history()
+
+            if task.category == "交易系统设置" and self._single_settings_batch:
+                self.update_settings_batch(
+                    self._single_settings_batch,
+                    [{
+                        "category": "交易系统设置",
+                        "script_name": task.name,
+                        "script_path": task.path,
+                        "params": task.params,
+                        "status": (
+                            TaskCenter.ST_STOPPED
+                            if self._single_stop_requested
+                            else TaskCenter.ST_ERROR
+                        ),
+                        "return_code": None,
+                        "elapsed": 0.0,
+                        "error": str(exc),
+                    }],
+                    final=True,
+                    stopped=self._single_stop_requested,
+                )
+                self._single_settings_batch = None
+                self._single_stop_requested = False
 
             self._reset_running_state()
         self.root.after(0, _apply)
