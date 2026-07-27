@@ -28,6 +28,7 @@ class QianlongClientProfileTests(unittest.TestCase):
     def test_known_qianlong_paths_have_expected_positions(self):
         positions = self.qianlong["native_tree_profile"]["positions"]
         self.assertEqual(positions[r"\期权下单(新)"], [0])
+        self.assertEqual(positions[r"\三键下单"], [1])
         self.assertEqual(positions[r"\四键下单"], [2])
         self.assertEqual(positions[r"\撤单"], [17])
         self.assertEqual(positions[r"\查询\资金查询"], [19, 9])
@@ -55,7 +56,7 @@ class QianlongClientProfileTests(unittest.TestCase):
         ]
         self.assertFalse(any("一键炒单设置" in name for name in names))
 
-    def test_gui_hides_missing_three_key_panel_for_qianlong(self):
+    def test_gui_shows_three_key_panel_for_qianlong(self):
         config_path = PROJECT_ROOT / "GUI自动化工具2" / "config.py"
         spec = importlib.util.spec_from_file_location(
             "gui_automation_config_orders_for_test", config_path
@@ -67,7 +68,27 @@ class QianlongClientProfileTests(unittest.TestCase):
             script["name"]
             for script in module.get_scripts_config("qianlong")["下单"]
         ]
-        self.assertFalse(any("三键下单" in name for name in names))
+        self.assertTrue(any("三键下单" in name for name in names))
+
+    def test_gui_registers_quick_order_script(self):
+        config_path = PROJECT_ROOT / "GUI自动化工具2" / "config.py"
+        spec = importlib.util.spec_from_file_location(
+            "gui_automation_config_quick_order_for_test", config_path
+        )
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+        scripts = module.get_scripts_config("qianlong")["下单"]
+        quick_order = next(
+            script for script in scripts if "快速下单_自动化下单" in script["name"]
+        )
+        self.assertTrue(Path(quick_order["path"]).is_file())
+
+        guotai_names = [
+            script["name"]
+            for script in module.get_scripts_config("guotai_haitong")["下单"]
+        ]
+        self.assertTrue(any("快速下单_自动化下单" in name for name in guotai_names))
 
 
 if __name__ == "__main__":
