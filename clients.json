@@ -5,6 +5,14 @@
       "id": "qianlong",
       "name": "钱龙模拟期权宝",
       "window_key": "钱龙模拟期权宝",
+      "workspace": {
+        "main_class": "QL_OPTION_MAINWND_CLASS",
+        "market_button_id": 1019,
+        "super_button_id": 1023,
+        "market_tree_id": 1223,
+        "tactics_panel_id": 103,
+        "tactics_scrollbar_id": 104
+      },
       "native_tree_profile": {
         "description": "钱龙模拟期权宝 Win11 实机采集；位置定位前同时校验节点总数和根节点拓扑",
         "expected_node_count": 52,
@@ -91,6 +99,14 @@
       "name": "国泰海通证券期权宝",
       "window_key": "国泰海通证券期权宝",
       "requires_elevation": false,
+      "workspace": {
+        "main_class": "QL_OPTION_MAINWND_CLASS",
+        "market_button_id": 1019,
+        "super_button_id": 1023,
+        "market_tree_id": 1223,
+        "tactics_panel_id": 103,
+        "tactics_scrollbar_id": 104
+      },
       "native_tree_profile": {
         "expected_node_count": 78,
         "positions": {

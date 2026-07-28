@@ -54,6 +54,44 @@ class ScriptRunner:
             env["PYTHONIOENCODING"] = "utf-8"
             env["PYTHONUTF8"] = "1"
 
+            # 界面切换必须在独立子进程中完成。core.workspace 会加载 pywinauto，
+            # 若在已经创建 Tk 窗口的 GUI 进程中首次加载，会改变进程 DPI 感知并
+            # 导致整个主窗口缩放、控件裁切。旧版 runner 也始终保持 GUI 与自动化
+            # 依赖隔离；这里延续该边界，同时保留自动切换界面的新功能。
+            preflight_path = os.path.join(
+                self.project_root, "core", "workspace.py"
+            )
+            if self.is_frozen:
+                preflight_cmd = [
+                    sys.executable, "--_run_script", preflight_path
+                ]
+            else:
+                preflight_cmd = [sys.executable, "-u", preflight_path]
+
+            self.on_debug(f"界面准备命令: {preflight_cmd}")
+            self._process = subprocess.Popen(
+                preflight_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                creationflags=subprocess.CREATE_NO_WINDOW,
+                env=env,
+            )
+            for line in self._process.stdout:
+                line = line.rstrip()
+                if line:
+                    self.on_debug(line)
+                    if self.log_level_getter() == "详细":
+                        self.on_log(line)
+            preflight_code = self._process.wait()
+            self._process = None
+            if preflight_code != 0:
+                raise RuntimeError(
+                    f"任务启动前自动切换界面失败，退出码: {preflight_code}"
+                )
+
             # 构建命令：打包后用 exe 自身充当 Python 解释器，开发环境用系统 Python
             if self.is_frozen:
                 cmd = [sys.executable, "--_run_script", task.path]
@@ -78,6 +116,10 @@ class ScriptRunner:
             for line in self._process.stdout:
                 line = line.rstrip()
                 if line:
+                    if line.startswith("[LOGIN_REQUIRED]"):
+                        task.login_required_message = line.split("]", 1)[1].strip()
+                    elif line.startswith("[TRADING_TIME_BLOCKED]"):
+                        task.trading_time_message = line.split("]", 1)[1].strip()
                     # 简洁模式下不显示子脚本自身的 print 输出，但继续读取管道避免子进程阻塞
                     self.on_debug(line)
                     if self.log_level_getter() == "详细":

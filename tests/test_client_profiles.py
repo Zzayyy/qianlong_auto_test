@@ -90,6 +90,44 @@ class QianlongClientProfileTests(unittest.TestCase):
         ]
         self.assertTrue(any("快速下单_自动化下单" in name for name in guotai_names))
 
+    def test_gui_exposes_three_top_level_modules(self):
+        config_path = PROJECT_ROOT / "GUI自动化工具2" / "config.py"
+        spec = importlib.util.spec_from_file_location(
+            "gui_automation_config_modules_for_test", config_path
+        )
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+        self.assertEqual(
+            list(module.MODULE_GROUPS),
+            ["行情交易", "超级策略", "交易系统设置"],
+        )
+        self.assertEqual(
+            tuple(module.MODULE_GROUPS["超级策略"]),
+            ("超级策略",),
+        )
+        self.assertEqual(
+            module.SUPER_STRATEGY_CATEGORIES,
+            frozenset(("超级策略",)),
+        )
+        scripts = module.get_scripts_config("guotai_haitong")
+        self.assertEqual(
+            [script["name"] for script in scripts["超级策略"]],
+            ["牛市认沽", "牛市认购", "熊市认沽", "熊市认购"],
+        )
+        for script in scripts["超级策略"]:
+            self.assertIn(
+                f"超级策略\\{script['name']}\\", script["path"]
+            )
+
+    def test_both_clients_declare_workspace_fingerprints(self):
+        for client in self.clients:
+            with self.subTest(client=client["id"]):
+                profile = client["workspace"]
+                self.assertEqual(profile["market_button_id"], 1019)
+                self.assertEqual(profile["super_button_id"], 1023)
+                self.assertEqual(profile["tactics_panel_id"], 103)
+
 
 if __name__ == "__main__":
     unittest.main()
