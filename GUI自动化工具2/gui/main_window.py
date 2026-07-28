@@ -539,37 +539,56 @@ class AutomationGUI:
         ttk.Label(left_group, text="状态:").pack(side=tk.LEFT, padx=(0, 2))
         self.history_filter_var = tk.StringVar(value="全部")
         filter_combo = ttk.Combobox(
-            left_group, textvariable=self.history_filter_var, state="readonly", width=8
+            left_group, textvariable=self.history_filter_var, state="readonly", width=6
         )
         filter_combo["values"] = ["全部", "成功", "失败", "异常", "已停止", "运行中"]
         filter_combo.pack(side=tk.LEFT)
-        filter_combo.bind("<<ComboboxSelected>>", lambda e: self._refresh_history())
+        filter_combo.bind("<<ComboboxSelected>>", lambda e: self._history_reset_and_refresh())
 
         # 时间范围筛选
         ttk.Label(left_group, text="时间:").pack(side=tk.LEFT, padx=(8, 2))
         self.history_range_var = tk.StringVar(value="全部")
         range_combo = ttk.Combobox(
-            left_group, textvariable=self.history_range_var, state="readonly", width=8
+            left_group, textvariable=self.history_range_var, state="readonly", width=6
         )
         range_combo["values"] = ["全部", "今天", "近一周", "近一月"]
         range_combo.pack(side=tk.LEFT)
-        range_combo.bind("<<ComboboxSelected>>", lambda e: self._refresh_history())
+        range_combo.bind("<<ComboboxSelected>>", lambda e: self._history_reset_and_refresh())
 
-        # 右侧：信息组（计数 + 清空），锚定在右，内部宽度变化不影响左侧
+        # 分类筛选
+        ttk.Label(left_group, text="分类:").pack(side=tk.LEFT, padx=(8, 2))
+        self.history_category_var = tk.StringVar(value="全部")
+        self.history_category_combo = ttk.Combobox(
+            left_group, textvariable=self.history_category_var, state="readonly", width=10
+        )
+        self.history_category_combo["values"] = ["全部"]
+        self.history_category_combo.pack(side=tk.LEFT)
+        self.history_category_combo.bind("<<ComboboxSelected>>", lambda e: self._history_reset_and_refresh())
+
+        # 分页状态（每页默认 100 条，可在界面切换 50/100/200）
+        self.history_page = 1
+        self.history_page_size = 100
+        self.history_page_size_var = tk.StringVar(value="100")
+
+        # 右侧：信息组（每页 + 清空），锚定在右，内部宽度变化不影响左侧
         right_group = ttk.Frame(tool_frame)
         right_group.pack(side=tk.RIGHT)
 
-        self.history_count_label = ttk.Label(right_group, text="", foreground="gray")
-        self.history_count_label.pack(side=tk.LEFT, padx=(2, 0))
+        ttk.Label(right_group, text="每页:").pack(side=tk.LEFT, padx=(8, 2))
+        page_size_combo = ttk.Combobox(
+            right_group, textvariable=self.history_page_size_var, state="readonly", width=5
+        )
+        page_size_combo["values"] = ["50", "100", "200"]
+        page_size_combo.pack(side=tk.LEFT)
+        page_size_combo.bind("<<ComboboxSelected>>", self._history_change_page_size)
 
-        ttk.Button(
-            right_group, text="清空记录", command=self._clear_history, width=10
-        ).pack(side=tk.LEFT, padx=(8, 0))
+        # 列表区：独立容器充满中间剩余空间，避免 Treeview 撑满导致分页栏被挤到边上
+        list_frame = ttk.Frame(parent)
+        list_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
-        # 列表
         columns = ("time", "task", "category", "status", "elapsed")
         self.history_tree = ttk.Treeview(
-            parent, columns=columns, show="headings", height=15, selectmode=tk.BROWSE
+            list_frame, columns=columns, show="headings", height=15, selectmode=tk.BROWSE
         )
         self.history_tree.heading("time", text="时间")
         self.history_tree.heading("task", text="任务")
@@ -589,13 +608,32 @@ class AutomationGUI:
         self.history_tree.tag_configure("stopped", foreground="#FF8C00")
         self.history_tree.tag_configure("running", foreground="#0000FF")
 
-        v_scroll = ttk.Scrollbar(parent, orient=tk.VERTICAL, command=self.history_tree.yview)
+        v_scroll = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.history_tree.yview)
         self.history_tree.configure(yscrollcommand=v_scroll.set)
         self.history_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         v_scroll.pack(side=tk.RIGHT, fill=tk.Y)
 
         # 双击查看详情
         self.history_tree.bind('<Double-Button-1>', self._show_history_detail)
+
+        # —— 底部分页栏 ——
+        pager = ttk.Frame(parent)
+        pager.pack(side=tk.BOTTOM, fill=tk.X, pady=(5, 0))
+        self.history_prev_btn = ttk.Button(
+            pager, text="上一页", width=8, command=self._history_prev_page
+        )
+        self.history_prev_btn.pack(side=tk.LEFT, padx=2)
+        self.history_page_label = ttk.Label(pager, text="第 1 / 1 页", foreground="#444")
+        self.history_page_label.pack(side=tk.LEFT, padx=6)
+        self.history_next_btn = ttk.Button(
+            pager, text="下一页", width=8, command=self._history_next_page
+        )
+        self.history_next_btn.pack(side=tk.LEFT, padx=2)
+
+        # 清空记录放右下角，避免被工具栏筛选控件挤掉
+        ttk.Button(
+            pager, text="清空记录", command=self._clear_history, width=10
+        ).pack(side=tk.RIGHT, padx=(0, 2))
 
     # ---------- 刷新入口 ----------
     def _refresh_history(self):
@@ -630,12 +668,37 @@ class AutomationGUI:
             self.stat_success.config(foreground="#f44747")
 
     def _refresh_history_list(self):
-        """刷新列表视图（应用状态 + 时间范围筛选）"""
+        """刷新列表视图（应用状态 + 时间范围筛选，并按页渲染）"""
         tree = self.history_tree
         tree.delete(*tree.get_children())
-        total = len(self.history.records)
+
+        # 先按筛选条件过滤（records 最新在前）
         filt = self.history_filter_var.get() if hasattr(self, "history_filter_var") else "全部"
         rng = self.history_range_var.get() if hasattr(self, "history_range_var") else "全部"
+        cat = self.history_category_var.get() if hasattr(self, "history_category_var") else "全部"
+
+        # 分类下拉项根据现有记录动态生成（含「全部」）；若当前选择已无对应记录则回退
+        cats = sorted({rec.get("category", "") for rec in self.history.records if rec.get("category", "")})
+        if hasattr(self, "history_category_combo"):
+            self.history_category_combo["values"] = ["全部"] + cats
+        if cat != "全部" and cat not in cats:
+            self.history_category_var.set("全部")
+            cat = "全部"
+
+        filtered = [
+            rec for rec in self.history.records
+            if (filt == "全部" or rec.get("status", "") == filt)
+            and (rng == "全部" or self._in_range(rec.get("time", ""), rng))
+            and (cat == "全部" or rec.get("category", "") == cat)
+        ]
+
+        total = len(filtered)
+        size = self.history_page_size
+        total_pages = max(1, (total + size - 1) // size)
+        if self.history_page > total_pages:
+            self.history_page = total_pages
+        if self.history_page < 1:
+            self.history_page = 1
 
         status_tag = {
             STATUS_SUCCESS: "success",
@@ -644,14 +707,9 @@ class AutomationGUI:
             STATUS_STOPPED: "stopped",
             STATUS_RUNNING: "running",
         }
-        shown = 0
-        for rec in self.history.records:
+        start = (self.history_page - 1) * size
+        for rec in filtered[start:start + size]:
             status = rec.get("status", "")
-            if filt != "全部" and status != filt:
-                continue
-            if rng != "全部" and not self._in_range(rec.get("time", ""), rng):
-                continue
-            shown += 1
             tag = status_tag.get(status, "")
             elapsed = self.history.format_elapsed(rec.get("elapsed", 0))
             tree.insert(
@@ -667,11 +725,41 @@ class AutomationGUI:
                 tags=(tag,) if tag else (),
             )
 
-        parts = [f"共 {total} 条"]
-        if filt != "全部" or rng != "全部":
-            parts.append(f"显示 {shown} 条")
-        self.history_count_label.config(text=" | ".join(parts))
+        # 计数 + 页码（合并到分页栏，避免工具栏拥挤）
+        self.history_page_label.config(text=f"共 {total} 条 · 第 {self.history_page} / {total_pages} 页")
+        self.history_prev_btn.config(
+            state="normal" if self.history_page > 1 else "disabled"
+        )
+        self.history_next_btn.config(
+            state="normal" if self.history_page < total_pages else "disabled"
+        )
 
+
+    # ---------- 分页控制 ----------
+    def _history_prev_page(self):
+        """上一页"""
+        if self.history_page > 1:
+            self.history_page -= 1
+            self._refresh_history_list()
+
+    def _history_next_page(self):
+        """下一页"""
+        self.history_page += 1
+        self._refresh_history_list()
+
+    def _history_change_page_size(self, event=None):
+        """切换每页条数后回到第 1 页"""
+        try:
+            self.history_page_size = int(self.history_page_size_var.get())
+        except ValueError:
+            self.history_page_size = 100
+        self.history_page = 1
+        self._refresh_history_list()
+
+    def _history_reset_and_refresh(self):
+        """切换筛选 / 时间范围时回到第 1 页再刷新"""
+        self.history_page = 1
+        self._refresh_history()
 
     # ---------- 时间格式化工具 ----------
     @staticmethod
@@ -1488,6 +1576,7 @@ class AutomationGUI:
 
         # 交给执行引擎在后台线程运行
         self._current_record_id = self.history.add_record(script["name"], self.current_category)
+        self.history_page = 1  # 新任务置顶，回到第 1 页
         self._refresh_history()
         self.runner.run(task)
 
