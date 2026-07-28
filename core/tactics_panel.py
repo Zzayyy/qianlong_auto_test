@@ -221,7 +221,8 @@ def _parse_ocr_output(output) -> list[tuple[object, str, float]]:
 
 
 def ocr_image_items(image: Image.Image, *, screen_origin: tuple[int, int] = (0, 0),
-                    min_conf: float = 0.80, enlarge: float = 3.0) -> list[dict]:
+                    min_conf: float = 0.80, enlarge: float = 3.0,
+                    use_cls: bool = True) -> list[dict]:
     """OCR 一张小区域截图并把结果换算为屏幕坐标。"""
     if enlarge and enlarge != 1.0:
         image = image.resize(
@@ -230,7 +231,7 @@ def ocr_image_items(image: Image.Image, *, screen_origin: tuple[int, int] = (0, 
         )
     started = time.perf_counter()
     output = _get_rapid_ocr()(
-        np.asarray(image), use_det=True, use_cls=True, use_rec=True
+        np.asarray(image), use_det=True, use_cls=bool(use_cls), use_rec=True
     )
     elapsed = time.perf_counter() - started
     scale = float(enlarge or 1.0)
@@ -254,6 +255,30 @@ def ocr_image_items(image: Image.Image, *, screen_origin: tuple[int, int] = (0, 
             "ocr_elapsed": elapsed,
         })
     return result
+
+
+def ocr_single_line(image: Image.Image, *, min_conf: float = 0.80,
+                    enlarge: float = 3.0) -> dict | None:
+    """识别一个已经裁好的横向文字块，不再运行耗时的文字检测。"""
+    if enlarge and enlarge != 1.0:
+        image = image.resize(
+            (max(1, int(image.width * enlarge)), max(1, int(image.height * enlarge))),
+            Image.Resampling.LANCZOS,
+        )
+    started = time.perf_counter()
+    output = _get_rapid_ocr()(
+        np.asarray(image), use_det=False, use_cls=False, use_rec=True
+    )
+    elapsed = time.perf_counter() - started
+    texts = list(getattr(output, "txts", ()) or ())
+    scores = list(getattr(output, "scores", ()) or ())
+    if len(texts) != 1 or len(scores) != 1 or float(scores[0]) < min_conf:
+        return None
+    return {
+        "text": str(texts[0]),
+        "score": float(scores[0]),
+        "ocr_elapsed": elapsed,
+    }
 
 
 def _click_client(hwnd: int, x: int, y: int, *, delay: float = 0.25) -> None:

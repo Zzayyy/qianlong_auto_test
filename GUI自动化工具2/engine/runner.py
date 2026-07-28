@@ -116,13 +116,16 @@ class ScriptRunner:
             for line in self._process.stdout:
                 line = line.rstrip()
                 if line:
+                    is_runtime_problem = line.startswith(
+                        ("[LOGIN_REQUIRED]", "[TRADING_TIME_BLOCKED]", "[错误]")
+                    )
                     if line.startswith("[LOGIN_REQUIRED]"):
                         task.login_required_message = line.split("]", 1)[1].strip()
                     elif line.startswith("[TRADING_TIME_BLOCKED]"):
                         task.trading_time_message = line.split("]", 1)[1].strip()
-                    # 简洁模式下不显示子脚本自身的 print 输出，但继续读取管道避免子进程阻塞
+                    # 简洁模式仍显示需要用户处理的问题；其余普通输出只写文件日志。
                     self.on_debug(line)
-                    if self.log_level_getter() == "详细":
+                    if is_runtime_problem or self.log_level_getter() == "详细":
                         self.on_log(line)
 
             return_code = self._process.wait()

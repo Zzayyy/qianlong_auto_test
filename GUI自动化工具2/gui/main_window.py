@@ -1632,10 +1632,6 @@ class AutomationGUI:
         # 任务中心顺序执行模式：回调转交任务中心处理
         if self._task_mode:
             def _tc_finish():
-                if login_message:
-                    messagebox.showwarning("需要登录", login_message)
-                elif trading_time_message:
-                    messagebox.showwarning("非交易时段", trading_time_message)
                 self.task_center.on_finish(return_code, elapsed, task)
             self.root.after(0, _tc_finish)
             return
@@ -1653,10 +1649,6 @@ class AutomationGUI:
                 self._log(f"\n[错误] {task.name} 执行失败，退出码: {return_code}")
                 self.logger.error(f"执行失败: {task.name}, 退出码: {return_code}")
                 self._set_status(f"失败: {task.name} (用时 {elapsed:.1f}s)")
-                if login_message:
-                    messagebox.showwarning("需要登录", login_message)
-                elif trading_time_message:
-                    messagebox.showwarning("非交易时段", trading_time_message)
 
             if self._current_record_id is not None:
                 self.history.update_record(self._current_record_id, status, elapsed, detail)

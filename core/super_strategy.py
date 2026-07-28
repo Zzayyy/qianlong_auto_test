@@ -3,11 +3,13 @@
 
 from __future__ import annotations
 
+import ctypes
+import json
 import os
 import re
+import tempfile
 import time
 
-from PIL import Image
 import win32api
 import win32con
 import win32gui
@@ -20,6 +22,7 @@ from core.tactics_panel import (
     click_tactics_item,
     dpi_unaware,
     ocr_image_items,
+    ocr_single_line,
 )
 from core.window import countdown, find_window
 from core.workspace import WORKSPACE_SUPER, ensure_workspace
@@ -29,8 +32,11 @@ ACTION_PANEL_CONTROL_ID = 128
 ACTION_PANEL_CLASS = "AfxWnd140u"
 ADD_UNDERLYING_TEXT = "加入标的"
 OPEN_POSITION_TEXT = "一键开仓"
+ACTION_CACHE_VERSION = 1
+ACTION_CACHE_TARGETS = (ADD_UNDERLYING_TEXT, OPEN_POSITION_TEXT)
 LOGIN_REQUIRED_EXIT_CODE = 3
 TRADING_TIME_BLOCKED_EXIT_CODE = 4
+RESULT_QUIET_PERIOD = 1.2
 LOGIN_PATTERNS = (
     "未登录",
     "尚未登录",
@@ -55,6 +61,10 @@ ORDER_CONFIRM_PATTERNS = (
     "您确定要下单吗",
     "确定要下单吗",
 )
+DIALOG_CLASS = "#32770"
+AFFIRMATIVE_BUTTON_IDS = (win32con.IDOK, win32con.IDYES, 5051)
+
+
 class SuperStrategyError(RuntimeError):
     """超级策略流程无法安全继续。"""
 
@@ -119,39 +129,185 @@ def _action_strip(main_hwnd: int, action_panel: int):
     return image.crop((x0, y0, x1, y1)), (left, screen_top)
 
 
-def _find_action_text(main_hwnd: int, action_panel: int, target: str) -> dict:
-    # 客户端会随主窗口宽度调整按钮位置，不能使用固定面板坐标。
-    # 每次只识别高度很小的操作栏，并以 OCR 返回的屏幕坐标作为真实点击点。
-    image, origin = _action_strip(main_hwnd, action_panel)
-    items = ocr_image_items(
-        image,
-        screen_origin=origin,
-        min_conf=0.70,
-        enlarge=3.0,
+def _action_cache_path() -> str:
+    override = os.environ.get("GUI_SUPER_ACTION_CACHE")
+    if override:
+        return os.path.abspath(override)
+    root = os.environ.get("LOCALAPPDATA") or os.environ.get("TEMP") or os.getcwd()
+    return os.path.join(root, "qianlong_auto", "super_strategy_action_cache.json")
+
+
+def _load_action_cache() -> dict:
+    try:
+        with open(_action_cache_path(), "r", encoding="utf-8") as stream:
+            payload = json.load(stream)
+        if payload.get("version") != ACTION_CACHE_VERSION:
+            return {"version": ACTION_CACHE_VERSION, "entries": {}}
+        if not isinstance(payload.get("entries"), dict):
+            return {"version": ACTION_CACHE_VERSION, "entries": {}}
+        return payload
+    except (OSError, ValueError, TypeError, AttributeError):
+        return {"version": ACTION_CACHE_VERSION, "entries": {}}
+
+
+def _save_action_cache(payload: dict) -> None:
+    path = _action_cache_path()
+    directory = os.path.dirname(path) or os.getcwd()
+    os.makedirs(directory, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(
+        prefix="super_strategy_action_", suffix=".json.tmp", dir=directory
     )
-    matches = [item for item in items if item["text"].strip() == target]
-    if len(matches) != 1:
-        # 密集操作栏偶尔会在第一次文字检测中漏掉单个按钮；同一区域换一个
-        # 缩放倍率重试一次。两次都必须精确识别，绝不使用模糊文字点击。
-        retry_items = ocr_image_items(
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump(payload, stream, ensure_ascii=False, indent=2)
+        os.replace(temporary, path)
+    except Exception:
+        try:
+            os.unlink(temporary)
+        except OSError:
+            pass
+        raise
+
+
+def _action_cache_key(action_panel: int, image) -> str:
+    with dpi_unaware():
+        left, top, right, bottom = win32gui.GetWindowRect(int(action_panel))
+    client_id = os.environ.get("GUI_CLIENT_ID") or get_default_client_id()
+    return (
+        f"{client_id}|panel={right-left}x{bottom-top}|"
+        f"strip={image.width}x{image.height}"
+    )
+
+
+def _unique_action_hits(items: list[dict]) -> dict[str, dict]:
+    result = {}
+    for target in ACTION_CACHE_TARGETS:
+        matches = [item for item in items if item["text"].strip() == target]
+        if len(matches) == 1:
+            result[target] = matches[0]
+    return result
+
+
+def _cache_detected_action_hits(cache_key: str, origin: tuple[int, int],
+                                image, hits: dict[str, dict]) -> None:
+    if not hits:
+        return
+    payload = _load_action_cache()
+    entries = payload.setdefault("entries", {})
+    entry = entries.setdefault(cache_key, {})
+    for target, hit in hits.items():
+        entry[target] = {
+            "left": float(hit["left"]) - origin[0],
+            "top": float(hit["top"]) - origin[1],
+            "right": float(hit["right"]) - origin[0],
+            "bottom": float(hit["bottom"]) - origin[1],
+        }
+    entry["updated_at"] = time.time()
+    entry["strip_size"] = [image.width, image.height]
+    try:
+        _save_action_cache(payload)
+    except OSError as exc:
+        print(f"[WARN] 超级策略按钮位置缓存写入失败，继续使用本次 OCR 结果: {exc}")
+
+
+def _cached_action_hits(image, origin: tuple[int, int], cache_key: str,
+                        targets: tuple[str, ...]) -> dict[str, dict] | None:
+    entry = _load_action_cache().get("entries", {}).get(cache_key)
+    if not isinstance(entry, dict):
+        return None
+    verified = {}
+    for target in targets:
+        box = entry.get(target)
+        if not isinstance(box, dict):
+            return None
+        try:
+            left = float(box["left"])
+            top = float(box["top"])
+            right = float(box["right"])
+            bottom = float(box["bottom"])
+        except (KeyError, TypeError, ValueError):
+            return None
+        padding_x = max(4.0, (right - left) * 0.10)
+        padding_y = max(3.0, (bottom - top) * 0.25)
+        crop_box = (
+            max(0, int(left - padding_x)),
+            max(0, int(top - padding_y)),
+            min(image.width, int(right + padding_x + 1)),
+            min(image.height, int(bottom + padding_y + 1)),
+        )
+        if crop_box[2] <= crop_box[0] or crop_box[3] <= crop_box[1]:
+            return None
+        recognized = ocr_single_line(
+            image.crop(crop_box), min_conf=0.70, enlarge=3.0
+        )
+        if recognized is None or recognized["text"].strip() != target:
+            return None
+        verified[target] = {
+            "text": target,
+            "score": recognized["score"],
+            "left": origin[0] + left,
+            "top": origin[1] + top,
+            "right": origin[0] + right,
+            "bottom": origin[1] + bottom,
+            "cx": origin[0] + (left + right) / 2,
+            "cy": origin[1] + (top + bottom) / 2,
+            "ocr_elapsed": recognized["ocr_elapsed"],
+            "mode": "cached_recognition_only",
+        }
+    return verified
+
+
+def _find_action_texts(main_hwnd: int, action_panel: int,
+                       targets) -> dict[str, dict]:
+    """一次截图定位多个操作按钮；缓存只在逐按钮 OCR 复核后使用。"""
+    targets = tuple(dict.fromkeys(str(target) for target in targets))
+    if not targets:
+        return {}
+    unsupported = [target for target in targets if target not in ACTION_CACHE_TARGETS]
+    if unsupported:
+        raise SuperStrategyError(f"不支持的策略操作按钮: {unsupported}")
+
+    # 客户端会随主窗口宽度调整按钮位置，不能直接使用固定屏幕坐标。
+    # 首次完整检测后缓存相对位置；以后仅裁出单个文字块做识别复核。
+    image, origin = _action_strip(main_hwnd, action_panel)
+    cache_key = _action_cache_key(action_panel, image)
+    cached = _cached_action_hits(image, origin, cache_key, targets)
+    if cached is not None:
+        total = sum(hit["ocr_elapsed"] for hit in cached.values())
+        print(
+            f"[OK] 已用缓存位置快速复核操作按钮: {', '.join(targets)}，"
+            f"OCR={total:.2f}s"
+        )
+        return cached
+
+    detected = {}
+    last_items = []
+    for enlarge in (3.0, 4.0):
+        items = ocr_image_items(
             image,
             screen_origin=origin,
             min_conf=0.70,
-            enlarge=4.0,
+            enlarge=enlarge,
+            use_cls=False,
         )
-        retry_matches = [
-            item for item in retry_items if item["text"].strip() == target
-        ]
-        if len(retry_matches) == 1:
-            return retry_matches[0]
-        items = retry_items
-        matches = retry_matches
-    if len(matches) != 1:
-        seen = [item["text"] for item in items]
+        last_items = items
+        detected.update(_unique_action_hits(items))
+        if all(target in detected for target in targets):
+            break
+    if not all(target in detected for target in targets):
+        seen = [item["text"] for item in last_items]
+        missing = [target for target in targets if target not in detected]
         raise SuperStrategyError(
-            f"未唯一识别到操作按钮 {target!r}（匹配数={len(matches)}, OCR={seen}）"
+            f"未唯一识别到操作按钮 {missing!r}（OCR={seen}）"
         )
-    return matches[0]
+    _cache_detected_action_hits(cache_key, origin, image, detected)
+    for hit in detected.values():
+        hit["mode"] = "full_detection"
+    return {target: detected[target] for target in targets}
+
+
+def _find_action_text(main_hwnd: int, action_panel: int, target: str) -> dict:
+    return _find_action_texts(main_hwnd, action_panel, (target,))[target]
 
 
 def _set_foreground_with_attached_input(hwnd: int) -> None:
@@ -242,10 +398,15 @@ def _real_mouse_click(main_hwnd: int, target_hwnd: int, screen_x: float,
     time.sleep(delay)
 
 
-def click_action(main_hwnd: int, target: str, *, delay: float = 0.8) -> dict:
+def click_action(main_hwnd: int, target: str, *, delay: float = 0.8,
+                 panel: int | None = None, hit: dict | None = None) -> dict:
     """OCR 定位自绘操作按钮，并在校验后的屏幕坐标执行真实鼠标点击。"""
-    panel = get_action_panel(main_hwnd)
-    hit = _find_action_text(main_hwnd, panel, target)
+    panel = get_action_panel(main_hwnd) if panel is None else int(panel)
+    hit = _find_action_text(main_hwnd, panel, target) if hit is None else hit
+    if hit.get("text", "").strip() != target:
+        raise SuperStrategyError(
+            f"预识别按钮与点击目标不一致: 目标={target!r}, 识别={hit.get('text')!r}"
+        )
     _real_mouse_click(
         main_hwnd,
         panel,
@@ -255,7 +416,7 @@ def click_action(main_hwnd: int, target: str, *, delay: float = 0.8) -> dict:
     )
     print(
         f"[OK] 已点击 {target}: 置信度={hit['score']:.3f}, "
-        f"OCR={hit['ocr_elapsed']:.2f}s"
+        f"OCR={hit['ocr_elapsed']:.2f}s, 模式={hit.get('mode', 'full_detection')}"
     )
     return hit
 
@@ -265,50 +426,68 @@ def _process_id(hwnd: int) -> int:
 
 
 def _visible_process_surfaces(pid: int, main_hwnd: int) -> set[int]:
-    """返回可能承载提示的可见顶层窗口和主窗口内嵌子窗口。"""
+    """返回目标进程内可见的原生对话框，不扫描普通业务子面板。"""
     result = set()
 
     def callback(hwnd, _):
         try:
             if hwnd == int(main_hwnd) or not win32gui.IsWindowVisible(hwnd):
-                return
+                return True
             _, window_pid = win32process.GetWindowThreadProcessId(hwnd)
             if window_pid != pid:
-                return
-            left, top, right, bottom = win32gui.GetWindowRect(hwnd)
-            if right - left >= 80 and bottom - top >= 40:
+                return True
+            if win32gui.GetClassName(hwnd) == DIALOG_CLASS:
                 result.add(hwnd)
         except Exception:
-            return
+            pass
+        return True
 
     win32gui.EnumWindows(callback, None)
     for hwnd in _enum_descendants(main_hwnd):
         try:
             if not win32gui.IsWindowVisible(hwnd):
                 continue
-            left, top, right, bottom = win32gui.GetWindowRect(hwnd)
-            if right - left >= 80 and bottom - top >= 40:
+            if win32gui.GetClassName(hwnd) == DIALOG_CLASS:
                 result.add(hwnd)
         except Exception:
             continue
     return result
 
 
-def _window_text_dump(hwnd: int) -> str:
-    texts = []
+def _native_window_text(hwnd: int, max_chars: int = 32768) -> str:
+    """通过原生 WM_GETTEXT 读取跨进程窗口/控件文字。"""
     try:
-        title = win32gui.GetWindowText(hwnd)
-        if title:
-            texts.append(title)
+        length = int(
+            win32gui.SendMessage(
+                int(hwnd), win32con.WM_GETTEXTLENGTH, 0, 0
+            )
+        )
+        size = max(1, min(length + 1, int(max_chars)))
+        buffer = ctypes.create_unicode_buffer(size)
+        win32gui.SendMessage(
+            int(hwnd), win32con.WM_GETTEXT, size, buffer
+        )
+        text = buffer.value.strip()
+        if text:
+            return text
     except Exception:
         pass
+    try:
+        return (win32gui.GetWindowText(int(hwnd)) or "").strip()
+    except Exception:
+        return ""
+
+
+def _window_text_dump(hwnd: int) -> str:
+    """只用 Win32 读取弹窗标题及所有原生子控件文字。"""
+    texts: list[str] = []
+    title = _native_window_text(hwnd)
+    if title:
+        texts.append(title)
     for child in _enum_descendants(hwnd):
-        try:
-            text = win32gui.GetWindowText(child)
-            if text:
-                texts.append(text)
-        except Exception:
-            continue
+        text = _native_window_text(child)
+        if text and text not in texts:
+            texts.append(text)
     return "\n".join(texts)
 
 
@@ -341,16 +520,102 @@ def _exact_child_buttons(hwnd: int, text: str) -> list[int]:
                 continue
             if win32gui.GetClassName(child) != "Button":
                 continue
-            if win32gui.GetWindowText(child).strip() == text:
+            if _native_window_text(child) == text:
                 matches.append(child)
         except Exception:
             continue
     return matches
 
 
+def _button_by_id(dialog_hwnd: int, control_ids: tuple[int, ...]) -> int | None:
+    for control_id in control_ids:
+        try:
+            button = win32gui.GetDlgItem(int(dialog_hwnd), int(control_id))
+        except Exception:
+            button = 0
+        if not button:
+            continue
+        try:
+            if (
+                win32gui.IsWindowVisible(button)
+                and win32gui.IsWindowEnabled(button)
+                and win32gui.GetClassName(button) == "Button"
+            ):
+                return int(button)
+        except Exception:
+            continue
+    return None
+
+
+def _dialog_signature(dialog_hwnd: int) -> tuple:
+    """生成轻量原生状态签名，用于验证弹窗关闭或内容切换。"""
+    controls = []
+    for child in _enum_descendants(dialog_hwnd):
+        try:
+            if not win32gui.IsWindowVisible(child):
+                continue
+            controls.append((
+                _control_id(child),
+                win32gui.GetClassName(child),
+                _native_window_text(child),
+            ))
+        except Exception:
+            continue
+    return (_native_window_text(dialog_hwnd), tuple(controls))
+
+
+def _dialog_is_visible(dialog_hwnd: int) -> bool:
+    try:
+        return bool(
+            win32gui.IsWindow(int(dialog_hwnd))
+            and win32gui.IsWindowVisible(int(dialog_hwnd))
+        )
+    except Exception:
+        return False
+
+
+def _wait_dialog_transition(dialog_hwnd: int, previous_signature: tuple,
+                            timeout: float = 1.5, *,
+                            require_closed: bool = False) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if not _dialog_is_visible(dialog_hwnd):
+            return True
+        if (
+            not require_closed
+            and _dialog_signature(dialog_hwnd) != previous_signature
+        ):
+            return True
+        time.sleep(0.05)
+    return False
+
+
+def _click_dialog_button(dialog_hwnd: int, button_hwnd: int, *,
+                         attempts: int = 3, timeout: float = 1.5,
+                         require_closed: bool = False) -> None:
+    """异步发送 BM_CLICK，并确认弹窗关闭或切换到下一状态。"""
+    for attempt in range(1, attempts + 1):
+        if not _dialog_is_visible(dialog_hwnd):
+            return
+        signature = _dialog_signature(dialog_hwnd)
+        win32gui.PostMessage(int(button_hwnd), win32con.BM_CLICK, 0, 0)
+        if _wait_dialog_transition(
+            dialog_hwnd,
+            signature,
+            timeout=timeout,
+            require_closed=require_closed,
+        ):
+            return
+        print(
+            f"[WARN] Win32 弹窗按钮点击后没有状态变化，正在重试 "
+            f"({attempt}/{attempts})"
+        )
+    raise SuperStrategyError("Win32 弹窗按钮点击后窗口未关闭且内容未变化")
+
+
 def _confirm_order_dialog(dialog_hwnd: int, combined_text: str) -> None:
-    """仅对已核验的“一键开仓下单确认框”执行真实鼠标确定。"""
-    title = win32gui.GetWindowText(int(dialog_hwnd)).strip()
+    """仅对原生文字和按钮结构均已核验的下单确认框执行 BM_CLICK。"""
+    title = _native_window_text(dialog_hwnd)
     if "下单" not in title or not _is_order_confirmation(combined_text):
         raise SuperStrategyError("弹窗不是可确认的一键开仓下单确认框")
 
@@ -362,17 +627,8 @@ def _confirm_order_dialog(dialog_hwnd: int, combined_text: str) -> None:
             f"确定={len(confirms)}, 取消={len(cancels)}"
         )
 
-    button = confirms[0]
-    with dpi_unaware():
-        left, top, right, bottom = win32gui.GetWindowRect(button)
-    _real_mouse_click(
-        dialog_hwnd,
-        button,
-        (left + right) / 2,
-        (top + bottom) / 2,
-        delay=0.3,
-    )
-    print("[OK] 已确认经过文字和按钮双重校验的一键开仓下单确认框")
+    _click_dialog_button(dialog_hwnd, confirms[0])
+    print("[OK] 已用 Win32 确认经过文字和按钮双重校验的下单确认框")
 
 
 def _parse_batch_result(text: str) -> tuple[int, int] | None:
@@ -408,11 +664,11 @@ def _handle_batch_result(text: str, dialog_hwnd: int | None = None) -> dict | No
 
 
 def _confirm_success_result_dialog(dialog_hwnd: int, text: str) -> dict:
-    """确认成功批量结果并关闭提示框；失败结果由上层保留。"""
+    """用 Win32 确认成功批量结果并验证提示框关闭。"""
     result = _handle_batch_result(text)
     if result is None:
         raise SuperStrategyError("弹窗不包含可确认的批量下单成功结果")
-    title = win32gui.GetWindowText(int(dialog_hwnd)).strip()
+    title = _native_window_text(dialog_hwnd)
     confirms = _exact_child_buttons(dialog_hwnd, "确定")
     if "提示" not in title or len(confirms) != 1:
         raise SuperStrategyError(
@@ -420,75 +676,42 @@ def _confirm_success_result_dialog(dialog_hwnd: int, text: str) -> dict:
             f"标题={title!r}, 确定={len(confirms)}"
         )
 
-    button = confirms[0]
-    with dpi_unaware():
-        left, top, right, bottom = win32gui.GetWindowRect(button)
-    _real_mouse_click(
-        dialog_hwnd,
-        button,
-        (left + right) / 2,
-        (top + bottom) / 2,
-        delay=0.3,
+    _click_dialog_button(dialog_hwnd, confirms[0], require_closed=True)
+    print(
+        "[OK] 已用 Win32 确认并关闭批量下单成功框："
+        f"成功{result['success_count']}笔，失败0笔"
     )
-    deadline = time.monotonic() + 1.5
-    while time.monotonic() < deadline:
-        if not win32gui.IsWindow(int(dialog_hwnd)) or not win32gui.IsWindowVisible(
-            int(dialog_hwnd)
-        ):
-            print(
-                "[OK] 已确认并关闭批量下单成功框："
-                f"成功{result['success_count']}笔，失败0笔"
-            )
-            return result
-        time.sleep(0.05)
-    raise SuperStrategyError("已点击批量下单成功框的确定按钮，但弹窗未关闭")
-
-
-def _ocr_window_text(hwnd: int) -> str:
-    """仅在常规窗口文本不足时，用 OCR 读取自绘提示内容。"""
-    try:
-        image = capture_window_image(hwnd)
-        if image.width > 1200:
-            ratio = 1200 / image.width
-            image = image.resize(
-                (1200, max(1, int(image.height * ratio))),
-                Image.Resampling.LANCZOS,
-            )
-        items = ocr_image_items(image, min_conf=0.45, enlarge=1.0)
-        return "\n".join(item["text"] for item in items)
-    except Exception as exc:
-        print(f"[WARN] 提示窗口 OCR 读取失败: hwnd={hwnd}, {exc}")
-        return ""
+    return result
 
 
 def _dismiss_prompt_dialog(dialog_hwnd: int) -> None:
-    """关闭已经分类的提示框；优先真实点击唯一的“确定”按钮。"""
+    """只用 Win32 关闭已分类、失败或未知提示框，并验证无残留。"""
     confirms = _exact_child_buttons(dialog_hwnd, "确定")
-    if len(confirms) == 1:
-        button = confirms[0]
-        with dpi_unaware():
-            left, top, right, bottom = win32gui.GetWindowRect(button)
-        _real_mouse_click(
-            dialog_hwnd,
-            button,
-            (left + right) / 2,
-            (top + bottom) / 2,
-            delay=0.3,
-        )
+    button = confirms[0] if len(confirms) == 1 else _button_by_id(
+        dialog_hwnd, AFFIRMATIVE_BUTTON_IDS
+    )
+    if button:
+        try:
+            _click_dialog_button(
+                dialog_hwnd,
+                button,
+                attempts=2,
+                timeout=0.8,
+                require_closed=True,
+            )
+        except SuperStrategyError:
+            # 部分错误框的默认按钮只改变焦点，继续用精确句柄关闭窗口。
+            win32gui.PostMessage(int(dialog_hwnd), win32con.WM_CLOSE, 0, 0)
     else:
-        # 登录类提示在部分客户端上没有标准“确定”按钮，只允许关闭已经被
-        # 明确分类的窗口；未知窗口不会进入这里。
         win32gui.PostMessage(int(dialog_hwnd), win32con.WM_CLOSE, 0, 0)
 
     deadline = time.monotonic() + 1.5
     while time.monotonic() < deadline:
-        if not win32gui.IsWindow(int(dialog_hwnd)) or not win32gui.IsWindowVisible(
-            int(dialog_hwnd)
-        ):
-            print("[OK] 已关闭识别完成的客户端提示框")
+        if not _dialog_is_visible(dialog_hwnd):
+            print("[OK] 已用 Win32 关闭客户端提示框")
             return
         time.sleep(0.05)
-    raise SuperStrategyError("已处理识别完成的客户端提示框，但弹窗未关闭")
+    raise SuperStrategyError("已用 Win32 处理客户端提示框，但弹窗仍未关闭")
 
 
 def _raise_for_known_prompt(text: str, dialog_hwnd: int | None = None) -> None:
@@ -506,34 +729,96 @@ def _raise_for_known_prompt(text: str, dialog_hwnd: int | None = None) -> None:
         )
 
 
-def wait_after_open(main_hwnd: int, before_windows: set[int],
-                    timeout: float = 3.0) -> dict:
-    """确认明确的下单确认框，再分类登录、非交易时段和批量结果。"""
+def _raise_collected_result_errors(events: list[dict], *,
+                                   result_labels: tuple[str, ...],
+                                   expected_count: int) -> None:
+    failed = [event for event in events if event.get("error") is not None]
+    if not failed:
+        return
+    summaries = []
+    for index, event in enumerate(events):
+        error = event.get("error")
+        if error is None:
+            continue
+        label = (
+            result_labels[index]
+            if index < len(result_labels)
+            else f"第{index + 1}次操作"
+        )
+        if "success_count" in event and "failure_count" in event:
+            summaries.append(
+                f"{label}结果：成功{event['success_count']}笔，"
+                f"失败{event['failure_count']}笔"
+            )
+        else:
+            summaries.append(f"{label}：{error}")
+    if len(events) < expected_count:
+        summaries.append(
+            f"结果弹窗链不完整（期望{expected_count}个，实际{len(events)}个）"
+        )
+    message = "；".join(summaries) + "；所有已出现的客户端弹窗均已关闭"
+    error_types = [type(event["error"]) for event in failed]
+    if LoginRequiredError in error_types:
+        raise LoginRequiredError(message)
+    if TradingTimeBlockedError in error_types:
+        raise TradingTimeBlockedError(message)
+    raise SuperStrategyError(message)
+
+
+def _wait_after_action(main_hwnd: int, before_windows: set[int], *,
+                       action_name: str, timeout: float = 3.0,
+                       quiet_period: float = RESULT_QUIET_PERIOD,
+                       minimum_success_dialogs: int = 1,
+                       result_labels: tuple[str, ...] = ()) -> dict:
+    """逐个处理一次业务动作的弹窗，连续静默后才允许报告成功。"""
     pid = _process_id(main_hwnd)
     deadline = time.monotonic() + timeout
     unknown: dict[int, str] = {}
-    handled_confirmations: set[int] = set()
+    success_results: list[dict] = []
+    result_events: list[dict] = []
+    quiet_since: float | None = None
     while time.monotonic() < deadline:
         current = _visible_process_surfaces(pid, main_hwnd)
-        for hwnd in current - before_windows:
-            if hwnd in handled_confirmations:
-                continue
+        pending = current - before_windows
+        for hwnd in pending:
+            quiet_since = None
             text = _window_text_dump(hwnd)
-            _raise_for_known_prompt(text, hwnd)
-            batch_result = _handle_batch_result(text, hwnd)
+            try:
+                _raise_for_known_prompt(text, hwnd)
+            except (LoginRequiredError, TradingTimeBlockedError) as exc:
+                result_events.append({"error": exc})
+                unknown.pop(hwnd, None)
+                # 即使第一个结果已经失败，第二个操作结果仍可能延迟出现。
+                deadline = time.monotonic() + max(timeout, quiet_period + 0.2)
+                time.sleep(0.05)
+                break
+            try:
+                batch_result = _handle_batch_result(text, hwnd)
+            except SuperStrategyError as exc:
+                parsed = _parse_batch_result(text)
+                event = {"error": exc}
+                if parsed is not None:
+                    event.update({
+                        "success_count": parsed[0],
+                        "failure_count": parsed[1],
+                    })
+                result_events.append(event)
+                unknown.pop(hwnd, None)
+                # 关闭失败框后继续监听，避免遗漏延迟生成的第二个结果框。
+                deadline = time.monotonic() + max(timeout, quiet_period + 0.2)
+                time.sleep(0.05)
+                break
             if batch_result is not None:
-                return _confirm_success_result_dialog(hwnd, text)
-            ocr_text = _ocr_window_text(hwnd)
-            combined = f"{text}\n{ocr_text}"
-            _raise_for_known_prompt(combined, hwnd)
-            batch_result = _handle_batch_result(combined, hwnd)
-            if batch_result is not None:
-                return _confirm_success_result_dialog(hwnd, combined)
-            if ocr_text:
-                text = f"{text}\n{ocr_text}".strip()
+                latest = _confirm_success_result_dialog(hwnd, text)
+                success_results.append(latest)
+                result_events.append({"result": latest})
+                unknown.pop(hwnd, None)
+                # 交易客户端可能在首个结果框关闭后异步创建下一层结果框。
+                deadline = time.monotonic() + max(timeout, quiet_period + 0.2)
+                time.sleep(0.05)
+                break
             if _is_order_confirmation(text):
                 _confirm_order_dialog(hwnd, text)
-                handled_confirmations.add(hwnd)
                 unknown.pop(hwnd, None)
                 # 确认后客户端需要时间生成下一层登录、停市或结果弹窗。
                 deadline = time.monotonic() + timeout
@@ -541,6 +826,29 @@ def wait_after_open(main_hwnd: int, before_windows: set[int],
                 break
             unknown[hwnd] = text
         else:
+            if result_events and not pending:
+                now = time.monotonic()
+                if quiet_since is None:
+                    quiet_since = now
+                if (
+                    len(result_events) >= minimum_success_dialogs
+                    and now - quiet_since >= quiet_period
+                ):
+                    print(
+                        f"[OK] {action_name}后续弹窗已全部处理，"
+                        f"连续 {quiet_period:.1f}s 无新弹窗"
+                    )
+                    _raise_collected_result_errors(
+                        result_events,
+                        result_labels=result_labels,
+                        expected_count=minimum_success_dialogs,
+                    )
+                    result = dict(success_results[0])
+                    result["result_dialog_count"] = len(result_events)
+                    result["followup_results"] = success_results[1:]
+                    return result
+                time.sleep(0.05)
+                continue
             if unknown:
                 # 给连续弹窗留出短暂稳定时间，但绝不确认未知弹窗。
                 time.sleep(0.4)
@@ -566,22 +874,56 @@ def wait_after_open(main_hwnd: int, before_windows: set[int],
             "；关闭异常=" + " | ".join(close_errors)
             if close_errors else "；弹窗已关闭"
         )
-        raise SuperStrategyError(
-            "一键开仓后出现未识别弹窗：" + "；".join(summaries) + close_note
+        message = f"{action_name}后出现未识别弹窗：" + "；".join(summaries) + close_note
+        if result_events:
+            try:
+                _raise_collected_result_errors(
+                    result_events,
+                    result_labels=result_labels,
+                    expected_count=minimum_success_dialogs,
+                )
+            except SuperStrategyError as exc:
+                message = f"{exc}；{message}"
+        raise SuperStrategyError(message)
+    if result_events:
+        _raise_collected_result_errors(
+            result_events,
+            result_labels=result_labels,
+            expected_count=minimum_success_dialogs,
         )
-    # 少数客户端把提示直接绘制在主窗口内部，不会新增 HWND；最后对主窗口
-    # 做一次 OCR 兜底。已登录且正常执行时不会命中这些明确的错误短语。
-    main_text = _ocr_window_text(main_hwnd)
-    _raise_for_known_prompt(main_text)
-    batch_result = _handle_batch_result(main_text)
-    if batch_result is not None:
+        if len(result_events) < minimum_success_dialogs:
+            raise SuperStrategyError(
+                f"{action_name}结果弹窗不完整：期望至少"
+                f"{minimum_success_dialogs}个，实际{len(result_events)}个"
+            )
         raise SuperStrategyError(
-            "已从主窗口 OCR 识别到批量下单成功，但未定位到独立结果框，"
-            "无法安全点击确定"
+            f"已处理{action_name}成功框，但在等待后续弹窗静默时超时"
         )
     raise SuperStrategyError(
-        "真实鼠标点击后未检测到批量下单结果或错误提示，不能确认一键开仓已执行"
+        f"{action_name}后未检测到原生 Win32 弹窗，不能确认操作已执行"
     )
+
+
+def wait_after_open(main_hwnd: int, before_windows: set[int],
+                    timeout: float = 3.0,
+                    quiet_period: float = RESULT_QUIET_PERIOD, *,
+                    expect_add_result: bool = False) -> dict:
+    """兼容入口：处理一键开仓的原生弹窗链。"""
+    result = _wait_after_action(
+        main_hwnd,
+        before_windows,
+        action_name=OPEN_POSITION_TEXT,
+        timeout=timeout,
+        quiet_period=quiet_period,
+        minimum_success_dialogs=2 if expect_add_result else 1,
+        result_labels=(
+            (OPEN_POSITION_TEXT, ADD_UNDERLYING_TEXT)
+            if expect_add_result else (OPEN_POSITION_TEXT,)
+        ),
+    )
+    if expect_add_result:
+        result["add_result"] = result["followup_results"][0]
+    return result
 
 
 def run_strategy(target: str, *, add_underlying: bool | None = None,
@@ -607,14 +949,30 @@ def run_strategy(target: str, *, add_underlying: bool | None = None,
         add_underlying = os.environ.get(
             "GUI_SUPER_ADD_UNDERLYING", "False"
         ).strip().lower() == "true"
+    action_targets = []
     if add_underlying:
-        click_action(main_hwnd, ADD_UNDERLYING_TEXT)
+        action_targets.append(ADD_UNDERLYING_TEXT)
+    if execute_open:
+        action_targets.append(OPEN_POSITION_TEXT)
+    action_panel = get_action_panel(main_hwnd) if action_targets else None
+    action_hits = (
+        _find_action_texts(main_hwnd, action_panel, action_targets)
+        if action_panel is not None else {}
+    )
+    if add_underlying:
+        click_action(
+            main_hwnd,
+            ADD_UNDERLYING_TEXT,
+            panel=action_panel,
+            hit=action_hits[ADD_UNDERLYING_TEXT],
+        )
     else:
         print("[INFO] 未启用“加入标的”，跳过该步骤")
 
     result = {
         "target": target,
         "add_underlying": bool(add_underlying),
+        "add_result": None,
         "menu_hit": menu_hit,
         "open_triggered": False,
     }
@@ -624,8 +982,24 @@ def run_strategy(target: str, *, add_underlying: bool | None = None,
 
     pid = _process_id(main_hwnd)
     before = _visible_process_surfaces(pid, main_hwnd)
-    click_action(main_hwnd, OPEN_POSITION_TEXT)
-    result.update(wait_after_open(main_hwnd, before))
+    click_action(
+        main_hwnd,
+        OPEN_POSITION_TEXT,
+        panel=action_panel,
+        hit=action_hits[OPEN_POSITION_TEXT],
+    )
+    result.update(wait_after_open(
+        main_hwnd,
+        before,
+        expect_add_result=bool(add_underlying),
+    ))
+    if result.get("add_result") is not None:
+        add_summary = result["add_result"]
+        print(
+            "[OK] 已分别处理两次操作结果："
+            f"一键开仓成功{result['success_count']}笔，"
+            f"加入标的成功{add_summary['success_count']}笔"
+        )
     result["open_triggered"] = bool(result.get("open_confirmed"))
     print(f"[OK] {target} 一键开仓动作已触发")
     return result
