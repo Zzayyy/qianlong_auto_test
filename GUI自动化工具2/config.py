@@ -54,6 +54,12 @@ CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 DEFAULT_OUTPUT_DIR = os.path.join(os.path.expanduser("~"), "Desktop")
 CATEGORIES = ["查询", "通知查询", "结算单", "下单", "组合申报", "交易系统设置"]
 
+# 抓取自定义标准（交易系统设置）时可勾选的面板列表。
+# 仅登记已实现 collect_current_settings 的面板；与
+# 交易系统设置/抓取自定义标准.py 的 PANEL_MODULES 保持同步（新增面板接入后在此追加）。
+CAPTURE_STANDARD_PANELS = ["委托设置", "期权设置", "自动拆单设置", "自动追单设置",
+                          "快捷设置", "价格提醒设置", "一键炒单设置"]
+
 
 def load_user_config() -> dict:
     """加载用户配置"""
@@ -193,6 +199,7 @@ SCRIPTS_CONFIG = {
         {"name": "5.快捷设置", "path": rf"{PROJECT_ROOT}\交易系统设置\5_快捷设置.py"},
         {"name": "6.一键炒单设置", "path": rf"{PROJECT_ROOT}\交易系统设置\6_一键炒单设置.py"},
         {"name": "7.价格提醒设置", "path": rf"{PROJECT_ROOT}\交易系统设置\6_价格提醒设置.py"},
+        {"name": "8.抓取自定义标准_工具", "path": rf"{PROJECT_ROOT}\交易系统设置\抓取自定义标准.py", "exclude_from_batch": True, "capture_standard": True},  # 两个参数的含义：是否排除出"批量跑整类"    # 是否走"抓取标准"专属面板与逻辑，可以随意改名了
     ],
 }
 

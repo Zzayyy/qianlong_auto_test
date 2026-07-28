@@ -41,6 +41,7 @@ from core.settings_window import (
     switch_settings_panel as switch_settings_panel_compat,
 )
 from core.settings import SettingsTestResult
+from core.settings_standard import load_standard
 
 
 # ====================== 可配置参数 ======================
@@ -50,8 +51,10 @@ SETTINGS_MENU_ITEM_AUTO_ID = "20025" # 弹出菜单中"交易系统设置"项 au
 SETTINGS_DIALOG_TITLE = "交易系统设置"  # 设置对话框标题
 PANEL_NAME = "自动追单设置"               # 左侧树节点名称
 
-# 标准值（恢复默认后应呈现的值），用于比对
-STANDARD_VALUES = {
+# 标准值（恢复默认后应呈现的值），用于比对。
+# 优先从 交易系统设置/标准/<客户端>/自动追单设置.json 读取（可自定义/抓取覆盖）；
+# 找不到时使用下方内嵌兜底（与 qianlong 默认标准一致），保证离线不崩。
+DEFAULT_STANDARD_VALUES = {
     "启用自动追单": False,
     "使用": "对手价",
     "使用_选项列表": ["对手价", "挂盘价", "涨停价", "跌停价", "最新价"],  # 常见候选项，可据实调整
@@ -62,6 +65,10 @@ STANDARD_VALUES = {
     "秒，最多重复": 2,
     "未完成则自动撤单": False,
 }
+
+# 当前客户端（GUI 启动时由 GUI_CLIENT_ID 环境变量注入；空则用内嵌兜底）
+CLIENT_ID = os.environ.get("GUI_CLIENT_ID", "") or ""
+STANDARD_VALUES = load_standard(PANEL_NAME, CLIENT_ID, DEFAULT_STANDARD_VALUES)
 
 # 控件 auto_id 映射（来自交易系统设置_自动追单设置.txt 抓取）
 AUTO_ID = {
@@ -490,6 +497,68 @@ def explore_dialog_controls(dlg):
                 print(f"  [?] 获取信息失败: {e}")
     except Exception as e:
         print(f"  探索失败: {e}")
+
+
+def collect_current_settings(dlg) -> dict:
+    """读取当前面板全部设置值，返回与 STANDARD_VALUES 同构的字典。
+
+    供“抓取自定义标准”脚本把当前客户端界面值采集为新的比对标准。
+    逻辑与 test_auto_order_followup 一致（未启用时临时点击启用以读取下方参数，
+    读取完再恢复原状态），但只返回字典、不写报告、不改任何设置。
+    """
+    data: dict = {}
+
+    # 启用自动追单（未启用时临时启用以读取下方参数，读取后再恢复）
+    initial_enabled = get_checkbox_state_by_id(dlg, AUTO_ID["启用自动追单"])
+    data["启用自动追单"] = bool(initial_enabled) if initial_enabled is not None else False
+    need_restore = False
+    if not initial_enabled:
+        print("  [INFO] '启用自动追单'未勾选，点击启用以暴露下方参数...")
+        click_checkbox_by_id(dlg, AUTO_ID["启用自动追单"])
+        need_restore = True
+        time.sleep(0.6)
+
+    # 使用（下拉框）
+    use = get_combobox_selection_by_id(dlg, AUTO_ID["使用"])
+    data["使用"] = use or ""
+    use_items = get_combobox_items_by_id(dlg, AUTO_ID["使用"])
+    data["使用_选项列表"] = use_items or []
+
+    # 追价，调整（下拉框）
+    adjust = get_combobox_selection_by_id(dlg, AUTO_ID["追价，调整"])
+    try:
+        adjust_val = int(adjust) if adjust is not None and adjust.isdigit() else adjust
+    except Exception:
+        adjust_val = adjust
+    data["追价，调整"] = adjust_val
+    adjust_items = get_combobox_items_by_id(dlg, AUTO_ID["追价，调整"])
+    data["追价，调整_选项列表"] = adjust_items or []
+
+    # 自动追单时间间隔（下拉框）
+    interval = get_combobox_selection_by_id(dlg, AUTO_ID["自动追单时间间隔"])
+    try:
+        interval_val = int(interval) if interval is not None and interval.isdigit() else interval
+    except Exception:
+        interval_val = interval
+    data["自动追单时间间隔"] = interval_val
+    interval_items = get_combobox_items_by_id(dlg, AUTO_ID["自动追单时间间隔"])
+    data["自动追单时间间隔_选项列表"] = interval_items or []
+
+    # 秒，最多重复（Edit）
+    repeat = get_edit_value_by_id(dlg, AUTO_ID["秒，最多重复"])
+    data["秒，最多重复"] = repeat if repeat is not None else 0
+
+    # 未完成则自动撤单（CheckBox）
+    cancel = get_checkbox_state_by_id(dlg, AUTO_ID["未完成则自动撤单"])
+    data["未完成则自动撤单"] = bool(cancel) if cancel is not None else False
+
+    # 恢复为未启用
+    if need_restore:
+        print("  [INFO] 检查完成，恢复'启用自动追单'为关闭状态...")
+        click_checkbox_by_id(dlg, AUTO_ID["启用自动追单"])
+        time.sleep(0.4)
+
+    return data
 
 
 def main():

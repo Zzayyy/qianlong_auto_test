@@ -698,6 +698,8 @@ class TaskCenter:
         # 先收集本分类下可加入的脚本项（跳过文件不存在 / 缺少 Excel 的下单脚本）
         items = []
         for s in scripts:
+            if s.get("exclude_from_batch"):
+                continue  # 配置/工具类脚本不参与批量拖入（仍可由叶子节点单独加入）
             if not os.path.exists(s["path"]):
                 continue
             if category == "下单" and get_script_filename(s["name"]) not in ("期权下单_一键导出", "全选撤单"):

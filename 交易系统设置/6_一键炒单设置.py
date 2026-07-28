@@ -44,6 +44,7 @@ from core.one_click_settings import (
     parse_shortcut_ocr_tokens,
 )
 from core.settings import SettingsTestResult
+from core.settings_standard import load_standard
 
 
 # GUI 启动时 core.window 会按 GUI_CLIENT_ID 覆盖此值；直接运行本脚本时，
@@ -58,11 +59,21 @@ PROFILE_PATH = Path(__file__).with_name("一键炒单设置标准.json")
 with PROFILE_PATH.open("r", encoding="utf-8-sig") as profile_file:
     VALIDATION_PROFILE = json.load(profile_file)
 
-STANDARD_VALUES = {
+# 标准值（可比字段）：下拉框当前选择 + 默认合约输入值。
+# 优先从 交易系统设置/标准/<客户端>/一键炒单设置.json 读取（抓取脚本可覆盖）；
+# 找不到时用下方由 VALIDATION_PROFILE 推导的兜底，保证离线不崩。
+# 注意（本面板特殊）：完整校验标准仍来自独立 JSON（一键炒单设置标准.json）的
+# VALIDATION_PROFILE，含下拉候选项、默认合约、快捷键表格指纹与 OCR 配置；
+# 此处 STANDARD_VALUES 仅承载会与界面“当前值”比对的扁平字段。
+DEFAULT_STANDARD_VALUES = {
     key: value["selected"]
     for key, value in VALIDATION_PROFILE["dropdowns"].items()
 }
-STANDARD_VALUES.update(VALIDATION_PROFILE["default_contracts"])
+DEFAULT_STANDARD_VALUES.update(VALIDATION_PROFILE["default_contracts"])
+
+# 当前客户端（GUI 启动时由 GUI_CLIENT_ID 环境变量注入；空则用内嵌兜底）
+CLIENT_ID = os.environ.get("GUI_CLIENT_ID", "") or ""
+STANDARD_VALUES = load_standard(PANEL_NAME, CLIENT_ID, DEFAULT_STANDARD_VALUES)
 
 AUTO_ID = {
     "快捷键方案": "2100",
@@ -348,10 +359,13 @@ def test_one_click_trading(dlg, result: SettingsTestResult,
                            artifact_dir: str, timestamp: str):
     print("\n--- 一键炒单设置检查 ---")
     for key, expected in VALIDATION_PROFILE["dropdowns"].items():
+        # 下拉“当前值”的期望值优先用 STANDARD_VALUES（可被抓取脚本覆盖），
+        # 候选项列表仍来自 VALIDATION_PROFILE（特殊，不随比对标准迁移）。
+        expected_selected = STANDARD_VALUES.get(key, expected["selected"])
         try:
             snapshot = get_combobox_snapshot(dlg, AUTO_ID[key])
             result.add_result(
-                f"{key}_当前值", snapshot["current"], expected["selected"],
+                f"{key}_当前值", snapshot["current"], expected_selected,
                 snapshot["source"]
             )
             result.add_result(
@@ -362,18 +376,20 @@ def test_one_click_trading(dlg, result: SettingsTestResult,
             )
         except Exception as error:
             result.add_unverified(
-                f"{key}_当前值", expected["selected"], str(error)
+                f"{key}_当前值", expected_selected, str(error)
             )
             result.add_unverified(
                 f"{key}_候选项列表", "、".join(expected["items"]), str(error)
             )
 
     for key, expected in VALIDATION_PROFILE["default_contracts"].items():
+        # 默认合约期望值优先用 STANDARD_VALUES（可被抓取脚本覆盖）。
+        expected_contract = STANDARD_VALUES.get(key, expected)
         actual = get_edit_value(dlg, AUTO_ID[key])
         if actual is None:
-            result.add_unverified(key, expected, "Edit控件无法读取")
+            result.add_unverified(key, expected_contract, "Edit控件无法读取")
         else:
-            result.add_result(key, actual, expected, "UIA只读")
+            result.add_result(key, actual, expected_contract, "UIA只读")
 
     table = collect_shortcut_table(dlg, artifact_dir, timestamp)
     fingerprint = VALIDATION_PROFILE["fingerprint"]
@@ -415,6 +431,41 @@ def test_one_click_trading(dlg, result: SettingsTestResult,
         f"来源：{table['source']}；只读采集，不发送快捷键、不修改设置",
     )
     result.add_observation("校验标准", str(PROFILE_PATH), "独立JSON配置")
+
+
+def collect_current_settings(dlg) -> dict:
+    """读取当前面板的可比设置值，返回与 STANDARD_VALUES 同构的扁平字典。
+
+    供“抓取自定义标准”脚本把当前客户端界面值采集为新的比对标准。
+    说明（本面板特殊）：
+      - 完整校验标准仍来自独立 JSON（一键炒单设置标准.json）的 VALIDATION_PROFILE，
+        含下拉候选项、默认合约、快捷键表格指纹与 OCR 配置；
+        此处只采集会与 STANDARD_VALUES 比对的“下拉当前选择”与“默认合约输入值”，
+        不采集 OCR 快捷键表格（采集重、且依赖专属 profile，不随比对标准迁移）。
+      - 全程只读：不发送快捷键、不点击“应用”/“恢复默认”，不改变任何设置。
+      - 钱龙客户端无此面板，调用方（抓取脚本）会先因切换面板失败而跳过本面板。
+    """
+    data: dict = {}
+
+    # 下拉框当前选择（selected）
+    for key in VALIDATION_PROFILE["dropdowns"]:
+        try:
+            snapshot = get_combobox_snapshot(dlg, AUTO_ID[key])
+            data[key] = snapshot["current"]
+        except Exception as e:
+            print(f"  [WARN] 采集下拉框({key})失败: {e}")
+            data[key] = ""
+
+    # 默认合约输入框
+    for key in VALIDATION_PROFILE["default_contracts"]:
+        try:
+            val = get_edit_value(dlg, AUTO_ID[key])
+            data[key] = val if val is not None else ""
+        except Exception as e:
+            print(f"  [WARN] 采集默认合约({key})失败: {e}")
+            data[key] = ""
+
+    return data
 
 
 def main():

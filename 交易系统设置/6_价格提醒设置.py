@@ -45,6 +45,7 @@ from core.settings_window import (
     switch_settings_panel as switch_settings_panel_compat,
 )
 from core.settings import SettingsTestResult
+from core.settings_standard import load_standard
 
 
 # ====================== 可配置参数 ======================
@@ -54,19 +55,25 @@ SETTINGS_MENU_ITEM_AUTO_ID = "20025" # 弹出菜单中"交易系统设置"项 au
 SETTINGS_DIALOG_TITLE = "交易系统设置"  # 设置对话框标题
 PANEL_NAME = "价格提醒设置"               # 左侧树节点名称
 
-# 标准值（恢复默认后应呈现的值），用于比对
+# 标准值（恢复默认后应呈现的值），用于比对。
+# 优先从 交易系统设置/标准/<客户端>/价格提醒设置.json 读取（可自定义/抓取覆盖）；
+# 找不到时使用下方内嵌兜底（与 qianlong 默认标准一致），保证离线不崩。
 # 已确认（2026-07-08 实测）：
 #   默认两个复选框均未勾选（未启用），倍数输入框为空（空白）。
 #   因此复选框标准值 = False，倍数在"未启用"时记为空、不计入差异。
 #   倍数对比仅在复选框已勾选时才进行；若你启用后需要校验具体倍数，
 #   请把启用状态下的默认倍数回填到下列"倍数"项（参数需 >1 / 0~1）。
-STANDARD_VALUES = {
+DEFAULT_STANDARD_VALUES = {
     # 一、合约委托价格超过限定价格提醒
     "买开买平备平_委托价格高于最新价格_勾选": False,   # 已确认默认未勾选
     "买开买平备平_委托价格高于最新价格_倍数": None,   # 未启用时空白；启用后按实际默认倍数回填
     "卖开卖平备开_委托价格低于最新价格_勾选": False,   # 已确认默认未勾选
     "卖开卖平备开_委托价格低于最新价格_倍数": None,   # 未启用时空白；启用后按实际默认倍数回填
 }
+
+# 当前客户端（GUI 启动时由 GUI_CLIENT_ID 环境变量注入；空则用内嵌兜底）
+CLIENT_ID = os.environ.get("GUI_CLIENT_ID", "") or ""
+STANDARD_VALUES = load_standard(PANEL_NAME, CLIENT_ID, DEFAULT_STANDARD_VALUES)
 
 # 控件 auto_id 映射（来自交易系统设置_价格提醒设置.txt 抓取）
 AUTO_ID = {
@@ -327,6 +334,36 @@ def explore_dialog_controls(dlg):
                 print(f"  [?] 获取信息失败: {e}")
     except Exception as e:
         print(f"  探索失败: {e}")
+
+
+def collect_current_settings(dlg) -> dict:
+    """读取当前面板全部设置值，返回与 STANDARD_VALUES 同构的字典。
+
+    供“抓取自定义标准”脚本把当前客户端界面值采集为新的比对标准。
+    逻辑与 test_price_reminder 一致（复选框未勾选时对应倍数记为空 None），
+    但只返回字典、不写报告、不改任何设置（不点击、不录入倍数）。
+    """
+    data: dict = {}
+
+    # 1. 买开、买平、备平委托价格高于最新价格的
+    buy_checked = get_checkbox_state_by_id(dlg, AUTO_ID["买开买平备平_委托价格高于最新价格_勾选"])
+    data["买开买平备平_委托价格高于最新价格_勾选"] = bool(buy_checked) if buy_checked is not None else False
+    if buy_checked:
+        buy_mult = get_edit_value_by_id(dlg, AUTO_ID["买开买平备平_委托价格高于最新价格_倍数"])
+        data["买开买平备平_委托价格高于最新价格_倍数"] = buy_mult
+    else:
+        data["买开买平备平_委托价格高于最新价格_倍数"] = None
+
+    # 2. 卖开、卖平、备开委托价格低于最新价格的
+    sell_checked = get_checkbox_state_by_id(dlg, AUTO_ID["卖开卖平备开_委托价格低于最新价格_勾选"])
+    data["卖开卖平备开_委托价格低于最新价格_勾选"] = bool(sell_checked) if sell_checked is not None else False
+    if sell_checked:
+        sell_mult = get_edit_value_by_id(dlg, AUTO_ID["卖开卖平备开_委托价格低于最新价格_倍数"])
+        data["卖开卖平备开_委托价格低于最新价格_倍数"] = sell_mult
+    else:
+        data["卖开卖平备开_委托价格低于最新价格_倍数"] = None
+
+    return data
 
 
 def main():

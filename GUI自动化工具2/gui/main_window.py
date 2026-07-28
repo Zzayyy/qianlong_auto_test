@@ -4,6 +4,7 @@
 import os
 import sys
 import time
+import shutil
 import logging
 from datetime import datetime
 import tkinter as tk
@@ -29,6 +30,7 @@ from config import (
     get_client_ids,
     get_client_name,
     get_default_client_id,
+    CAPTURE_STANDARD_PANELS,
 )
 from engine.runner import ScriptRunner
 from engine.task import Task
@@ -47,6 +49,7 @@ from gui.history import (
 from gui.compare import ComparePanel
 from gui.settings_report import SettingsReportPanel
 from gui.shell_open import open_path
+from core.settings_standard import resolve_standard_path, STANDARD_ROOT
 from core.settings import (
     BATCH_COMPLETED,
     BATCH_STOPPED,
@@ -112,6 +115,9 @@ class AutomationGUI:
 
         # 交易系统设置 参数（输出路径可自定义）
         self.settings_output_dir = tk.StringVar(value=get_output_dir(self.user_config, "交易系统设置"))
+
+        # 抓取自定义标准：勾选要抓取的面板（默认全选）
+        self.capture_panels = {name: tk.BooleanVar(value=True) for name in CAPTURE_STANDARD_PANELS}
 
         # 日志目录：打包后放在exe同级目录
         if IS_FROZEN:
@@ -792,7 +798,10 @@ class AutomationGUI:
         elif self.current_category == "组合申报":
             self._build_combo_params()
         elif self.current_category == "交易系统设置":
-            self._build_settings_params()
+            if self._is_capture_script_selected():
+                self._build_capture_params()
+            else:
+                self._build_settings_params()
 
     def _update_params_for_selected_script(self):
         """根据选中的脚本更新参数面板"""
@@ -927,6 +936,145 @@ class AutomationGUI:
         ).grid(row=1, column=0, columnspan=3, sticky=tk.W, pady=5)
 
         self.params_frame.columnconfigure(1, weight=1)
+
+    def _is_capture_script_selected(self) -> bool:
+        """当前选中的脚本是否为“抓取自定义标准”（按元数据标记判断，名字可随意改）"""
+        script = self._get_selected_script()
+        if not script:
+            return False
+        return bool(script.get("capture_standard"))
+
+    def _capturable_panels(self):
+        """当前客户端下可抓取的交易系统设置面板（按 clients.json 的 unsupported 动态过滤）。
+
+        面板名与 SCRIPTS_CONFIG 的菜单名一致；与 get_scripts_config 同样的过滤规则：
+        菜单名或 \\交易系统设置\\<面板名> 出现在客户端 unsupported 中即隐藏。
+        例如钱龙客户端不支持“一键炒单设置”，参数配置里便不显示该项。
+        """
+        client = get_client(self.client_id) if self.client_id else None
+        unsupported = set((client or {}).get("unsupported", []) or [])
+        out = []
+        for name in CAPTURE_STANDARD_PANELS:
+            if name in unsupported:
+                continue
+            if f"\\交易系统设置\\{name}" in unsupported:
+                continue
+            out.append(name)
+        return out
+
+    def _build_capture_params(self):
+        """抓取自定义标准 - 勾选要抓取的面板（按当前客户端动态过滤不支持的面板）"""
+        panels = self._capturable_panels()
+
+        # 标题行：左侧标签，右侧 全选 / 全不选
+        head = ttk.Frame(self.params_frame)
+        head.grid(row=0, column=0, columnspan=4, sticky=tk.EW, pady=(2, 8))
+        head.columnconfigure(0, weight=1)
+        ttk.Label(head, text="选择要抓取的面板:").grid(row=0, column=0, sticky=tk.W)
+        btn_row = ttk.Frame(head)
+        btn_row.grid(row=0, column=1, sticky=tk.E)
+        ttk.Button(
+            btn_row, text="全选",
+            command=lambda: self._set_capture_all(True),
+        ).pack(side=tk.LEFT, padx=(0, 6))
+        ttk.Button(
+            btn_row, text="全不选",
+            command=lambda: self._set_capture_all(False),
+        ).pack(side=tk.LEFT)
+
+        if not panels:
+            ttk.Label(
+                self.params_frame,
+                text="当前客户端不支持任何可抓取的面板。",
+                foreground="gray",
+            ).grid(row=1, column=0, sticky=tk.W, pady=6, columnspan=4)
+            return
+
+        # 勾选框（每行 2 个）
+        cols = 2
+        for idx, name in enumerate(panels):
+            var = self.capture_panels.get(name)
+            if var is None:
+                var = tk.BooleanVar(value=True)
+                self.capture_panels[name] = var
+            r, c = divmod(idx, cols)
+            ttk.Checkbutton(self.params_frame, text=name, variable=var).grid(
+                row=1 + r, column=c, sticky=tk.W, padx=(0, 20), pady=3
+            )
+
+        # 操作按钮：打开标准文件夹 / 恢复默认
+        checkbox_rows = (len(panels) + cols - 1) // cols
+        act_row = ttk.Frame(self.params_frame)
+        act_row.grid(row=1 + checkbox_rows, column=0, columnspan=4, sticky=tk.W, pady=(12, 0))
+        ttk.Button(
+            act_row, text="打开标准文件夹",
+            command=self._open_standard_folder,
+        ).pack(side=tk.LEFT, padx=(0, 6))
+        ttk.Button(
+            act_row, text="恢复默认(删除选中面板JSON)",
+            command=self._restore_default_standards,
+        ).pack(side=tk.LEFT)
+
+    def _set_capture_all(self, value: bool):
+        """全选 / 全不选（仅作用于当前客户端可见的面板）"""
+        for name in self._capturable_panels():
+            var = self.capture_panels.get(name)
+            if var is not None:
+                var.set(value)
+
+    def _open_standard_folder(self):
+        """打开当前客户端的标准目录，便于查看/手动删除 JSON。
+
+        客户端专属目录不存在时回退到标准根目录；根目录也不存在时提示尚未抓取。
+        """
+        client_dir = STANDARD_ROOT / (self.client_id or "default")
+        try:
+            open_path(client_dir)
+            return
+        except FileNotFoundError:
+            pass
+        try:
+            open_path(STANDARD_ROOT)
+        except FileNotFoundError:
+            messagebox.showinfo("提示", "标准目录尚不存在（尚未抓取过任何自定义标准）。")
+
+    def _restore_default_standards(self):
+        """删除勾选面板在当前客户端的自定义标准 JSON，恢复到默认/兜底标准。
+
+        删除前自动备份为 .json.bak；若该面板本就无自定义 JSON，则提示已是默认状态。
+        删除后 load_standard 会回退到 default 兜底目录或脚本内嵌默认值。
+        """
+        selected = [
+            n for n in self._capturable_panels()
+            if self.capture_panels.get(n) and self.capture_panels[n].get()
+        ]
+        if not selected:
+            messagebox.showwarning("提示", "请先勾选要恢复默认的面板")
+            return
+        client_name = get_client_name(self.client_id)
+        detail = "\n".join(f"  · {n}" for n in selected)
+        ans = messagebox.askyesno(
+            "确认恢复默认",
+            f"将删除以下 {len(selected)} 个面板在当前客户端（{client_name}）的\n"
+            f"自定义标准 JSON，恢复到默认/兜底标准：\n\n{detail}\n\n"
+            f"（删除前会自动备份为 .json.bak，可手动还原）",
+        )
+        if not ans:
+            return
+        deleted = []
+        for name in selected:
+            path = resolve_standard_path(name, self.client_id or "default")
+            if path.is_file():
+                try:
+                    shutil.copy2(path, path.with_suffix(".json.bak"))
+                    path.unlink()
+                    deleted.append(name)
+                except Exception as exc:  # noqa: BLE001
+                    messagebox.showerror("错误", f"删除 {name} 标准失败: {exc}")
+        if deleted:
+            messagebox.showinfo("完成", f"已恢复默认标准：{', '.join(deleted)}")
+        else:
+            messagebox.showinfo("完成", "所选面板当前没有自定义标准，已是默认状态。")
 
     def _build_export_params(self):
         """期权下单_一键导出 参数配置"""
@@ -1238,6 +1386,14 @@ class AutomationGUI:
             messagebox.showwarning("提示", "请先选择Excel配置文件")
             return
 
+        # 抓取自定义标准需要至少勾选一个面板
+        if self.current_category == "交易系统设置" and self._is_capture_script_selected():
+            selected_panels = [n for n in self._capturable_panels()
+                               if self.capture_panels.get(n) and self.capture_panels[n].get()]
+            if not selected_panels:
+                messagebox.showwarning("提示", "请至少勾选一个要抓取的面板")
+                return
+
         # 期权下单_一键导出需要检查导出目标
         export_targets = []
         if order_script_name == "期权下单_一键导出":
@@ -1324,7 +1480,10 @@ class AutomationGUI:
                 self._log(f"TXT路径: {self.txt_path.get()}")
                 self._log(f"XLS路径: {self.xls_path.get()}")
         elif self.current_category == "交易系统设置":
-            self._log(f"输出路径: {self.settings_output_dir.get()}")
+            if self._is_capture_script_selected():
+                self._log(f"抓取面板: {', '.join(n for n in self._capturable_panels() if self.capture_panels.get(n) and self.capture_panels[n].get())}")
+            else:
+                self._log(f"输出路径: {self.settings_output_dir.get()}")
 
         self._log(f"{'='*60}")
         self.logger.info(f"开始执行: {script['name']}")
@@ -1348,6 +1507,8 @@ class AutomationGUI:
             "export_output_dir": self.export_output_dir.get(),
             "settings_output_dir": self.settings_output_dir.get(),
             "client_id": self.client_id,
+            "capture_panels": [n for n in self._capturable_panels()
+                               if self.capture_panels.get(n) and self.capture_panels[n].get()],
         }
 
     def make_task_params(self, script, category):

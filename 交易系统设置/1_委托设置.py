@@ -56,6 +56,7 @@ from core.settings_window import (
     switch_settings_panel as switch_settings_panel_compat,
 )
 from core.settings import SettingsTestResult
+from core.settings_standard import load_standard
 
 
 # ====================== 可配置参数 ======================
@@ -65,8 +66,10 @@ SETTINGS_MENU_ITEM_AUTO_ID = "20025" # 弹出菜单中"交易系统设置"项 au
 SETTINGS_DIALOG_TITLE = "交易系统设置"  # 设置对话框标题
 PANEL_NAME = "委托设置"               # 左侧树节点名称
 
-# 标准值（恢复默认后应呈现的值），用于比对
-STANDARD_VALUES = {
+# 标准值（恢复默认后应呈现的值），用于比对。
+# 优先从 交易系统设置/标准/<客户端>/委托设置.json 读取（可自定义/抓取覆盖）；
+# 找不到时使用下方内嵌兜底（与 qianlong 默认标准一致），保证离线不崩。
+DEFAULT_STANDARD_VALUES = {
     # 股票买卖委托价格跟盘设置
     "买入缺省价_勾选": True,
     "买入缺省价_选项": "现价",
@@ -100,6 +103,10 @@ STANDARD_VALUES = {
     "委托成交时发出提示音": False,
     "点击持仓联动行情": True,
 }
+
+# 当前客户端（GUI 启动时由 GUI_CLIENT_ID 环境变量注入；空则用内嵌兜底）
+CLIENT_ID = os.environ.get("GUI_CLIENT_ID", "") or ""
+STANDARD_VALUES = load_standard(PANEL_NAME, CLIENT_ID, DEFAULT_STANDARD_VALUES)
 
 # 控件 auto_id 映射（来自交易系统设置_委托设置.txt 抓取）
 AUTO_ID = {
@@ -819,6 +826,101 @@ def explore_dialog_controls(dlg):
                 print(f"  [?] 获取信息失败: {e}")
     except Exception as e:
         print(f"  探索失败: {e}")
+
+
+def collect_current_settings(dlg) -> dict:
+    """读取当前面板全部设置值，返回与 STANDARD_VALUES 同构的字典。
+
+    供“抓取自定义标准”脚本把当前客户端界面值采集为新的比对标准。
+    逻辑与下方 test_* 函数一致（含为读取数值临时启用再恢复），但只返回字典、
+    不写报告、不改任何设置。
+    """
+    data: dict = {}
+
+    # 一、股票买卖委托价格跟盘设置
+    buy_checked = get_checkbox_state_by_id(dlg, AUTO_ID["买入缺省价"])
+    data["买入缺省价_勾选"] = bool(buy_checked) if buy_checked is not None else False
+    if buy_checked:
+        data["买入缺省价_选项"] = get_combobox_selection_by_id(dlg, AUTO_ID["买入缺省价_下拉"]) or ""
+        buy_items = get_combobox_items_by_id(dlg, AUTO_ID["买入缺省价_下拉"])
+        data["买入缺省价_下拉_选项列表"] = buy_items or []
+    else:
+        data["买入缺省价_选项"] = None
+        data["买入缺省价_下拉_选项列表"] = []
+
+    sell_checked = get_checkbox_state_by_id(dlg, AUTO_ID["卖出缺省价"])
+    data["卖出缺省价_勾选"] = bool(sell_checked) if sell_checked is not None else False
+    if sell_checked:
+        data["卖出缺省价_选项"] = get_combobox_selection_by_id(dlg, AUTO_ID["卖出缺省价_下拉"]) or ""
+        sell_items = get_combobox_items_by_id(dlg, AUTO_ID["卖出缺省价_下拉"])
+        data["卖出缺省价_下拉_选项列表"] = sell_items or []
+    else:
+        data["卖出缺省价_选项"] = None
+        data["卖出缺省价_下拉_选项列表"] = []
+
+    # 二、大单自动分单设置
+    def _collect_split(key: str, cb_id: str, val_id: str):
+        initial = get_checkbox_state_by_id(dlg, cb_id)
+        data[f"{key}_勾选"] = bool(initial) if initial is not None else False
+        need_restore = False
+        if not initial:
+            set_checkbox_by_id(dlg, cb_id, True)
+            need_restore = True
+            time.sleep(0.6)
+        val = get_edit_value_by_id(dlg, val_id)
+        data[f"{key}_数值"] = val if val is not None else 0
+        if need_restore:
+            set_checkbox_by_id(dlg, cb_id, False)
+            time.sleep(0.4)
+
+    _collect_split("股票拆单", AUTO_ID["股票拆单"], AUTO_ID["股票拆单_数值"])
+    _collect_split("基金拆单", AUTO_ID["基金拆单"], AUTO_ID["基金拆单_数值"])
+
+    # 三、委托数量设置
+    def _collect_qty(key: str, cb_id: str, sub):
+        initial = get_checkbox_state_by_id(dlg, cb_id)
+        data[f"{key}_勾选"] = bool(initial) if initial is not None else False
+        need_restore = False
+        if not initial:
+            set_checkbox_by_id(dlg, cb_id, True)
+            need_restore = True
+            time.sleep(0.6)
+        sub()
+        if need_restore:
+            set_checkbox_by_id(dlg, cb_id, False)
+            time.sleep(0.4)
+
+    def _buy_sell_sub(prefix: str):
+        option = None
+        for rid in (AUTO_ID[f"{prefix}_确定数量"], AUTO_ID[f"{prefix}_全部数量"],
+                    AUTO_ID[f"{prefix}_上一次交易数量"]):
+            if get_radiobutton_state_by_id(dlg, rid):
+                option = RADIO_NAMES.get(rid)
+                break
+        data[f"{prefix}_选项"] = option or ""
+        qty = get_edit_value_by_id(dlg, AUTO_ID[f"{prefix}_数值"])
+        data[f"{prefix}_数值"] = qty if qty is not None else 0
+
+    def _trade_sub(prefix: str):
+        qty = get_edit_value_by_id(dlg, AUTO_ID[f"{prefix}_数值"])
+        data[f"{prefix}_数值"] = qty if qty is not None else 0
+
+    _collect_qty("股票买入自动填入数量", AUTO_ID["股票买入自动填入数量"],
+                 lambda: _buy_sell_sub("股票买入"))
+    _collect_qty("股票卖出自动填入数量", AUTO_ID["股票卖出自动填入数量"],
+                 lambda: _buy_sell_sub("股票卖出"))
+    _collect_qty("期权交易自动填入数量", AUTO_ID["期权交易自动填入数量"],
+                 lambda: _trade_sub("期权交易"))
+    _collect_qty("期货交易自动填入数量", AUTO_ID["期货交易自动填入数量"],
+                 lambda: _trade_sub("期货交易"))
+
+    # 四、底部复选框
+    for key in ("静默委托下单模式", "显示期权下单成功提示",
+                "显示期权宝软件风险揭示书", "委托成交时发出提示音", "点击持仓联动行情"):
+        st = get_checkbox_state_by_id(dlg, AUTO_ID[key])
+        data[key] = bool(st) if st is not None else False
+
+    return data
 
 
 def main():

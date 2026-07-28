@@ -59,6 +59,10 @@ class Task:
         # window_key 与菜单路径，无需在本处耦合具体客户端细节
         env["GUI_CLIENT_ID"] = p.get("client_id", "") or ""
 
+        # 抓取自定义标准：透传 GUI 参数配置中勾选的面板（逗号分隔）
+        capture_panels = p.get("capture_panels", [])
+        env["GUI_CAPTURE_PANELS"] = ",".join(capture_panels)
+
         # 查询类通用驱动所需：指明要执行的具体查询（queries.json 的 key）
         env["GUI_QUERY_KEY"] = self.script.get("query_key", "") or ""
 

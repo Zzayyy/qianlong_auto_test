@@ -43,6 +43,7 @@ from core.settings_window import (
     switch_settings_panel as switch_settings_panel_compat,
 )
 from core.settings import SettingsTestResult
+from core.settings_standard import load_standard
 
 
 # ====================== 可配置参数 ======================
@@ -52,8 +53,10 @@ SETTINGS_MENU_ITEM_AUTO_ID = "20025" # 弹出菜单中"交易系统设置"项 au
 SETTINGS_DIALOG_TITLE = "交易系统设置"  # 设置对话框标题
 PANEL_NAME = "快捷设置"               # 左侧树节点名称
 
-# 标准值（恢复默认后应呈现的值），用于比对
-STANDARD_VALUES = {
+# 标准值（恢复默认后应呈现的值），用于比对。
+# 优先从 交易系统设置/标准/<客户端>/快捷设置.json 读取（可自定义/抓取覆盖）；
+# 找不到时使用下方内嵌兜底（与 qianlong 默认标准一致），保证离线不崩。
+DEFAULT_STANDARD_VALUES = {
     # 一、鼠标快捷输入
     "鼠标快捷输入": True,
     "数量_1": 1,
@@ -71,6 +74,10 @@ STANDARD_VALUES = {
     "委托数量最小跳动": False,
     "委托数量最小跳动_数值": 1,
 }
+
+# 当前客户端（GUI 启动时由 GUI_CLIENT_ID 环境变量注入；空则用内嵌兜底）
+CLIENT_ID = os.environ.get("GUI_CLIENT_ID", "") or ""
+STANDARD_VALUES = load_standard(PANEL_NAME, CLIENT_ID, DEFAULT_STANDARD_VALUES)
 
 # 控件 auto_id 映射（来自交易系统设置_快捷设置.txt 抓取）
 AUTO_ID = {
@@ -337,6 +344,64 @@ def explore_dialog_controls(dlg):
                 print(f"  [?] 获取信息失败: {e}")
     except Exception as e:
         print(f"  探索失败: {e}")
+
+
+def click_checkbox_by_id(dlg, auto_id: str):
+    """通过 auto_id 点击复选框（切换其勾选状态，Win32 BM_CLICK）。"""
+    try:
+        hwnd = _get_control_hwnd(dlg, auto_id)
+        if hwnd is not None:
+            _win32_user32().SendMessageW(hwnd, BM_CLICK, 0, 0)
+            print(f"[OK] 已点击复选框(auto_id={auto_id})(win32)")
+            return
+    except Exception as e:
+        print(f"  [WARN] win32 点击复选框(auto_id={auto_id})失败，降级到 UIA: {e}")
+    # 降级：UIA
+    try:
+        cb = dlg.child_window(auto_id=auto_id, control_type="CheckBox")
+        cb.wait("ready", timeout=3)
+        cb.click_input()
+        print(f"[OK] 已点击复选框(auto_id={auto_id})")
+    except Exception as e:
+        print(f"  [WARN] 点击复选框(auto_id={auto_id})失败: {e}")
+
+
+def collect_current_settings(dlg) -> dict:
+    """读取当前面板全部设置值，返回与 STANDARD_VALUES 同构的字典。
+
+    供“抓取自定义标准”脚本把当前客户端界面值采集为新的比对标准。
+    逻辑与下方 test_* 函数一致（委托数量最小跳动未启用时临时点击启用以读取
+    下方数值，读取完再恢复），但只返回字典、不写报告、不改任何设置。
+    """
+    data: dict = {}
+
+    # 一、鼠标快捷输入
+    mouse = get_checkbox_state_by_id(dlg, AUTO_ID["鼠标快捷输入"])
+    data["鼠标快捷输入"] = bool(mouse) if mouse is not None else False
+    for i in range(1, 6):
+        val = get_edit_value_by_id(dlg, AUTO_ID[f"数量_{i}"])
+        data[f"数量_{i}"] = val if val is not None else 0
+    for i in range(1, 6):
+        val = get_edit_value_by_id(dlg, AUTO_ID[f"百分比_{i}"])
+        data[f"百分比_{i}"] = val if val is not None else 0
+
+    # 二、委托数量最小跳动（未启用时临时启用以读取下方数值，再恢复）
+    tick = get_checkbox_state_by_id(dlg, AUTO_ID["委托数量最小跳动"])
+    data["委托数量最小跳动"] = bool(tick) if tick is not None else False
+    need_restore = False
+    if not tick:
+        print("  [INFO] '委托数量最小跳动'未勾选，点击启用以暴露下方数值...")
+        click_checkbox_by_id(dlg, AUTO_ID["委托数量最小跳动"])
+        need_restore = True
+        time.sleep(0.6)
+    val = get_edit_value_by_id(dlg, AUTO_ID["委托数量最小跳动_数值"])
+    data["委托数量最小跳动_数值"] = val if val is not None else 0
+    if need_restore:
+        print("  [INFO] 检查完成，恢复'委托数量最小跳动'为未启用状态...")
+        click_checkbox_by_id(dlg, AUTO_ID["委托数量最小跳动"])
+        time.sleep(0.4)
+
+    return data
 
 
 def main():

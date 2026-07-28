@@ -56,6 +56,7 @@ from core.settings_window import (
     switch_settings_panel as switch_settings_panel_compat,
 )
 from core.settings import SettingsTestResult
+from core.settings_standard import load_standard
 
 
 # ====================== 可配置参数 ======================
@@ -65,8 +66,10 @@ SETTINGS_MENU_ITEM_AUTO_ID = "20025" # 弹出菜单中"交易系统设置"项 au
 SETTINGS_DIALOG_TITLE = "交易系统设置"  # 设置对话框标题
 PANEL_NAME = "自动拆单设置"           # 左侧树节点名称
 
-# 标准值（恢复默认后应呈现的值），用于比对
-STANDARD_VALUES = {
+# 标准值（恢复默认后应呈现的值），用于比对。
+# 优先从 交易系统设置/标准/<客户端>/自动拆单设置.json 读取（可自定义/抓取覆盖）；
+# 找不到时使用下方内嵌兜底（与 qianlong 默认标准一致），保证离线不崩。
+DEFAULT_STANDARD_VALUES = {
     # 一、随机拆单
     "随机拆单_启用": False,
     "随机拆单_限价_如果下单张数大于": 1,
@@ -87,6 +90,10 @@ STANDARD_VALUES = {
     "固定拆单_市价_以每次": 10,
     "固定拆单_市价_间隔毫秒": 300,
 }
+
+# 当前客户端（GUI 启动时由 GUI_CLIENT_ID 环境变量注入；空则用内嵌兜底）
+CLIENT_ID = os.environ.get("GUI_CLIENT_ID", "") or ""
+STANDARD_VALUES = load_standard(PANEL_NAME, CLIENT_ID, DEFAULT_STANDARD_VALUES)
 
 # 控件 auto_id 映射（来自交易系统设置_自动拆单设置.txt 抓取）
 AUTO_ID = {
@@ -355,6 +362,37 @@ def explore_dialog_controls(dlg):
                 print(f"  [?] 获取信息失败: {e}")
     except Exception as e:
         print(f"  探索失败: {e}")
+
+
+def collect_current_settings(dlg) -> dict:
+    """读取当前面板全部设置值，返回与 STANDARD_VALUES 同构的字典。
+
+    供“抓取自定义标准”脚本把当前客户端界面值采集为新的比对标准。
+    逻辑与下方 test_* 函数一致（随机/固定拆单下参数组件始终可见，直接读取），
+    但只返回字典、不写报告、不改任何设置。
+    """
+    data: dict = {}
+
+    # 一、随机拆单
+    random_enabled = get_checkbox_state_by_id(dlg, AUTO_ID["随机拆单_启用"])
+    data["随机拆单_启用"] = bool(random_enabled) if random_enabled is not None else False
+    for key in ("随机拆单_限价_如果下单张数大于", "随机拆单_限价_以最少",
+                "随机拆单_限价_最多", "随机拆单_限价_间隔毫秒",
+                "随机拆单_市价_如果下单张数大于", "随机拆单_市价_以最少",
+                "随机拆单_市价_最多", "随机拆单_市价_间隔毫秒"):
+        val = get_edit_value_by_id(dlg, AUTO_ID[key])
+        data[key] = val if val is not None else 0
+
+    # 二、固定拆单
+    fixed_enabled = get_checkbox_state_by_id(dlg, AUTO_ID["固定拆单_启用"])
+    data["固定拆单_启用"] = bool(fixed_enabled) if fixed_enabled is not None else False
+    for key in ("固定拆单_限价_如果下单张数大于", "固定拆单_限价_以每次",
+                "固定拆单_限价_间隔毫秒", "固定拆单_市价_如果下单张数大于",
+                "固定拆单_市价_以每次", "固定拆单_市价_间隔毫秒"):
+        val = get_edit_value_by_id(dlg, AUTO_ID[key])
+        data[key] = val if val is not None else 0
+
+    return data
 
 
 def main():
