@@ -356,8 +356,6 @@ class AutomationGUI:
         self.right_notebook.add(report_frame, text="报告中心")
         self.report_center = SettingsReportPanel(report_frame, self)
         self._report_frame = report_frame
-        self._report_suppress_clear = False
-        self.right_notebook.bind("<<NotebookTabChanged>>", self._on_right_tab_changed)
 
         # 状态栏：钉在窗口底部（始终可见，矮窗口也不会被裁切），
         # 但左右加 10px 内边距与主面板对齐，避免「分层」的割裂感
@@ -1562,27 +1560,13 @@ class AutomationGUI:
     def show_report_center(self, auto_clear=True):
         """切换到交易系统设置报告中心标签页。
 
-        auto_clear=False 用于运行完成后自动跳转展示结果，此时不清空。
+        面板仅在软件打开时清空一次（见 SettingsReportPanel.__init__ 的
+        refresh_batches），切换标签页不再清空，以保留用户正在查看的批次结果。
+        auto_clear 仅保留作兼容参数，已无实际清空作用。
         """
         if not hasattr(self, "_report_frame"):
             return
-        already = self.right_notebook.select() == str(self._report_frame)
-        if not auto_clear:
-            self._report_suppress_clear = True
         self.right_notebook.select(self._report_frame)
-        if not auto_clear and already:
-            self._report_suppress_clear = False
-
-    def _on_right_tab_changed(self, event=None):
-        """用户切到报告中心时清空历史展示；运行完成自动跳转则不清空。"""
-        if not hasattr(self, "_report_frame") or not hasattr(self, "report_center"):
-            return
-        if self.right_notebook.select() != str(self._report_frame):
-            return
-        if getattr(self, "_report_suppress_clear", False):
-            self._report_suppress_clear = False
-            return
-        self.report_center.clear_view()
 
     # ====================== 交易系统设置：统一批次报告 ======================
     def begin_settings_batch(self, source, task_items):
