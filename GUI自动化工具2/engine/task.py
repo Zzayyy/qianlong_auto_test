@@ -37,6 +37,9 @@ class Task:
         env["GUI_COUNTDOWN"] = str(p.get("countdown_sec", 3))
         env["GUI_XLSX_FILE"] = p.get("xlsx_file", "")
         env["GUI_CATEGORY"] = self.category
+        env["GUI_SUPER_ADD_UNDERLYING"] = str(
+            bool(p.get("super_add_underlying", False))
+        )
 
         # 期权下单_一键导出 参数
         export_targets = p.get("export_targets", [])

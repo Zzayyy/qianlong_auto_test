@@ -1,114 +1,75 @@
 Control Identifiers:
 
 Dialog - '国泰海通证券期权宝(仿真行情) 　　当前账号 | 期权：章绍龙1(130375)'    (L-16, T-16, R3088, B1840)
-['Dialog', '国泰海通证券期权宝(仿真行情) \u3000\u3000当前账号 | 期权：章绍龙1(130375)', '国泰海通证券期权宝(仿真行情) \u3000\u3000当前账号 | 期权：章绍龙1(130375)Dialog', 'Dialog0', 'Dialog1']
+['国泰海通证券期权宝(仿真行情) \u3000\u3000当前账号 | 期权：章绍龙1(130375)', 'Dialog', '国泰海通证券期权宝(仿真行情) \u3000\u3000当前账号 | 期权：章绍龙1(130375)Dialog']
 child_window(title="国泰海通证券期权宝(仿真行情) 　　当前账号 | 期权：章绍龙1(130375)", control_type="Window")
-   | 
-   | Dialog - '下单'    (L874, T552, R2198, B1274)
-   | ['下单Dialog', 'Dialog2', '下单']
-   | child_window(title="下单", control_type="Window")
-   |    | 
-   |    | Button - '确定'    (L1832, T1192, R1982, B1234)
-   |    | ['Button', '确定Button', '确定', 'Button0', 'Button1']
-   |    | child_window(title="确定", auto_id="1", control_type="Button")
-   |    | 
-   |    | Button - '取消'    (L2002, T1192, R2152, B1234)
-   |    | ['Button2', '取消Button', '取消']
-   |    | child_window(title="取消", auto_id="2", control_type="Button")
-   |    | 
-   |    | Edit - ''    (L1018, T646, R2146, B1126)
-   |    | ['倍数：Edit', 'Edit', 'Edit0', 'Edit1', '倍数：Edit0', '倍数：Edit1']
-   |    | child_window(auto_id="2171", control_type="Edit")
-   |    |    | 
-   |    |    | ScrollBar - '垂直滚动条'    (L2112, T646, R2180, B1126)
-   |    |    | ['垂直滚动条', 'ScrollBar', '垂直滚动条ScrollBar', '垂直滚动条0', '垂直滚动条1', 'ScrollBar0', 'ScrollBar1', '垂直滚动条ScrollBar0', '垂直滚动条ScrollBar1']
-   |    |    | child_window(title="垂直滚动条", auto_id="NonClientVerticalScrollBar", control_type="ScrollBar")
-   |    |    |    | 
-   |    |    |    | Button - '上一行'    (L2112, T646, R2180, B680)
-   |    |    |    | ['Button3', '上一行', '上一行Button', '上一行0', '上一行1', '上一行Button0', '上一行Button1']
-   |    |    |    | child_window(title="上一行", auto_id="UpButton", control_type="Button")
-   |    |    |    | 
-   |    |    |    | Button - '下一行'    (L2112, T1092, R2180, B1126)
-   |    |    |    | ['Button4', '下一行Button', '下一行', '下一行Button0', '下一行Button1', '下一行0', '下一行1']
-   |    |    |    | child_window(title="下一行", auto_id="DownButton", control_type="Button")
-   |    | 
-   |    | Static - '倍数：'    (L938, T1094, R1434, B1190)
-   |    | ['倍数：Static', '倍数：', 'Static', 'Static0', 'Static1']
-   |    | child_window(title="倍数：", auto_id="1000", control_type="Text")
-   |    | 
-   |    | TitleBar - ''    (L880, T558, R2192, B604)
-   |    | ['TitleBar', 'TitleBar0', 'TitleBar1']
-   |    |    | 
-   |    |    | Button - '关闭'    (L2124, T554, R2194, B604)
-   |    |    | ['Button5', '关闭', '关闭Button', '关闭0', '关闭1', '关闭Button0', '关闭Button1']
-   |    |    | child_window(title="关闭", control_type="Button")
    | 
    | Pane - ''    (L2, T48, R3070, B1822)
    | ['Pane', 'Pane0', 'Pane1']
    | child_window(auto_id="59648", control_type="Pane")
    |    | 
    |    | Button - ''    (L14, T58, R176, B100)
-   |    | ['Button6']
+   |    | ['Button', 'Button0', 'Button1']
    |    | child_window(auto_id="1001", control_type="Button")
    |    | 
    |    | Button - ''    (L186, T58, R348, B100)
-   |    | ['Button7']
+   |    | ['Button2']
    |    | child_window(auto_id="1002", control_type="Button")
    |    | 
    |    | Button - ''    (L358, T58, R520, B100)
-   |    | ['Button8']
+   |    | ['Button3']
    |    | child_window(auto_id="1023", control_type="Button")
    |    | 
    |    | Button - ''    (L530, T58, R692, B100)
-   |    | ['Button9']
+   |    | ['Button4']
    |    | child_window(auto_id="1019", control_type="Button")
    |    | 
    |    | Button - ''    (L702, T58, R864, B100)
-   |    | ['Button10']
+   |    | ['Button5']
    |    | child_window(auto_id="1022", control_type="Button")
    |    | 
    |    | Button - ''    (L874, T58, R1036, B100)
-   |    | ['Button11']
+   |    | ['Button6']
    |    | child_window(auto_id="1021", control_type="Button")
    |    | 
    |    | Button - ''    (L1046, T58, R1208, B100)
-   |    | ['Button12']
+   |    | ['Button7']
    |    | child_window(auto_id="1027", control_type="Button")
    |    | 
    |    | Button - ''    (L1218, T58, R1380, B100)
-   |    | ['Button13']
+   |    | ['Button8']
    |    | child_window(auto_id="1031", control_type="Button")
    |    | 
    |    | Button - ''    (L1390, T58, R1552, B100)
-   |    | ['Button14']
+   |    | ['Button9']
    |    | child_window(auto_id="1032", control_type="Button")
    |    | 
    |    | Button - ''    (L1562, T58, R1724, B100)
-   |    | ['Button15']
+   |    | ['Button10']
    |    | child_window(auto_id="1030", control_type="Button")
    |    | 
    |    | Button - ''    (L1734, T58, R1896, B100)
-   |    | ['Button16']
+   |    | ['Button11']
    |    | child_window(auto_id="1033", control_type="Button")
    |    | 
    |    | Button - ''    (L1906, T58, R2068, B100)
-   |    | ['Button17']
+   |    | ['Button12']
    |    | child_window(auto_id="1036", control_type="Button")
    |    | 
    |    | Button - ''    (L2470, T60, R2588, B102)
-   |    | ['Button18']
+   |    | ['Button13']
    |    | child_window(auto_id="1016", control_type="Button")
    |    | 
    |    | Edit - ''    (L2598, T62, R2926, B96)
-   |    | ['Edit2']
+   |    | ['Edit', 'Edit0', 'Edit1']
    |    | child_window(auto_id="1000", control_type="Edit")
    |    | 
    |    | Button - ''    (L3002, T52, R3058, B108)
-   |    | ['Button19']
+   |    | ['Button14']
    |    | child_window(auto_id="1008", control_type="Button")
    |    | 
    |    | Button - ''    (L2942, T52, R2998, B108)
-   |    | ['Button20']
+   |    | ['Button15']
    |    | child_window(auto_id="1026", control_type="Button")
    |    | 
    |    | Pane - ''    (L4, T110, R3068, B1764)
@@ -116,11 +77,11 @@ child_window(title="国泰海通证券期权宝(仿真行情) 　　当前账号
    |    | child_window(auto_id="197287272", control_type="Pane")
    |    |    | 
    |    |    | Static - ''    (L36, T126, R328, B166)
-   |    |    | ['Static2']
+   |    |    | ['Static', 'Static0', 'Static1']
    |    |    | child_window(auto_id="100", control_type="Text")
    |    |    | 
    |    |    | Static - ''    (L36, T182, R328, B222)
-   |    |    | ['Static3']
+   |    |    | ['Static2']
    |    |    | child_window(auto_id="101", control_type="Text")
    |    |    | 
    |    |    | Pane - 'TacticsPanel'    (L4, T238, R360, B1764)
@@ -144,15 +105,15 @@ child_window(title="国泰海通证券期权宝(仿真行情) 　　当前账号
    |    |    |    | child_window(auto_id="108", control_type="Pane")
    |    |    |    | 
    |    |    |    | Static - ''    (L1148, T220, R1400, B258)
-   |    |    |    | ['Static4']
+   |    |    |    | ['Static3']
    |    |    |    | child_window(auto_id="106", control_type="Text")
    |    |    |    | 
    |    |    |    | Static - ''    (L1424, T220, R1676, B258)
-   |    |    |    | ['Static5']
+   |    |    |    | ['Static4']
    |    |    |    | child_window(auto_id="107", control_type="Text")
    |    |    | 
    |    |    | Pane - ''    (L362, T836, R2498, B1296)
-   |    |    | ['Pane8', '倍数：Pane', '倍数：Pane0', '倍数：Pane1']
+   |    |    | ['Pane8']
    |    |    | child_window(auto_id="128", control_type="Pane")
    |    |    |    | 
    |    |    |    | Pane - ''    (L2462, T836, R2498, B1244)
@@ -160,23 +121,23 @@ child_window(title="国泰海通证券期权宝(仿真行情) 　　当前账号
    |    |    |    | child_window(auto_id="108", control_type="Pane")
    |    |    |    | 
    |    |    |    | Pane - 'spinedit_multiple'    (L1936, T1254, R2010, B1286)
-   |    |    |    | ['Pane10', 'spinedit_multiple', 'spinedit_multiplePane']
+   |    |    |    | ['Pane10', 'spinedit_multiplePane', 'spinedit_multiple']
    |    |    |    | child_window(title="spinedit_multiple", auto_id="129", control_type="Pane")
    |    |    |    |    | 
    |    |    |    |    | Edit - ''    (L1944, T1258, R1978, B1282)
-   |    |    |    |    | ['倍数：Edit2', 'Edit3']
+   |    |    |    |    | ['Edit2']
    |    |    |    |    | child_window(auto_id="2000", control_type="Edit")
    |    |    |    | 
    |    |    |    | Static - ''    (L626, T904, R762, B936)
-   |    |    |    | ['Static6']
+   |    |    |    | ['Static5']
    |    |    |    | child_window(auto_id="1152", control_type="Text")
    |    |    |    | 
    |    |    |    | Static - ''    (L826, T904, R918, B936)
-   |    |    |    | ['Static7']
+   |    |    |    | ['Static6']
    |    |    |    | child_window(auto_id="1408", control_type="Text")
    |    |    |    | 
    |    |    |    | Static - ''    (L926, T904, R1070, B936)
-   |    |    |    | ['Static8']
+   |    |    |    | ['Static7']
    |    |    |    | child_window(auto_id="1664", control_type="Text")
    |    |    |    | 
    |    |    |    | Pane - 'prelst_spin_price0'    (L1122, T904, R1250, B936)
@@ -184,35 +145,35 @@ child_window(title="国泰海通证券期权宝(仿真行情) 　　当前账号
    |    |    |    | child_window(title="prelst_spin_price0", auto_id="1920", control_type="Pane")
    |    |    |    |    | 
    |    |    |    |    | Edit - ''    (L1130, T908, R1218, B932)
-   |    |    |    |    | ['Edit4']
+   |    |    |    |    | ['Edit3']
    |    |    |    |    | child_window(auto_id="2000", control_type="Edit")
    |    |    |    | 
    |    |    |    | Pane - 'prelst_spin_unit0'    (L1258, T904, R1378, B936)
-   |    |    |    | ['Pane12', 'prelst_spin_unit0', 'prelst_spin_unit0Pane']
+   |    |    |    | ['prelst_spin_unit0Pane', 'Pane12', 'prelst_spin_unit0']
    |    |    |    | child_window(title="prelst_spin_unit0", auto_id="2176", control_type="Pane")
    |    |    |    |    | 
    |    |    |    |    | Edit - ''    (L1266, T908, R1346, B932)
-   |    |    |    |    | ['Edit5']
+   |    |    |    |    | ['Edit4']
    |    |    |    |    | child_window(auto_id="2000", control_type="Edit")
    |    |    |    | 
    |    |    |    | Static - ''    (L626, T952, R762, B984)
-   |    |    |    | ['Static9']
+   |    |    |    | ['Static8']
    |    |    |    | child_window(auto_id="1153", control_type="Text")
    |    |    |    | 
    |    |    |    | Static - ''    (L826, T952, R918, B984)
-   |    |    |    | ['Static10']
+   |    |    |    | ['Static9']
    |    |    |    | child_window(auto_id="1409", control_type="Text")
    |    |    |    | 
    |    |    |    | Static - ''    (L926, T952, R1070, B984)
-   |    |    |    | ['Static11']
+   |    |    |    | ['Static10']
    |    |    |    | child_window(auto_id="1665", control_type="Text")
    |    |    |    | 
    |    |    |    | Pane - 'prelst_spin_price1'    (L1122, T952, R1250, B984)
-   |    |    |    | ['Pane13', 'prelst_spin_price1', 'prelst_spin_price1Pane']
+   |    |    |    | ['prelst_spin_price1', 'Pane13', 'prelst_spin_price1Pane']
    |    |    |    | child_window(title="prelst_spin_price1", auto_id="1921", control_type="Pane")
    |    |    |    |    | 
    |    |    |    |    | Edit - ''    (L1130, T956, R1218, B980)
-   |    |    |    |    | ['Edit6']
+   |    |    |    |    | ['Edit5']
    |    |    |    |    | child_window(auto_id="2000", control_type="Edit")
    |    |    |    | 
    |    |    |    | Pane - 'prelst_spin_unit1'    (L1258, T952, R1378, B984)
@@ -220,7 +181,7 @@ child_window(title="国泰海通证券期权宝(仿真行情) 　　当前账号
    |    |    |    | child_window(title="prelst_spin_unit1", auto_id="2177", control_type="Pane")
    |    |    |    |    | 
    |    |    |    |    | Edit - ''    (L1266, T956, R1346, B980)
-   |    |    |    |    | ['Edit7']
+   |    |    |    |    | ['Edit6']
    |    |    |    |    | child_window(auto_id="2000", control_type="Edit")
    |    |    | 
    |    |    | Pane - 'RiskList'    (L2500, T1440, R3068, B1764)
@@ -228,120 +189,120 @@ child_window(title="国泰海通证券期权宝(仿真行情) 　　当前账号
    |    |    | child_window(title="RiskList", auto_id="109", control_type="Pane")
    |    |    |    | 
    |    |    |    | Pane - 'rank_price_spin0'    (L2770, T1538, R2892, B1572)
-   |    |    |    | ['Pane16', 'rank_price_spin0', 'rank_price_spin0Pane']
+   |    |    |    | ['rank_price_spin0', 'Pane16', 'rank_price_spin0Pane']
    |    |    |    | child_window(title="rank_price_spin0", auto_id="110", control_type="Pane")
    |    |    |    |    | 
    |    |    |    |    | Edit - ''    (L2778, T1542, R2858, B1566)
-   |    |    |    |    | ['Edit8']
+   |    |    |    |    | ['Edit7']
    |    |    |    |    | child_window(auto_id="2000", control_type="Edit")
    |    |    |    | 
    |    |    |    | Pane - 'rank_price_spin1'    (L2770, T1584, R2892, B1618)
-   |    |    |    | ['Pane17', 'rank_price_spin1', 'rank_price_spin1Pane']
+   |    |    |    | ['rank_price_spin1Pane', 'rank_price_spin1', 'Pane17']
    |    |    |    | child_window(title="rank_price_spin1", auto_id="111", control_type="Pane")
    |    |    |    |    | 
    |    |    |    |    | Edit - ''    (L2778, T1588, R2858, B1612)
-   |    |    |    |    | ['Edit9']
+   |    |    |    |    | ['Edit8']
    |    |    |    |    | child_window(auto_id="2000", control_type="Edit")
    |    |    |    | 
    |    |    |    | Pane - 'rank_price_spin2'    (L2770, T1630, R2892, B1664)
-   |    |    |    | ['Pane18', 'rank_price_spin2Pane', 'rank_price_spin2']
+   |    |    |    | ['rank_price_spin2Pane', 'Pane18', 'rank_price_spin2']
    |    |    |    | child_window(title="rank_price_spin2", auto_id="112", control_type="Pane")
    |    |    |    |    | 
    |    |    |    |    | Edit - ''    (L2778, T1634, R2858, B1658)
-   |    |    |    |    | ['Edit10']
+   |    |    |    |    | ['Edit9']
    |    |    |    |    | child_window(auto_id="2000", control_type="Edit")
    |    |    |    | 
    |    |    |    | Pane - 'rank_price_spin3'    (L2770, T1676, R2892, B1710)
-   |    |    |    | ['Pane19', 'rank_price_spin3', 'rank_price_spin3Pane']
+   |    |    |    | ['Pane19', 'rank_price_spin3Pane', 'rank_price_spin3']
    |    |    |    | child_window(title="rank_price_spin3", auto_id="113", control_type="Pane")
    |    |    |    |    | 
    |    |    |    |    | Edit - ''    (L2778, T1680, R2858, B1704)
-   |    |    |    |    | ['Edit11']
+   |    |    |    |    | ['Edit10']
    |    |    |    |    | child_window(auto_id="2000", control_type="Edit")
    |    |    |    | 
    |    |    |    | Pane - 'rank_price_spin4'    (L2770, T1722, R2892, B1756)
-   |    |    |    | ['Pane20', 'rank_price_spin4', 'rank_price_spin4Pane']
+   |    |    |    | ['rank_price_spin4Pane', 'Pane20', 'rank_price_spin4']
    |    |    |    | child_window(title="rank_price_spin4", auto_id="114", control_type="Pane")
    |    |    |    |    | 
    |    |    |    |    | Edit - ''    (L2778, T1726, R2858, B1750)
-   |    |    |    |    | ['Edit12']
+   |    |    |    |    | ['Edit11']
    |    |    |    |    | child_window(auto_id="2000", control_type="Edit")
    |    |    | 
    |    |    | Pane - ''    (L362, T1296, R2498, B1764)
-   |    |    | ['Pane21', '倍数：Pane2']
+   |    |    | ['Pane21']
    |    |    | child_window(auto_id="197315448", control_type="Pane")
    |    |    |    | 
    |    |    |    | Static - ''    (L362, T1296, R402, B1714)
-   |    |    |    | ['Static12']
+   |    |    |    | ['Static11']
    |    |    |    | child_window(auto_id="8022", control_type="Text")
    |    |    |    | 
    |    |    |    | Button - ''    (L2386, T1300, R2446, B1350)
-   |    |    |    | ['Button21']
+   |    |    |    | ['Button16']
    |    |    |    | child_window(auto_id="9036", control_type="Button")
    |    |    |    | 
    |    |    |    | Button - 'Button1'    (L402, T1296, R1162, B1350)
-   |    |    |    | ['Button22', 'Button1Button', 'Button110']
+   |    |    |    | ['Button1Button', 'Button17', 'Button18']
    |    |    |    | child_window(title="Button1", auto_id="1191", control_type="Button")
    |    |    |    | 
    |    |    |    | Button - '刷新'    (L1884, T1300, R1974, B1346)
-   |    |    |    | ['Button23', '刷新Button', '刷新']
+   |    |    |    | ['刷新Button', '刷新', 'Button19']
    |    |    |    | child_window(title="刷新", auto_id="1157", control_type="Button")
    |    |    |    | 
    |    |    |    | Button - '输出'    (L1974, T1300, R2064, B1346)
-   |    |    |    | ['Button24', '输出Button', '输出']
+   |    |    |    | ['输出Button', '输出', 'Button20']
    |    |    |    | child_window(title="输出", auto_id="1159", control_type="Button")
    |    |    |    | 
    |    |    |    | Button - '全选'    (L1704, T1300, R1794, B1346)
-   |    |    |    | ['Button25', '全选', '全选Button']
+   |    |    |    | ['全选', '全选Button', 'Button21']
    |    |    |    | child_window(title="全选", auto_id="1165", control_type="Button")
    |    |    |    | 
    |    |    |    | Button - '重置'    (L1794, T1300, R1884, B1346)
-   |    |    |    | ['Button26', '重置', '重置Button']
+   |    |    |    | ['Button22', '重置', '重置Button']
    |    |    |    | child_window(title="重置", auto_id="1153", control_type="Button")
    |    |    |    | 
    |    |    |    | Button - '×'    (L2450, T1304, R2490, B1344)
-   |    |    |    | ['Button27', '×Button', '×']
+   |    |    |    | ['×', '×Button', 'Button23']
    |    |    |    | child_window(title="×", auto_id="9035", control_type="Button")
    |    |    |    | 
    |    |    |    | ComboBox - ''    (L2064, T1300, R2386, B1348)
-   |    |    |    | ['ComboBox', '倍数：ComboBox', 'ComboBox0', 'ComboBox1', '倍数：ComboBox0', '倍数：ComboBox1']
+   |    |    |    | ['ComboBoxZzayyy/qianlong_auto_test - Google Chrome', 'ComboBox任务栏', 'ComboBox微信', 'ComboBox', 'ComboBoxv2rayN - V7.22.5 - X64 - 以非管理员身份运行', 'ComboBoxProgram Manager', 'ComboBox钱龙模拟期权宝 \u3000\u3000当前账号 | 期权：20241216003(20241216003) | 股票：20241216003(20241216003)', 'ComboBox获取组件.py - 自动测试 - Visual Studio Code', 'ComboBox素质拓展课安排 - Google Chrome', 'ComboBoxQlOption - 文件资源管理器', 'ComboBoxChatGPT', 'ComboBox国泰海通证券期权宝(仿真行情) \u3000\u3000当前账号 | 期权：章绍龙1(130375)', 'ComboBoxZzayyy/qianlong_auto_test - Google Chrome0', 'ComboBoxZzayyy/qianlong_auto_test - Google Chrome1', 'ComboBox任务栏0', 'ComboBox任务栏1', 'ComboBox微信0', 'ComboBox微信1', 'ComboBox0', 'ComboBox1', 'ComboBoxv2rayN - V7.22.5 - X64 - 以非管理员身份运行0', 'ComboBoxv2rayN - V7.22.5 - X64 - 以非管理员身份运行1', 'ComboBoxProgram Manager0', 'ComboBoxProgram Manager1', 'ComboBox钱龙模拟期权宝 \u3000\u3000当前账号 | 期权：20241216003(20241216003) | 股票：20241216003(20241216003)0', 'ComboBox钱龙模拟期权宝 \u3000\u3000当前账号 | 期权：20241216003(20241216003) | 股票：20241216003(20241216003)1', 'ComboBox获取组件.py - 自动测试 - Visual Studio Code0', 'ComboBox获取组件.py - 自动测试 - Visual Studio Code1', 'ComboBox素质拓展课安排 - Google Chrome0', 'ComboBox素质拓展课安排 - Google Chrome1', 'ComboBoxQlOption - 文件资源管理器0', 'ComboBoxQlOption - 文件资源管理器1', 'ComboBoxChatGPT0', 'ComboBoxChatGPT1', 'ComboBox国泰海通证券期权宝(仿真行情) \u3000\u3000当前账号 | 期权：章绍龙1(130375)0', 'ComboBox国泰海通证券期权宝(仿真行情) \u3000\u3000当前账号 | 期权：章绍龙1(130375)1']
    |    |    |    | child_window(auto_id="1126", control_type="ComboBox")
    |    |    |    |    | 
    |    |    |    |    | Static - ''    (L6, T6, R282, B42)
-   |    |    |    |    | ['Static13']
+   |    |    |    |    | ['Static12']
    |    |    |    |    | 
    |    |    |    |    | Button - '打开'    (L2348, T1304, R2382, B1344)
-   |    |    |    |    | ['Button28', '打开', '打开Button', '打开0', '打开1', '打开Button0', '打开Button1']
+   |    |    |    |    | ['打开', '打开Button', 'Button24', '打开0', '打开1', '打开Button0', '打开Button1']
    |    |    |    |    | child_window(title="打开", auto_id="DropDown", control_type="Button")
    |    |    |    | 
    |    |    |    | ComboBox - ''    (L1254, T1300, R1542, B1340)
-   |    |    |    | ['ComboBox2', '倍数：ComboBox2']
+   |    |    |    | ['ComboBoxZzayyy/qianlong_auto_test - Google Chrome2', 'ComboBox任务栏2', 'ComboBox微信2', 'ComboBox2', 'ComboBoxv2rayN - V7.22.5 - X64 - 以非管理员身份运行2', 'ComboBoxProgram Manager2', 'ComboBox钱龙模拟期权宝 \u3000\u3000当前账号 | 期权：20241216003(20241216003) | 股票：20241216003(20241216003)2', 'ComboBox获取组件.py - 自动测试 - Visual Studio Code2', 'ComboBox素质拓展课安排 - Google Chrome2', 'ComboBoxQlOption - 文件资源管理器2', 'ComboBoxChatGPT2', 'ComboBox国泰海通证券期权宝(仿真行情) \u3000\u3000当前账号 | 期权：章绍龙1(130375)2']
    |    |    |    | child_window(auto_id="9040", control_type="ComboBox")
    |    |    |    |    | 
    |    |    |    |    | Static - ''    (L6, T6, R248, B34)
-   |    |    |    |    | ['Static14']
+   |    |    |    |    | ['Static13']
    |    |    |    |    | 
    |    |    |    |    | Button - '打开'    (L1504, T1304, R1538, B1336)
-   |    |    |    |    | ['Button29', '打开2', '打开Button2']
+   |    |    |    |    | ['打开2', '打开Button2', 'Button25']
    |    |    |    |    | child_window(title="打开", auto_id="DropDown", control_type="Button")
    |    |    |    | 
    |    |    |    | ComboBox - ''    (L1542, T1300, R1704, B1340)
-   |    |    |    | ['ComboBox3', '倍数：ComboBox3']
+   |    |    |    | ['ComboBoxZzayyy/qianlong_auto_test - Google Chrome3', 'ComboBox任务栏3', 'ComboBox微信3', 'ComboBox3', 'ComboBoxv2rayN - V7.22.5 - X64 - 以非管理员身份运行3', 'ComboBoxProgram Manager3', 'ComboBox钱龙模拟期权宝 \u3000\u3000当前账号 | 期权：20241216003(20241216003) | 股票：20241216003(20241216003)3', 'ComboBox获取组件.py - 自动测试 - Visual Studio Code3', 'ComboBox素质拓展课安排 - Google Chrome3', 'ComboBoxQlOption - 文件资源管理器3', 'ComboBoxChatGPT3', 'ComboBox国泰海通证券期权宝(仿真行情) \u3000\u3000当前账号 | 期权：章绍龙1(130375)3']
    |    |    |    | child_window(auto_id="941", control_type="ComboBox")
    |    |    |    |    | 
    |    |    |    |    | Static - ''    (L6, T6, R122, B34)
-   |    |    |    |    | ['Static15']
+   |    |    |    |    | ['Static14']
    |    |    |    |    | 
    |    |    |    |    | Button - '打开'    (L1666, T1304, R1700, B1336)
-   |    |    |    |    | ['Button30', '打开3', '打开Button3']
+   |    |    |    |    | ['打开3', '打开Button3', 'Button26']
    |    |    |    |    | child_window(title="打开", auto_id="DropDown", control_type="Button")
    |    |    |    | 
    |    |    |    | ListBox - ''    (L402, T1350, R2498, B1764)
-   |    |    |    | ['ListBox', '倍数：ListBox']
+   |    |    |    | ['ListBox']
    |    |    |    | child_window(auto_id="1229", control_type="List")
    |    |    |    |    | 
    |    |    |    |    | Header - ''    (L402, T1350, R2498, B1382)
-   |    |    |    |    | ['Header', '倍数：Header']
+   |    |    |    |    | ['Header']
    |    |    |    |    | child_window(auto_id="Header", control_type="Header")
    |    |    |    |    |    | 
    |    |    |    |    |    | HeaderItem - ''    (L0, T0, R0, B0)
@@ -453,15 +414,15 @@ child_window(title="国泰海通证券期权宝(仿真行情) 　　当前账号
    |    |    |    |    |    | ['HeaderItem36']
    |    |    |    |    | 
    |    |    |    |    | ScrollBar - '垂直滚动条'    (L2464, T1350, R2532, B1730)
-   |    |    |    |    | ['垂直滚动条2', 'ScrollBar2', '垂直滚动条ScrollBar2']
+   |    |    |    |    | ['垂直滚动条', 'ScrollBar', '垂直滚动条ScrollBar', 'ScrollBar0', 'ScrollBar1']
    |    |    |    |    | child_window(title="垂直滚动条", auto_id="NonClientVerticalScrollBar", control_type="ScrollBar")
    |    |    |    |    |    | 
    |    |    |    |    |    | Button - '上一行'    (L2464, T1350, R2532, B1384)
-   |    |    |    |    |    | ['Button31', '上一行2', '上一行Button2']
+   |    |    |    |    |    | ['上一行Button', '上一行', 'Button27']
    |    |    |    |    |    | child_window(title="上一行", auto_id="UpButton", control_type="Button")
    |    |    |    |    |    | 
    |    |    |    |    |    | Button - '向上翻页'    (L2464, T1384, R2532, B1399)
-   |    |    |    |    |    | ['Button32', '向上翻页', '向上翻页Button']
+   |    |    |    |    |    | ['Button28', '向上翻页Button', '向上翻页']
    |    |    |    |    |    | child_window(title="向上翻页", auto_id="UpPageButton", control_type="Button")
    |    |    |    |    |    | 
    |    |    |    |    |    | Thumb - '位置'    (L2464, T1399, R2532, B1448)
@@ -469,19 +430,19 @@ child_window(title="国泰海通证券期权宝(仿真行情) 　　当前账号
    |    |    |    |    |    | child_window(title="位置", auto_id="ScrollbarThumb", control_type="Thumb")
    |    |    |    |    |    | 
    |    |    |    |    |    | Button - '向下翻页'    (L2464, T1448, R2532, B1696)
-   |    |    |    |    |    | ['Button33', '向下翻页Button', '向下翻页']
+   |    |    |    |    |    | ['向下翻页', 'Button29', '向下翻页Button']
    |    |    |    |    |    | child_window(title="向下翻页", auto_id="DownPageButton", control_type="Button")
    |    |    |    |    |    | 
    |    |    |    |    |    | Button - '下一行'    (L2464, T1696, R2532, B1730)
-   |    |    |    |    |    | ['Button34', '下一行Button2', '下一行2']
+   |    |    |    |    |    | ['下一行Button', '下一行', 'Button30']
    |    |    |    |    |    | child_window(title="下一行", auto_id="DownButton", control_type="Button")
    |    |    |    |    | 
    |    |    |    |    | ScrollBar - '水平滚动条'    (L402, T1730, R2464, B1798)
-   |    |    |    |    | ['水平滚动条ScrollBar', 'ScrollBar3', '水平滚动条']
+   |    |    |    |    | ['水平滚动条', '水平滚动条ScrollBar', 'ScrollBar2']
    |    |    |    |    | child_window(title="水平滚动条", auto_id="NonClientHorizontalScrollBar", control_type="ScrollBar")
    |    |    |    |    |    | 
    |    |    |    |    |    | Button - '左移一列'    (L402, T1730, R436, B1798)
-   |    |    |    |    |    | ['Button35', '左移一列Button', '左移一列']
+   |    |    |    |    |    | ['左移一列', '左移一列Button', 'Button31']
    |    |    |    |    |    | child_window(title="左移一列", auto_id="UpButton", control_type="Button")
    |    |    |    |    |    | 
    |    |    |    |    |    | Thumb - '位置'    (L436, T1730, R834, B1798)
@@ -489,11 +450,11 @@ child_window(title="国泰海通证券期权宝(仿真行情) 　　当前账号
    |    |    |    |    |    | child_window(title="位置", auto_id="ScrollbarThumb", control_type="Thumb")
    |    |    |    |    |    | 
    |    |    |    |    |    | Button - '向右翻页'    (L834, T1730, R2430, B1798)
-   |    |    |    |    |    | ['Button36', '向右翻页Button', '向右翻页']
+   |    |    |    |    |    | ['Button32', '向右翻页', '向右翻页Button']
    |    |    |    |    |    | child_window(title="向右翻页", auto_id="DownPageButton", control_type="Button")
    |    |    |    |    |    | 
    |    |    |    |    |    | Button - '右移一列'    (L2430, T1730, R2464, B1798)
-   |    |    |    |    |    | ['Button37', '右移一列', '右移一列Button']
+   |    |    |    |    |    | ['右移一列Button', '右移一列', 'Button33']
    |    |    |    |    |    | child_window(title="右移一列", auto_id="DownButton", control_type="Button")
    |    |    |    |    | 
    |    |    |    |    | Thumb - ''    (L2464, T1730, R2498, B1764)
@@ -575,11 +536,11 @@ child_window(title="国泰海通证券期权宝(仿真行情) 　　当前账号
    |    |    |    |    | ['ListItem25']
    |    |    | 
    |    |    | Pane - 'AnalysisGraph'    (L2500, T110, R3068, B1440)
-   |    |    | ['Pane22', 'AnalysisGraphPane', 'AnalysisGraph']
+   |    |    | ['AnalysisGraphPane', 'AnalysisGraph', 'Pane22']
    |    |    | child_window(title="AnalysisGraph", auto_id="115", control_type="Pane")
    |    |    |    | 
    |    |    |    | Pane - 'CProbabilityPanel'    (L2500, T110, R3068, B664)
-   |    |    |    | ['Pane23', 'CProbabilityPanel', 'CProbabilityPanelPane']
+   |    |    |    | ['Pane23', 'CProbabilityPanelPane', 'CProbabilityPanel']
    |    |    |    | child_window(title="CProbabilityPanel", auto_id="116", control_type="Pane")
    |    |    |    |    | 
    |    |    |    |    | Pane - 'ProbabilityView'    (L2500, T172, R3068, B664)
@@ -591,7 +552,7 @@ child_window(title="国泰海通证券期权宝(仿真行情) 　　当前账号
    |    |    |    |    | child_window(auto_id="117", control_type="Pane")
    |    |    |    | 
    |    |    |    | Pane - 'AdvProfitPanel'    (L2500, T664, R3068, B1440)
-   |    |    |    | ['Pane26', 'AdvProfitPanel', 'AdvProfitPanelPane']
+   |    |    |    | ['AdvProfitPanelPane', 'AdvProfitPanel', 'Pane26']
    |    |    |    | child_window(title="AdvProfitPanel", auto_id="120", control_type="Pane")
    |    |    |    |    | 
    |    |    |    |    | Pane - ''    (L2500, T664, R3068, B724)
@@ -599,44 +560,44 @@ child_window(title="国泰海通证券期权宝(仿真行情) 　　当前账号
    |    |    |    |    | child_window(auto_id="121", control_type="Pane")
    |    |    |    |    | 
    |    |    |    |    | Pane - 'ProfitChartList'    (L2500, T724, R3068, B1344)
-   |    |    |    |    | ['Pane28', 'ProfitChartList', 'ProfitChartListPane']
+   |    |    |    |    | ['ProfitChartList', 'Pane28', 'ProfitChartListPane']
    |    |    |    |    | child_window(title="ProfitChartList", auto_id="122", control_type="Pane")
    |    |    |    |    |    | 
    |    |    |    |    |    | Static - ''    (L2516, T1300, R2660, B1336)
-   |    |    |    |    |    | ['Static16']
+   |    |    |    |    |    | ['Static15']
    |    |    |    |    |    | child_window(auto_id="123", control_type="Text")
    |    |    |    |    |    | 
    |    |    |    |    |    | Static - ''    (L2736, T1300, R2916, B1336)
-   |    |    |    |    |    | ['Static17']
+   |    |    |    |    |    | ['Static16']
    |    |    |    |    |    | child_window(auto_id="124", control_type="Text")
    |    |    |    |    |    | 
    |    |    |    |    |    | Pane - 'QlSpinEditExVola'    (L2932, T1300, R3036, B1336)
-   |    |    |    |    |    | ['Pane29', 'QlSpinEditExVolaPane', 'QlSpinEditExVola']
+   |    |    |    |    |    | ['QlSpinEditExVolaPane', 'Pane29', 'QlSpinEditExVola']
    |    |    |    |    |    | child_window(title="QlSpinEditExVola", auto_id="125", control_type="Pane")
    |    |    |    |    |    |    | 
    |    |    |    |    |    |    | Edit - ''    (L2940, T1306, R3000, B1330)
-   |    |    |    |    |    |    | ['Edit13']
+   |    |    |    |    |    |    | ['Edit12']
    |    |    |    |    |    |    | child_window(auto_id="2000", control_type="Edit")
    | 
    | TitleBar - ''    (L36, T-10, R3068, B50)
-   | ['TitleBar2']
+   | ['TitleBar']
    |    | 
    |    | Menu - '系统'    (L0, T0, R22, B22)
-   |    | ['Menu', '系统', '系统Menu', '系统0', '系统1']
+   |    | ['系统', 'Menu', '系统Menu', '系统0', '系统1']
    |    | child_window(title="系统", auto_id="MenuBar", control_type="MenuBar")
    |    |    | 
    |    |    | MenuItem - '系统'    (L0, T0, R22, B22)
-   |    |    | ['MenuItem', '系统2', '系统MenuItem']
+   |    |    | ['系统2', '系统MenuItem', 'MenuItem']
    |    |    | child_window(title="系统", control_type="MenuItem")
    |    | 
    |    | Button - '最小化'    (L2790, T0, R2884, B50)
-   |    | ['Button38', '最小化Button', '最小化']
+   |    | ['最小化Button', '最小化', 'Button34']
    |    | child_window(title="最小化", control_type="Button")
    |    | 
    |    | Button - '还原'    (L2884, T0, R2976, B50)
-   |    | ['Button39', '还原Button', '还原']
+   |    | ['还原Button', 'Button35', '还原']
    |    | child_window(title="还原", control_type="Button")
    |    | 
    |    | Button - '关闭'    (L2976, T0, R3074, B50)
-   |    | ['Button40', '关闭2', '关闭Button2']
+   |    | ['关闭Button', '关闭', 'Button36']
    |    | child_window(title="关闭", control_type="Button")

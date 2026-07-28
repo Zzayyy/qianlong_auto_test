@@ -1,334 +1,517 @@
 # -*- coding: utf-8 -*-
-"""超级策略(TacticsPanel)左面板 OCR 定位与点击
-================================================
-背景:
-    项目现有三套面板定位都针对「主导航树 SysTreeView32 (control_id=1223)」:
-      1) select_tree_path            -> TVM_GETITEMW 读文本        (win32)
-      2) select_tree_path_by_position-> TVM_GETNEXTITEM 按位置     (win32)
-      3) switch_panel 的 UIA 回退      -> pywinauto TreeItem        (UIA)
-    而「超级策略」界面左侧的策略列表是一个自定义绘制的 Pane
-    (title='TacticsPanel', auto_id='103'), 内部策略项既不暴露文本也不暴露
-    auto_id, 上面三套方法都拿不到。本模块改用「截图 + RapidOCR」识别左面板
-    可见文字, 再换算屏幕坐标点击, 正好补齐第四种定位, 并可直接读出左面板数据。
-
-依赖(项目 requirements 已含):
-    rapidocr / onnxruntime / mss / opencv-python / numpy / pywin32 / pywinauto
-
-注意:
-    真实 GUI 点击需管理员权限 + 已登录客户端, 且必须在指定客户端做受控人工验证。
-"""
+"""超级策略自绘左菜单的快速 OCR 读取与安全点击。"""
 
 from __future__ import annotations
 
+import ctypes
+from contextlib import contextmanager
+import difflib
+import os
 import time
 import unicodedata
-import difflib
 
-import cv2
 import numpy as np
-import mss
+from PIL import Image
 import win32api
 import win32con
 import win32gui
-from pywinauto import Application, findwindows
+import win32ui
 
 
-TACTICS_PANEL_AUTO_ID = "103"
+TACTICS_PANEL_CONTROL_ID = 103
+TACTICS_SCROLLBAR_CONTROL_ID = 104
+TACTICS_PANEL_CLASS = "AfxWnd140u"
+TACTICS_PANEL_TEXT = "TacticsPanel"
+SUPER_TARGETS = {"牛市认购", "牛市认沽", "熊市认购", "熊市认沽"}
+# 菜单复位到顶部后，四个正式目标所在的逻辑像素单元格。位置只用于裁出
+# 单个文字块；是否可点击仍必须由 OCR 对该块进行精确文字校验。
+FORMAL_TARGET_CELLS = {
+    "牛市认购": (5, 200, 80, 242),
+    "牛市认沽": (82, 200, 158, 242),
+    "熊市认购": (5, 380, 80, 422),
+    "熊市认沽": (82, 380, 158, 422),
+}
 
 
-# ----------------------------------------------------------------------------
-# 基础工具(与下单/表格 OCR 脚本保持一致的实现语义)
-# ----------------------------------------------------------------------------
+class TacticsPanelError(RuntimeError):
+    """超级策略左菜单无法被唯一、安全地读取。"""
+
+
+@contextmanager
+def dpi_unaware():
+    """临时使用 DPI-unaware 坐标，使 PrintWindow 与控件矩形保持同一尺度。"""
+    user32 = ctypes.windll.user32
+    setter = getattr(user32, "SetThreadDpiAwarenessContext", None)
+    if setter is None:  # pragma: no cover - 旧版 Windows
+        yield
+        return
+    setter.restype = ctypes.c_void_p
+    setter.argtypes = [ctypes.c_void_p]
+    old = setter(ctypes.c_void_p(-1))  # DPI_AWARENESS_CONTEXT_UNAWARE
+    try:
+        yield
+    finally:
+        if old:
+            setter(ctypes.c_void_p(old))
+
+
 def _normalize(value: str) -> str:
-    """NFKC 归一化 + 抹平全角空格, 用于中英文菜单文本比对。"""
-    return unicodedata.normalize("NFKC", value).replace("\u3000", " ").strip()
+    return unicodedata.normalize("NFKC", str(value or "")).replace("\u3000", " ").strip()
+
+
+def _as_hwnd(window) -> int:
+    if isinstance(window, int):
+        return int(window)
+    return int(window.handle)
+
+
+def _enum_descendants(hwnd: int) -> list[int]:
+    found: list[int] = []
+    win32gui.EnumChildWindows(int(hwnd), lambda child, _: found.append(child), None)
+    return found
+
+
+def _control_id(hwnd: int) -> int | None:
+    try:
+        return int(win32gui.GetDlgCtrlID(hwnd))
+    except Exception:
+        return None
+
+
+def _find_children(hwnd: int, *, class_name: str | None = None,
+                   control_id: int | None = None, visible: bool = True) -> list[int]:
+    result = []
+    for child in _enum_descendants(hwnd):
+        try:
+            if visible and not win32gui.IsWindowVisible(child):
+                continue
+            if class_name and win32gui.GetClassName(child) != class_name:
+                continue
+            if control_id is not None and _control_id(child) != control_id:
+                continue
+            result.append(child)
+        except Exception:
+            continue
+    return result
+
+
+def get_tactics_panel(window) -> int:
+    """返回唯一、可见且尺寸合理的 TacticsPanel HWND。"""
+    main_hwnd = _as_hwnd(window)
+    candidates = _find_children(
+        main_hwnd,
+        class_name=TACTICS_PANEL_CLASS,
+        control_id=TACTICS_PANEL_CONTROL_ID,
+        visible=True,
+    )
+    valid = []
+    for hwnd in candidates:
+        left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+        if (
+            win32gui.GetWindowText(hwnd) == TACTICS_PANEL_TEXT
+            and 100 <= right - left <= 500
+            and bottom - top >= 200
+        ):
+            valid.append(hwnd)
+    if len(valid) != 1:
+        raise TacticsPanelError(
+            f"TacticsPanel 定位不唯一（匹配数={len(valid)}）；请先进入超级策略界面"
+        )
+    return valid[0]
+
+
+def get_tactics_scrollbar(panel_hwnd: int) -> int:
+    matches = _find_children(
+        panel_hwnd,
+        class_name="QLScrollBar",
+        control_id=TACTICS_SCROLLBAR_CONTROL_ID,
+        visible=True,
+    )
+    if len(matches) != 1:
+        raise TacticsPanelError(f"超级策略滚动条定位不唯一（匹配数={len(matches)}）")
+    return matches[0]
 
 
 def _get_rapid_ocr():
-    """初始化 RapidOCR 实例(单例)。"""
-    if getattr(_get_rapid_ocr, "_instance", None) is None:
+    """进程内只初始化一次 OCR 模型。"""
+    instance = getattr(_get_rapid_ocr, "_instance", None)
+    if instance is None:
         try:
             from rapidocr import RapidOCR
-        except Exception as e:  # pragma: no cover - 依赖缺失提示
-            raise RuntimeError(
-                f"rapidocr 导入失败: {e}；请执行 pip install rapidocr onnxruntime"
-            ) from e
-        _get_rapid_ocr._instance = RapidOCR()
-    return _get_rapid_ocr._instance
+        except Exception as exc:  # pragma: no cover - 部署依赖错误
+            raise TacticsPanelError(
+                f"rapidocr 导入失败: {exc}；请安装 rapidocr 与 onnxruntime"
+            ) from exc
+        instance = RapidOCR()
+        _get_rapid_ocr._instance = instance
+    return instance
 
 
-def _grab_region(left: int, top: int, right: int, bottom: int) -> np.ndarray:
-    """用 mss 截取屏幕矩形区域, 返回 RGB 的 np.ndarray。"""
-    monitor = {
-        "left": int(left),
-        "top": int(top),
-        "width": max(1, int(right - left)),
-        "height": max(1, int(bottom - top)),
-    }
-    with mss.MSS() as sct:
-        shot = sct.grab(monitor)
-        img = np.array(shot, dtype=np.uint8)
-    return cv2.cvtColor(img, cv2.COLOR_BGRA2RGB)
+def capture_window_image(hwnd: int) -> Image.Image:
+    """用 PrintWindow 截取 HWND；不依赖前台焦点，也不怕窗口被遮挡。"""
+    with dpi_unaware():
+        left, top, right, bottom = win32gui.GetWindowRect(int(hwnd))
+        width, height = right - left, bottom - top
+        if width <= 0 or height <= 0:
+            raise TacticsPanelError(f"窗口矩形无效: {(left, top, right, bottom)}")
+        window_dc = win32gui.GetWindowDC(int(hwnd))
+        source_dc = win32ui.CreateDCFromHandle(window_dc)
+        memory_dc = source_dc.CreateCompatibleDC()
+        bitmap = win32ui.CreateBitmap()
+        try:
+            bitmap.CreateCompatibleBitmap(source_dc, width, height)
+            memory_dc.SelectObject(bitmap)
+            if not ctypes.windll.user32.PrintWindow(
+                int(hwnd), memory_dc.GetSafeHdc(), 2
+            ):
+                raise TacticsPanelError("主窗口 PrintWindow 截图失败")
+            info = bitmap.GetInfo()
+            bits = bitmap.GetBitmapBits(True)
+            return Image.frombuffer(
+                "RGB",
+                (info["bmWidth"], info["bmHeight"]),
+                bits,
+                "raw",
+                "BGRX",
+                0,
+                1,
+            ).copy()
+        finally:
+            win32gui.DeleteObject(bitmap.GetHandle())
+            memory_dc.DeleteDC()
+            source_dc.DeleteDC()
+            win32gui.ReleaseDC(int(hwnd), window_dc)
 
 
-def _enlarge(img: np.ndarray, factor: float = 2.0) -> np.ndarray:
-    if factor and factor != 1.0:
-        h, w = img.shape[:2]
-        return cv2.resize(
-            img, (int(w * factor), int(h * factor)), interpolation=cv2.INTER_CUBIC
+def crop_child_from_main(main_image: Image.Image, main_hwnd: int, child_hwnd: int,
+                         *, right_crop: int = 0, top_limit: int | None = None,
+                         top_offset: int = 0,
+                         bottom_extra: int = 0) -> tuple[Image.Image, tuple[int, int]]:
+    """按 Win32 矩形从主窗口截图裁出子控件，并返回屏幕坐标原点。"""
+    with dpi_unaware():
+        main_left, main_top, _, _ = win32gui.GetWindowRect(int(main_hwnd))
+        left, top, right, bottom = win32gui.GetWindowRect(int(child_hwnd))
+    width = max(1, right - left - max(0, right_crop))
+    top_offset = max(0, int(top_offset))
+    height = max(1, bottom - top - top_offset + max(0, bottom_extra))
+    if top_limit is not None:
+        height = min(height, max(1, int(top_limit)))
+    x0, y0 = left - main_left, top - main_top + top_offset
+    x1 = min(main_image.width, x0 + width)
+    y1 = min(main_image.height, y0 + height)
+    if x0 < 0 or y0 < 0 or x1 <= x0 or y1 <= y0:
+        raise TacticsPanelError(
+            f"子控件裁剪越界: main={main_image.size}, child={(x0, y0, x1, y1)}"
         )
-    return img
+    return main_image.crop((x0, y0, x1, y1)), (left, top + top_offset)
 
 
-def _click_screen(x: int, y: int, delay: float = 0.3):
-    """绝对屏幕坐标点击(与现有 click_output_button 的鼠标方案一致)。"""
-    win32api.SetCursorPos((int(x), int(y)))
-    time.sleep(0.05)
-    win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0)
-    win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0)
+def _parse_ocr_output(output) -> list[tuple[object, str, float]]:
+    if output is None:
+        return []
+    if hasattr(output, "boxes"):
+        if output.boxes is None:
+            return []
+        return list(zip(output.boxes, output.txts, output.scores))
+    if isinstance(output, tuple) and len(output) == 3:
+        return list(zip(output[0], output[1], output[2]))
+    if isinstance(output, tuple) and len(output) == 2:
+        return list(output[0] or [])
+    return list(output)
+
+
+def ocr_image_items(image: Image.Image, *, screen_origin: tuple[int, int] = (0, 0),
+                    min_conf: float = 0.80, enlarge: float = 3.0,
+                    use_cls: bool = True) -> list[dict]:
+    """OCR 一张小区域截图并把结果换算为屏幕坐标。"""
+    if enlarge and enlarge != 1.0:
+        image = image.resize(
+            (max(1, int(image.width * enlarge)), max(1, int(image.height * enlarge))),
+            Image.Resampling.LANCZOS,
+        )
+    started = time.perf_counter()
+    output = _get_rapid_ocr()(
+        np.asarray(image), use_det=True, use_cls=bool(use_cls), use_rec=True
+    )
+    elapsed = time.perf_counter() - started
+    scale = float(enlarge or 1.0)
+    result = []
+    for box, text, score in _parse_ocr_output(output):
+        if float(score) < min_conf:
+            continue
+        xs = [float(point[0]) / scale for point in box]
+        ys = [float(point[1]) / scale for point in box]
+        left, right = min(xs), max(xs)
+        top, bottom = min(ys), max(ys)
+        result.append({
+            "text": str(text),
+            "score": float(score),
+            "left": screen_origin[0] + left,
+            "top": screen_origin[1] + top,
+            "right": screen_origin[0] + right,
+            "bottom": screen_origin[1] + bottom,
+            "cx": screen_origin[0] + (left + right) / 2,
+            "cy": screen_origin[1] + (top + bottom) / 2,
+            "ocr_elapsed": elapsed,
+        })
+    return result
+
+
+def ocr_single_line(image: Image.Image, *, min_conf: float = 0.80,
+                    enlarge: float = 3.0) -> dict | None:
+    """识别一个已经裁好的横向文字块，不再运行耗时的文字检测。"""
+    if enlarge and enlarge != 1.0:
+        image = image.resize(
+            (max(1, int(image.width * enlarge)), max(1, int(image.height * enlarge))),
+            Image.Resampling.LANCZOS,
+        )
+    started = time.perf_counter()
+    output = _get_rapid_ocr()(
+        np.asarray(image), use_det=False, use_cls=False, use_rec=True
+    )
+    elapsed = time.perf_counter() - started
+    texts = list(getattr(output, "txts", ()) or ())
+    scores = list(getattr(output, "scores", ()) or ())
+    if len(texts) != 1 or len(scores) != 1 or float(scores[0]) < min_conf:
+        return None
+    return {
+        "text": str(texts[0]),
+        "score": float(scores[0]),
+        "ocr_elapsed": elapsed,
+    }
+
+
+def _click_client(hwnd: int, x: int, y: int, *, delay: float = 0.25) -> None:
+    if not win32gui.IsWindow(int(hwnd)) or not win32gui.IsWindowEnabled(int(hwnd)):
+        raise TacticsPanelError(f"目标控件不可点击: hwnd={hwnd}")
+    with dpi_unaware():
+        left, top, right, bottom = win32gui.GetClientRect(int(hwnd))
+        if not (left <= x < right and top <= y < bottom):
+            raise TacticsPanelError(
+                f"点击坐标越界: hwnd={hwnd}, point={(x, y)}, rect={(left, top, right, bottom)}"
+            )
+        lparam = win32api.MAKELONG(int(x), int(y))
+        win32gui.SendMessage(
+            int(hwnd), win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, lparam
+        )
+        win32gui.SendMessage(int(hwnd), win32con.WM_LBUTTONUP, 0, lparam)
     time.sleep(delay)
 
 
-def _find_scrollbar(panel_hwnd: int):
-    """在面板下找 QLScrollBar 的 HWND(用于 WM_VSCROLL 滚动)。"""
-    found = []
-    def cb(h, _):
-        try:
-            if win32gui.GetClassName(h) == "QLScrollBar":
-                found.append(h)
-        except Exception:
-            pass
-    try:
-        win32gui.EnumChildWindows(panel_hwnd, cb, None)
-    except Exception:
-        pass
-    return found[0] if found else None
+def reset_tactics_scroll(panel_hwnd: int, clicks: int = 32) -> None:
+    """点击自绘 QLScrollBar 的向上箭头，确定性回到菜单顶部。"""
+    scrollbar = get_tactics_scrollbar(panel_hwnd)
+    with dpi_unaware():
+        _, _, right, bottom = win32gui.GetClientRect(scrollbar)
+    x, y = max(1, right // 2), max(1, min(bottom - 1, 8))
+    lparam = win32api.MAKELONG(x, y)
+    for _ in range(max(0, int(clicks))):
+        win32gui.SendMessage(
+            scrollbar, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, lparam
+        )
+        win32gui.SendMessage(scrollbar, win32con.WM_LBUTTONUP, 0, lparam)
+    time.sleep(0.2)
 
 
-def _scroll_panel(panel, delta: int = -120, times: int = 1):
-    """滚动超级策略左面板(向下 delta<0)。
-
-    现场观察: 该面板对鼠标滚轮无响应, 仅 QLScrollBar 可控。
-    故优先向 QLScrollBar 发 WM_VSCROLL(SB_PAGEDOWN, 一次翻一页);
-    找不到滚动条时再向面板发 WM_MOUSEWHEEL 兜底。
-    """
-    panel_hwnd = int(panel.handle)
-    sb_hwnd = _find_scrollbar(panel_hwnd)
-    r = panel.rectangle()
-    cx = (r.left + r.right) // 2
-    cy = (r.top + r.bottom) // 2
-    WM_MOUSEWHEEL = 0x020A
-    for _ in range(times):
-        if sb_hwnd:
-            try:
-                win32gui.SendMessage(
-                    sb_hwnd, win32con.WM_VSCROLL, win32con.SB_PAGEDOWN, 0
-                )
-            except Exception:
-                pass
-        else:
-            try:
-                wparam = win32api.MAKELONG(0, delta)
-                lparam = win32api.MAKELONG(cx, cy)
-                win32gui.SendMessage(panel_hwnd, WM_MOUSEWHEEL, wparam, lparam)
-            except Exception:
-                pass
-        time.sleep(0.25)
+def _page_down(panel_hwnd: int, clicks: int = 18) -> None:
+    scrollbar = get_tactics_scrollbar(panel_hwnd)
+    with dpi_unaware():
+        _, _, right, bottom = win32gui.GetClientRect(scrollbar)
+    x, y = max(1, right // 2), max(1, bottom - 8)
+    lparam = win32api.MAKELONG(x, y)
+    for _ in range(max(1, int(clicks))):
+        win32gui.PostMessage(
+            scrollbar, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, lparam
+        )
+        win32gui.PostMessage(scrollbar, win32con.WM_LBUTTONUP, 0, lparam)
+    time.sleep(0.35)
 
 
-# ----------------------------------------------------------------------------
-# 左面板识别
-# ----------------------------------------------------------------------------
-def get_tactics_panel(win):
-    """返回 TacticsPanel 的 UIA Pane 元素; 找不到抛错。"""
-    panel = win.child_window(auto_id=TACTICS_PANEL_AUTO_ID, control_type="Pane")
-    panel.wait("ready", timeout=5)
-    return panel
-
-
-def _panel_rect_screen(panel):
-    """取面板屏幕矩形, 返回 dict(left,top,right,bottom)。"""
-    r = panel.rectangle()
-    return {"left": r.left, "top": r.top, "right": r.right, "bottom": r.bottom}
-
-
-def _ocr_panel_items(panel, min_conf: float = 0.30, enlarge: float = 2.0,
-                     right_crop_px: int = 20):
-    """对当前可见的面板区域做 OCR, 返回屏幕坐标的项列表。
-
-    每项: {text, score, left, top, right, bottom, cx, cy}
-
-    right_crop_px: 裁掉右侧滚动条区域(现场确认左面板唯一子控件是
-        class='QLScrollBar', 位于右缘约 18px), 避免 OCR 误识箭头/滑块。
-    """
-    rect = _panel_rect_screen(panel)
-    right = max(rect["left"] + 1, rect["right"] - right_crop_px)
-    img = _grab_region(rect["left"], rect["top"], right, rect["bottom"])
-    img = _enlarge(img, enlarge)
-
-    engine = _get_rapid_ocr()
-    out = engine(img)
-    # 兼容多种返回格式:
-    #  - rapidocr_onnxruntime: (boxes, txts, scores) 三元组
-    #  - rapidocr 新版: RapidOCROutput 对象(.boxes/.txts/.scores)
-    #  - 旧式 (result, elapse): result 为 [[box, text, score], ...]
-    if hasattr(out, "boxes"):
-        result = list(zip(out.boxes, out.txts, out.scores))
-    elif isinstance(out, tuple) and len(out) == 3:
-        result = list(zip(out[0], out[1], out[2]))
-    elif isinstance(out, tuple) and len(out) == 2 and isinstance(out[0], list):
-        result = out[0]
-    else:
-        result = list(out)
-    # result 元素是 (box, text, score)
-    items = []
-    scale = enlarge or 1.0
-    for box, text, score in result:
-        xs = [float(p[0]) / scale for p in box]
-        ys = [float(p[1]) / scale for p in box]
-        left, right = min(xs), max(xs)
-        top, bottom = min(ys), max(ys)
-        # 图内坐标(已除回原始缩放) -> 屏幕坐标
-        sx = rect["left"] + (left + right) / 2
-        sy = rect["top"] + (top + bottom) / 2
-        items.append({
-            "text": text,
-            "score": float(score),
-            "left": rect["left"] + left,
-            "top": rect["top"] + top,
-            "right": rect["left"] + right,
-            "bottom": rect["top"] + bottom,
-            "cx": sx,
-            "cy": sy,
-        })
-    items = [it for it in items if it["score"] >= min_conf]
-    return items
-
-
-def list_tactics_items(win, *, min_conf: float = 0.30, enlarge: float = 2.0,
-                       scroll_pages: int = 0):
-    """获取左面板当前可见(及向下翻页)的策略项文字列表。
-
-    返回按出现顺序排列的项 dict 列表, 每项含 screen 坐标,
-    可直接用于「读取左侧菜单数据」或后续点击。
-    """
-    panel = get_tactics_panel(win)
-    seen: list[dict] = []
-    seen_keys = set()
-    for page in range(scroll_pages + 1):
-        items = _ocr_panel_items(panel, min_conf=min_conf, enlarge=enlarge)
-        for it in items:
-            key = (it["text"], round(it["cy"]))
-            if key in seen_keys:
-                continue
-            seen_keys.add(key)
-            seen.append(it)
-        if page < scroll_pages:
-            _scroll_panel(panel, delta=-120, times=1)
-            time.sleep(0.25)
-    return seen
-
-
-# ----------------------------------------------------------------------------
-# 定位 + 点击
-# ----------------------------------------------------------------------------
-def click_tactics_item(win, target: str, *,
-                       fuzzy: bool = True,
-                       fuzzy_threshold: float = 0.72,
-                       min_conf: float = 0.30,
-                       enlarge: float = 2.0,
-                       scroll_pages: int = 3,
-                       click_offset: tuple = (0, 0),
-                       delay: float = 0.3):
-    """在超级策略左面板找到目标并点击。
-
-    Args:
-        win: 主窗口(pywinauto window)
-        target: 目标策略项文字, 如 "垂直价差" / "牛市价差"
-        fuzzy: 是否模糊匹配(推荐, 抗 OCR 轻微误识)
-        scroll_pages: 目标不在当前视图时, 向下翻页 OCR 的最大次数
-        click_offset: 点击中心相对偏移(像素), 用于微调落点
-    Returns:
-        命中的项 dict(含屏幕坐标); 未命中抛 RuntimeError
-    """
-    panel = get_tactics_panel(win)
-    norm_target = _normalize(target)
-
-    def _match(items):
-        best = None
-        best_ratio = 0.0
-        for it in items:
-            norm_text = _normalize(it["text"])
-            if fuzzy:
-                ratio = difflib.SequenceMatcher(None, norm_target, norm_text).ratio()
-                if ratio > best_ratio:
-                    best_ratio, best = ratio, it
-            else:
-                if norm_text == norm_target:
-                    return it, 1.0
-        if fuzzy and best is not None and best_ratio >= fuzzy_threshold:
-            return best, best_ratio
-        return None, best_ratio
-
-    for page in range(scroll_pages + 1):
-        items = _ocr_panel_items(panel, min_conf=min_conf, enlarge=enlarge)
-        hit, ratio = _match(items)
-        if hit is not None:
-            cx = int(hit["cx"] + click_offset[0])
-            cy = int(hit["cy"] + click_offset[1])
-            print(
-                f"[OK] 命中左面板项 {hit['text']!r} "
-                f"(置信={hit['score']:.2f}, 匹配度={ratio:.2f}) -> 点击 ({cx},{cy})"
-            )
-            _click_screen(cx, cy, delay=delay)
-            return hit
-        if page < scroll_pages:
-            _scroll_panel(panel, delta=-120, times=1)
-            time.sleep(0.25)
-
-    raise RuntimeError(
-        f"超级策略左面板未找到 {target!r}（已翻 {scroll_pages} 页，"
-        "请确认文字、或调大 scroll_pages / 检查面板 auto_id=103）"
+def _ocr_current_panel(main_hwnd: int, panel_hwnd: int, *,
+                       top_limit: int | None = None,
+                       top_offset: int = 0,
+                       min_conf: float = 0.80,
+                       enlarge: float = 2.5) -> tuple[list[dict], Image.Image]:
+    main_image = capture_window_image(main_hwnd)
+    panel_image, origin = crop_child_from_main(
+        main_image,
+        main_hwnd,
+        panel_hwnd,
+        right_crop=20,
+        top_limit=top_limit,
+        top_offset=top_offset,
+    )
+    return (
+        ocr_image_items(
+            panel_image,
+            screen_origin=origin,
+            min_conf=min_conf,
+            enlarge=enlarge,
+        ),
+        panel_image,
     )
 
 
-def click_tactics_item_by_index(win, index: int, *,
-                                item_height: int = 30,
-                                top_padding: int = 6,
-                                click_offset: tuple = (0, 0),
-                                delay: float = 0.3):
-    """非 OCR 回退: 按行号点击(假设策略项等高排列)。
+def list_tactics_items(window, *, min_conf: float = 0.80, enlarge: float = 2.5,
+                       scroll_pages: int = 0, reset_to_top: bool = True) -> list[dict]:
+    """读取左菜单；截图来自主窗口，因此窗口被遮挡时也能工作。"""
+    main_hwnd = _as_hwnd(window)
+    panel_hwnd = get_tactics_panel(main_hwnd)
+    if reset_to_top:
+        reset_tactics_scroll(panel_hwnd)
+    seen = set()
+    result = []
+    for page in range(max(0, int(scroll_pages)) + 1):
+        items, _ = _ocr_current_panel(
+            main_hwnd, panel_hwnd, min_conf=min_conf, enlarge=enlarge
+        )
+        for item in items:
+            key = _normalize(item["text"])
+            if key and key not in seen:
+                seen.add(key)
+                result.append(item)
+        if page < scroll_pages:
+            _page_down(panel_hwnd)
+    return result
 
-    当左面板项是图标/无文字、OCR 读不到时可用。index 从 0 开始。
-    """
-    panel = get_tactics_panel(win)
-    rect = _panel_rect_screen(panel)
-    cx = (rect["left"] + rect["right"]) // 2 + click_offset[0]
-    cy = rect["top"] + top_padding + item_height * (index + 0.5) + click_offset[1]
-    if cy > rect["bottom"]:
-        raise RuntimeError(f"第 {index} 行超出面板范围")
-    print(f"[OK] 按行号点击左面板第 {index} 项 -> ({cx},{cy})")
-    _click_screen(cx, cy, delay=delay)
-    return {"cx": cx, "cy": cy, "index": index}
+
+def _match_target(items: list[dict], target: str, *, fuzzy_threshold: float) -> dict | None:
+    normalized = _normalize(target)
+    exact = [item for item in items if _normalize(item["text"]) == normalized]
+    if len(exact) == 1:
+        return exact[0]
+    if len(exact) > 1:
+        raise TacticsPanelError(f"OCR 重复识别到 {target!r}，拒绝选择")
+
+    ranked = []
+    for item in items:
+        ratio = difflib.SequenceMatcher(
+            None, normalized, _normalize(item["text"])
+        ).ratio()
+        if ratio >= fuzzy_threshold:
+            ranked.append((ratio, item))
+    ranked.sort(key=lambda pair: pair[0], reverse=True)
+    if not ranked:
+        return None
+    if len(ranked) > 1 and abs(ranked[0][0] - ranked[1][0]) < 0.03:
+        raise TacticsPanelError(f"{target!r} 存在多个相近 OCR 结果，拒绝选择")
+    return ranked[0][1]
 
 
-if __name__ == "__main__":  # pragma: no cover - 手动调试入口
-    import os
-    import sys
-    # 直接运行 core/tactics_panel.py 时, 把项目根目录加入路径, 使 `core` 包可导入
-    _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    if _root not in sys.path:
-        sys.path.insert(0, _root)
-    from core.window import find_window, activate_window
+def _recognize_formal_target(main_hwnd: int, panel_hwnd: int, target: str,
+                             min_conf: float = 0.80) -> dict | None:
+    """识别单个已知菜单格，跳过耗时的整页文字检测。"""
+    rect = FORMAL_TARGET_CELLS[target]
+    main_image = capture_window_image(main_hwnd)
+    panel_image, origin = crop_child_from_main(
+        main_image, main_hwnd, panel_hwnd, right_crop=20
+    )
+    left, top, right, bottom = rect
+    if right > panel_image.width or bottom > panel_image.height:
+        return None
+    cell = panel_image.crop(rect).resize(
+        ((right - left) * 3, (bottom - top) * 3), Image.Resampling.LANCZOS
+    )
+    started = time.perf_counter()
+    output = _get_rapid_ocr()(
+        np.asarray(cell), use_det=False, use_cls=False, use_rec=True
+    )
+    elapsed = time.perf_counter() - started
+    texts = list(getattr(output, "txts", ()) or ())
+    scores = list(getattr(output, "scores", ()) or ())
+    if len(texts) != 1 or len(scores) != 1:
+        return None
+    if _normalize(texts[0]) != _normalize(target) or float(scores[0]) < min_conf:
+        print(
+            f"[WARN] 快速菜单格校验未通过: 期望={target!r}, "
+            f"识别={texts[0]!r}, 置信度={float(scores[0]):.3f}"
+        )
+        return None
+    return {
+        "text": str(texts[0]),
+        "score": float(scores[0]),
+        "left": origin[0] + left,
+        "top": origin[1] + top,
+        "right": origin[0] + right,
+        "bottom": origin[1] + bottom,
+        "cx": origin[0] + (left + right) / 2,
+        "cy": origin[1] + (top + bottom) / 2,
+        "ocr_elapsed": elapsed,
+        "mode": "recognition_only",
+    }
 
-    hwnd = find_window("钱龙模拟期权宝")
-    app = Application(backend="uia").connect(handle=hwnd)
-    win = app.window(handle=hwnd)
-    win.set_focus()
 
-    items = list_tactics_items(win, scroll_pages=2)
-    print(f"左面板可见项({len(items)}个):")
-    for it in items:
-        print(f"  - {it['text']!r}  @({it['cx']:.0f},{it['cy']:.0f})")
+def _save_failure(image: Image.Image, target: str) -> str:
+    directory = os.environ.get("GUI_SUPER_ARTIFACT_DIR") or os.path.join(
+        os.environ.get("TEMP") or os.getcwd(), "qianlong_auto_super_strategy"
+    )
+    os.makedirs(directory, exist_ok=True)
+    safe_target = "".join(ch for ch in target if ch.isalnum()) or "unknown"
+    path = os.path.join(
+        directory,
+        f"菜单识别失败_{safe_target}_{time.strftime('%Y%m%d_%H%M%S')}.png",
+    )
+    image.save(path)
+    return path
 
-    click_tactics_item(win, "买入认购")
+
+def click_tactics_item(window, target: str, *, min_conf: float = 0.80,
+                       enlarge: float = 2.5, fuzzy_threshold: float = 0.88,
+                       scroll_pages: int = 0, delay: float = 0.5) -> dict:
+    """OCR 唯一命中目标后，以面板消息点击；不会使用裸屏幕坐标。"""
+    main_hwnd = _as_hwnd(window)
+    panel_hwnd = get_tactics_panel(main_hwnd)
+    reset_tactics_scroll(panel_hwnd)
+    if target in FORMAL_TARGET_CELLS:
+        hit = _recognize_formal_target(
+            main_hwnd, panel_hwnd, target, min_conf=min_conf
+        )
+        if hit is not None:
+            with dpi_unaware():
+                left, top, _, _ = win32gui.GetWindowRect(panel_hwnd)
+            _click_client(
+                panel_hwnd,
+                int(round(hit["cx"] - left)),
+                int(round(hit["cy"] - top)),
+                delay=delay,
+            )
+            print(
+                f"[OK] OCR 快速校验并点击 {target!r}: "
+                f"置信度={hit['score']:.3f}, OCR={hit['ocr_elapsed']:.2f}s"
+            )
+            return hit
+
+        # 自绘滚动条偶尔会丢失一轮消息；再次复位后才进入整页检测回退。
+        reset_tactics_scroll(panel_hwnd)
+    last_image = None
+    for page in range(max(0, int(scroll_pages)) + 1):
+        # 当前四个正式策略都位于顶部 440px 内，缩小 OCR 区域可显著提速。
+        formal_target = page == 0 and target in SUPER_TARGETS
+        top_offset = 160 if formal_target else 0
+        top_limit = 280 if formal_target else None
+        items, last_image = _ocr_current_panel(
+            main_hwnd,
+            panel_hwnd,
+            top_limit=top_limit,
+            top_offset=top_offset,
+            min_conf=min_conf,
+            enlarge=enlarge,
+        )
+        hit = _match_target(items, target, fuzzy_threshold=fuzzy_threshold)
+        if hit is not None:
+            with dpi_unaware():
+                left, top, _, _ = win32gui.GetWindowRect(panel_hwnd)
+            x, y = int(round(hit["cx"] - left)), int(round(hit["cy"] - top))
+            _click_client(panel_hwnd, x, y, delay=delay)
+            print(
+                f"[OK] OCR 命中并点击 {hit['text']!r}: "
+                f"置信度={hit['score']:.3f}, OCR={hit['ocr_elapsed']:.2f}s"
+            )
+            return hit
+        if page < scroll_pages:
+            _page_down(panel_hwnd)
+
+    artifact = _save_failure(last_image, target) if last_image is not None else ""
+    raise TacticsPanelError(
+        f"超级策略左菜单未唯一识别到 {target!r}；截图={artifact or '无'}"
+    )

@@ -21,9 +21,9 @@ window.set_focus()  # 激活窗口
 
 # lock.click()
 
-window.print_control_identifiers(depth=None,filename='国泰海通.txt')  # 获取所有组件
+window.print_control_identifiers(depth=None,filename='国泰海通1.txt')  # 获取所有组件
 # 尝试用gbk读取，用utf-8保存
-with open('国泰海通.txt', 'r', encoding='gbk', errors='ignore') as f:
+with open('国泰海通1.txt', 'r', encoding='gbk', errors='ignore') as f:
     content = f.read()
-with open('国泰海通.txt', 'w', encoding='utf-8') as f:
+with open('国泰海通1.txt', 'w', encoding='utf-8') as f:
     f.write(content)

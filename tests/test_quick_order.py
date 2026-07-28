@@ -14,6 +14,7 @@ import win32con
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = (
     PROJECT_ROOT
+    / "行情交易"
     / "下单"
     / "自动化下单"
     / "4.快速下单_自动化下单_Excel驱动版.py"

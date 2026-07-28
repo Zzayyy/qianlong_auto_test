@@ -19,6 +19,9 @@ except ImportError:
 from config import (
     get_scripts_config,
     CATEGORIES,
+    MODULE_GROUPS,
+    SUPER_STRATEGY_CATEGORIES,
+    get_module_for_category,
     load_user_config,
     save_user_config,
     get_output_dir,
@@ -107,6 +110,9 @@ class AutomationGUI:
         self.order_qty = tk.IntVar(value=1)
         self.countdown_sec = tk.IntVar(value=3)
         self.xlsx_file = tk.StringVar(value="")
+        self.super_add_underlying = tk.BooleanVar(
+            value=self.user_config.get("super_add_underlying", False)
+        )
 
         # 期权下单_一键导出 参数
         self.export_target_position = tk.BooleanVar(value=True)  # 持仓
@@ -417,39 +423,59 @@ class AutomationGUI:
         self.paned.sashpos(0, target)
 
     def _build_script_tree(self):
-        """根据当前客户端重建左侧「分类 -> 脚本」树（对应软件菜单、过滤不支持的）"""
+        """重建左侧「一级模块 -> 分类 -> 脚本」树。"""
         self.script_tree.delete(*self.script_tree.get_children())
         self.tree_script_map.clear()
         scripts_config = get_scripts_config(self.client_id)
-        for category in CATEGORIES:
-            scripts = scripts_config.get(category, [])
-            if not scripts:
-                # 该客户端无此分类的任何脚本，则不显示该分类
+        for module, categories in MODULE_GROUPS.items():
+            available = [c for c in categories if scripts_config.get(c)]
+            if not available:
                 continue
-            cat_iid = f"cat::{category}"
-            self.script_tree.insert("", tk.END, iid=cat_iid, text=category, open=False)
-            for s in scripts:
-                # iid 必须唯一：查询类脚本现已统一指向同一驱动文件，故用 query_key 区分
-                sid_iid = f"script::{category}::{s.get('query_key') or s['path']}"
-                self.script_tree.insert(cat_iid, tk.END, iid=sid_iid, text=s["name"])
-                self.tree_script_map[sid_iid] = {"script": s, "category": category}
+            module_iid = f"module::{module}"
+            self.script_tree.insert(
+                "", tk.END, iid=module_iid, text=module, open=(module == "行情交易")
+            )
+            for category in available:
+                scripts = scripts_config[category]
+                # 超级策略和交易系统设置本身就是一级模块，避免显示同名中间节点。
+                if len(categories) == 1 and category == module:
+                    parent_iid = module_iid
+                else:
+                    parent_iid = f"cat::{category}"
+                    self.script_tree.insert(
+                        module_iid, tk.END, iid=parent_iid, text=category, open=False
+                    )
+                for s in scripts:
+                    # iid 必须唯一：查询类脚本共用驱动文件，故用 query_key 区分。
+                    sid_iid = f"script::{category}::{s.get('query_key') or s['path']}"
+                    self.script_tree.insert(parent_iid, tk.END, iid=sid_iid, text=s["name"])
+                    self.tree_script_map[sid_iid] = {"script": s, "category": category}
 
     def _rebuild_func_menu(self):
-        """重建「功能」菜单，仅列出当前客户端支持的分类"""
+        """重建「功能」菜单，按三个一级模块组织可用分类。"""
         self.func_menu.delete(0, tk.END)
         scripts_config = get_scripts_config(self.client_id)
-        for category in CATEGORIES:
-            if scripts_config.get(category):
-                self.func_menu.add_command(
+        for module, categories in MODULE_GROUPS.items():
+            available = [c for c in categories if scripts_config.get(c)]
+            if not available:
+                continue
+            submenu = tk.Menu(self.func_menu, tearoff=0)
+            for category in available:
+                submenu.add_command(
                     label=category,
-                    command=lambda c=category: self._select_category(c)
+                    command=lambda c=category: self._select_category(c),
                 )
+            self.func_menu.add_cascade(label=module, menu=submenu)
 
     def _select_category(self, category):
         """选中某个功能分类（来自树节点或功能菜单）"""
         self.current_category = category
         self.category_label.config(text=f"当前功能: {category}")
-        # 展开对应分类节点
+        # 展开所属一级模块和对应分类节点。
+        module = get_module_for_category(category)
+        module_iid = f"module::{module}"
+        if module and self.script_tree.exists(module_iid):
+            self.script_tree.item(module_iid, open=True)
         cat_iid = f"cat::{category}"
         if self.script_tree.exists(cat_iid):
             self.script_tree.item(cat_iid, open=True)
@@ -480,7 +506,7 @@ class AutomationGUI:
             self._rebuild_params()
             self._update_paths_for_selected_script()
             self._update_params_for_selected_script()
-        else:
+        elif iid.startswith("cat::"):
             # 选中分类节点：设为当前功能（展开/折叠改到鼠标抬起时处理，见 _on_tree_release）
             category = iid.split("::", 1)[1]
             self.current_category = category
@@ -488,6 +514,9 @@ class AutomationGUI:
             self._rebuild_params()
             # 仅下单显示数据预览（其它分类隐藏并清空残留数据）
             self._update_preview_visibility(category == "下单")
+        else:
+            # 一级模块节点只负责展开/折叠，不把模块名当成可执行分类。
+            self._update_preview_visibility(False)
 
     def _on_tree_double_click(self, event):
         """双击树：仅当双击具体脚本节点时才执行，双击分类节点只展开/收起"""
@@ -888,6 +917,8 @@ class AutomationGUI:
                 self._build_capture_params()
             else:
                 self._build_settings_params()
+        elif self.current_category in SUPER_STRATEGY_CATEGORIES:
+            self._build_super_strategy_params()
 
     def _update_params_for_selected_script(self):
         """根据选中的脚本更新参数面板"""
@@ -1022,6 +1053,19 @@ class AutomationGUI:
         ).grid(row=1, column=0, columnspan=3, sticky=tk.W, pady=5)
 
         self.params_frame.columnconfigure(1, weight=1)
+
+    def _build_super_strategy_params(self):
+        """超级策略参数：是否在一键开仓前点击“加入标的”。"""
+        ttk.Checkbutton(
+            self.params_frame,
+            text="加入标的（可选）",
+            variable=self.super_add_underlying,
+        ).grid(row=0, column=0, sticky=tk.W, pady=5)
+        ttk.Label(
+            self.params_frame,
+            text="启用后：选择策略 → 加入标的 → 一键开仓；关闭时跳过加入标的。",
+            foreground="gray",
+        ).grid(row=1, column=0, sticky=tk.W, pady=5)
 
     def _is_capture_script_selected(self) -> bool:
         """当前选中的脚本是否为“抓取自定义标准”（按元数据标记判断，名字可随意改）"""
@@ -1440,7 +1484,7 @@ class AutomationGUI:
             self._drag_occurred = False
             return
         iid = self.script_tree.identify_row(event.y)
-        if not iid or not iid.startswith("cat::"):
+        if not iid or not iid.startswith(("cat::", "module::")):
             return
         # 仅当抬起位置就是当前选中的分类节点时才切换
         sel = self.script_tree.selection()
@@ -1494,6 +1538,7 @@ class AutomationGUI:
         # 保存当前配置
         self.user_config["export_format"] = self.export_format.get()
         self.user_config["auto_open"] = self.auto_open.get()
+        self.user_config["super_add_underlying"] = self.super_add_underlying.get()
         if self.current_category == "交易系统设置":
             set_output_dir(self.user_config, "交易系统设置", self.settings_output_dir.get())
         save_user_config(self.user_config)
@@ -1570,6 +1615,11 @@ class AutomationGUI:
                 self._log(f"抓取面板: {', '.join(n for n in self._capturable_panels() if self.capture_panels.get(n) and self.capture_panels[n].get())}")
             else:
                 self._log(f"输出路径: {self.settings_output_dir.get()}")
+        elif self.current_category in SUPER_STRATEGY_CATEGORIES:
+            self._log(
+                f"加入标的: {'是' if self.super_add_underlying.get() else '否'}"
+            )
+            self._log("下单动作: 一键开仓")
 
         self._log(f"{'='*60}")
         self.logger.info(f"开始执行: {script['name']}")
@@ -1593,6 +1643,7 @@ class AutomationGUI:
             "export_targets": export_targets or [],
             "export_output_dir": self.export_output_dir.get(),
             "settings_output_dir": self.settings_output_dir.get(),
+            "super_add_underlying": self.super_add_underlying.get(),
             "client_id": self.client_id,
             "capture_panels": [n for n in self._capturable_panels()
                                if self.capture_panels.get(n) and self.capture_panels[n].get()],
@@ -1810,6 +1861,8 @@ class AutomationGUI:
 
     # ====================== 执行结果回调（运行在 runner 线程，统一切回主线程更新 UI） ======================
     def _on_run_finish(self, return_code, elapsed, task):
+        login_message = getattr(task, "login_required_message", "")
+        trading_time_message = getattr(task, "trading_time_message", "")
         # 任务中心顺序执行模式：回调转交任务中心处理
         if self._task_mode:
             def _tc_finish():
@@ -1826,7 +1879,7 @@ class AutomationGUI:
                 self._set_status(f"完成: {task.name} (用时 {elapsed:.1f}s)")
             else:
                 status = STATUS_FAILED
-                detail = f"退出码: {return_code}"
+                detail = login_message or trading_time_message or f"退出码: {return_code}"
                 self._log(f"\n[错误] {task.name} 执行失败，退出码: {return_code}")
                 self.logger.error(f"执行失败: {task.name}, 退出码: {return_code}")
                 self._set_status(f"失败: {task.name} (用时 {elapsed:.1f}s)")

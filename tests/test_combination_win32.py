@@ -231,7 +231,7 @@ class WorkflowModeTests(unittest.TestCase):
             ("2.拆分申报_全自动.py", "split"),
         )
         for filename, expected_action in entries:
-            path = PROJECT_ROOT / "组合申报" / filename
+            path = PROJECT_ROOT / "行情交易" / "组合申报" / filename
             spec = importlib.util.spec_from_file_location(
                 f"entry_{expected_action}", path
             )
@@ -267,6 +267,17 @@ class GuiTaskEnvironmentTests(unittest.TestCase):
             {"name": "组合申报", "path": "unused.py"}, "组合申报"
         )
         self.assertNotIn("GUI_DRY_RUN", task.build_env(str(PROJECT_ROOT)))
+
+    def test_task_environment_passes_optional_super_underlying_flag(self):
+        task = self.task_module.Task(
+            {"name": "牛市认购", "path": "strategy.py"},
+            "牛市认购",
+            {"super_add_underlying": True},
+        )
+        self.assertEqual(
+            task.build_env(str(PROJECT_ROOT))["GUI_SUPER_ADD_UNDERLYING"],
+            "True",
+        )
 
 
 class DialogStateMachineTests(unittest.TestCase):
