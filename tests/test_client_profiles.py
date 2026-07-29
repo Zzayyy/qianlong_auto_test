@@ -113,12 +113,20 @@ class QianlongClientProfileTests(unittest.TestCase):
         scripts = module.get_scripts_config("guotai_haitong")
         self.assertEqual(
             [script["name"] for script in scripts["超级策略"]],
-            ["牛市认沽", "牛市认购", "熊市认沽", "熊市认购"],
+            [
+                "牛市认沽",
+                "牛市认购",
+                "熊市认沽",
+                "熊市认购",
+                "卖出跨式",
+                "卖宽跨式",
+            ],
         )
         for script in scripts["超级策略"]:
             self.assertTrue(script["path"].endswith(
                 f"超级策略\\{script['name']}_一键开仓.py"
             ))
+            self.assertTrue(Path(script["path"]).is_file())
 
     def test_both_clients_declare_workspace_fingerprints(self):
         for client in self.clients:

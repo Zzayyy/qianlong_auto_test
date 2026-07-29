@@ -559,11 +559,27 @@ class RealMouseClickTests(unittest.TestCase):
 
 
 class TacticsOcrTests(unittest.TestCase):
-    def test_four_formal_targets_have_distinct_fast_ocr_cells(self):
+    def test_six_formal_targets_have_distinct_fast_ocr_cells(self):
         self.assertEqual(set(tactics_panel.FORMAL_TARGET_CELLS), tactics_panel.SUPER_TARGETS)
         self.assertEqual(
             len(set(tactics_panel.FORMAL_TARGET_CELLS.values())),
             len(tactics_panel.SUPER_TARGETS),
+        )
+
+    def test_shared_driver_and_menu_support_the_same_targets(self):
+        self.assertEqual(
+            set(super_strategy.SUPER_STRATEGY_TARGETS),
+            tactics_panel.SUPER_TARGETS,
+        )
+
+    def test_neutral_strategy_targets_use_verified_top_page_cells(self):
+        self.assertEqual(
+            tactics_panel.FORMAL_TARGET_CELLS["卖出跨式"],
+            (5, 540, 80, 582),
+        )
+        self.assertEqual(
+            tactics_panel.FORMAL_TARGET_CELLS["卖宽跨式"],
+            (82, 540, 158, 582),
         )
 
     def test_exact_target_match_wins(self):

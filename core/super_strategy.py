@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""超级策略四类一键开仓的共享驱动。"""
+"""超级策略六类一键开仓的共享驱动。"""
 
 from __future__ import annotations
 
@@ -30,6 +30,14 @@ from core.workspace import WORKSPACE_SUPER, ensure_workspace
 
 ACTION_PANEL_CONTROL_ID = 128
 ACTION_PANEL_CLASS = "AfxWnd140u"
+SUPER_STRATEGY_TARGETS = frozenset({
+    "牛市认购",
+    "牛市认沽",
+    "熊市认购",
+    "熊市认沽",
+    "卖出跨式",
+    "卖宽跨式",
+})
 ADD_UNDERLYING_TEXT = "加入标的"
 OPEN_POSITION_TEXT = "一键开仓"
 ACTION_CACHE_VERSION = 1
@@ -929,7 +937,7 @@ def wait_after_open(main_hwnd: int, before_windows: set[int],
 def run_strategy(target: str, *, add_underlying: bool | None = None,
                  execute_open: bool = True) -> dict:
     """执行：自动进入超级策略 → OCR 选菜单 → 可选加入标的 → 一键开仓。"""
-    if target not in {"牛市认购", "牛市认沽", "熊市认购", "熊市认沽"}:
+    if target not in SUPER_STRATEGY_TARGETS:
         raise ValueError(f"不支持的超级策略: {target!r}")
     client_id = os.environ.get("GUI_CLIENT_ID") or get_default_client_id()
     client = get_client(client_id)

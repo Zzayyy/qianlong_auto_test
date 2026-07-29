@@ -217,6 +217,8 @@ SCRIPTS_CONFIG = {
         {"name": "牛市认购", "path": rf"{PROJECT_ROOT}\超级策略\牛市认购_一键开仓.py"},
         {"name": "熊市认沽", "path": rf"{PROJECT_ROOT}\超级策略\熊市认沽_一键开仓.py"},
         {"name": "熊市认购", "path": rf"{PROJECT_ROOT}\超级策略\熊市认购_一键开仓.py"},
+        {"name": "卖出跨式", "path": rf"{PROJECT_ROOT}\超级策略\卖出跨式_一键开仓.py"},
+        {"name": "卖宽跨式", "path": rf"{PROJECT_ROOT}\超级策略\卖宽跨式_一键开仓.py"},
     ],
     "交易系统设置": [
         {"name": "1.委托设置", "path": rf"{PROJECT_ROOT}\交易系统设置\1_委托设置.py"},

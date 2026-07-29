@@ -22,14 +22,23 @@ TACTICS_PANEL_CONTROL_ID = 103
 TACTICS_SCROLLBAR_CONTROL_ID = 104
 TACTICS_PANEL_CLASS = "AfxWnd140u"
 TACTICS_PANEL_TEXT = "TacticsPanel"
-SUPER_TARGETS = {"牛市认购", "牛市认沽", "熊市认购", "熊市认沽"}
-# 菜单复位到顶部后，四个正式目标所在的逻辑像素单元格。位置只用于裁出
+SUPER_TARGETS = {
+    "牛市认购",
+    "牛市认沽",
+    "熊市认购",
+    "熊市认沽",
+    "卖出跨式",
+    "卖宽跨式",
+}
+# 菜单复位到顶部后，六个正式目标所在的逻辑像素单元格。位置只用于裁出
 # 单个文字块；是否可点击仍必须由 OCR 对该块进行精确文字校验。
 FORMAL_TARGET_CELLS = {
     "牛市认购": (5, 200, 80, 242),
     "牛市认沽": (82, 200, 158, 242),
     "熊市认购": (5, 380, 80, 422),
     "熊市认沽": (82, 380, 158, 422),
+    "卖出跨式": (5, 540, 80, 582),
+    "卖宽跨式": (82, 540, 158, 582),
 }
 
 
@@ -485,10 +494,10 @@ def click_tactics_item(window, target: str, *, min_conf: float = 0.80,
         reset_tactics_scroll(panel_hwnd)
     last_image = None
     for page in range(max(0, int(scroll_pages)) + 1):
-        # 当前四个正式策略都位于顶部 440px 内，缩小 OCR 区域可显著提速。
+        # 当前六个正式策略都位于顶部 620px 内，缩小 OCR 区域可显著提速。
         formal_target = page == 0 and target in SUPER_TARGETS
         top_offset = 160 if formal_target else 0
-        top_limit = 280 if formal_target else None
+        top_limit = 460 if formal_target else None
         items, last_image = _ocr_current_panel(
             main_hwnd,
             panel_hwnd,
