@@ -35,6 +35,8 @@ from pywinauto import Application, findwindows
 import time
 import sys
 import ctypes
+import win32gui
+import win32con
 
 
 # ====================== 可配置参数 ======================
@@ -70,8 +72,48 @@ def switch_panel(win, tree_item: str):
     # item.click_input()
     print(f"[OK] 已切换到面板: {tree_item}")
 
+BM_CLICK = win32con.BM_CLICK
+
+
+def _find_child_by_id(parent_hwnd: int, ctrl_id: int):
+    """按 DlgCtrlID 递归查找可见子控件句柄(兼容任意嵌套层级)。"""
+    found = []
+    def _cb(h, _):
+        try:
+            if (win32gui.GetDlgCtrlID(h) == ctrl_id
+                    and win32gui.IsWindowVisible(h)):
+                found.append(h)
+        except Exception:
+            pass
+    try:
+        win32gui.EnumChildWindows(parent_hwnd, _cb, None)
+    except Exception:
+        pass
+    return found[0] if found else None
+
+
 def click_button(win, auto_id: str, title: str):
-    """按 auto_id 点击面板内的按钮(避开 title 漂移问题)。"""
+    """按 auto_id 点击面板内的按钮(避开 title 漂移问题)。
+
+    优先用 win32 异步消息 PostMessage(BM_CLICK)：不依赖 UIA 树、不移动鼠标、
+    也不要求窗口处于前台。由于“撤单”按钮会弹出模态确认框，必须用 PostMessage
+    而非 SendMessage(SendMessage 会阻塞到模态框关闭，使后续回车确认永远执行不到)，
+    与 core/combination_order.py 的 click_dialog_button 保持一致。
+
+    仅在 win32 方式找不到控件时回退到 pywinauto 的 click_input(真实鼠标点击)。
+    """
+    try:
+        parent = int(win.handle)
+        hwnd = _find_child_by_id(parent, int(auto_id))
+        if hwnd is not None:
+            win32gui.PostMessage(hwnd, BM_CLICK, 0, 0)
+            print(f"[OK] 已点击按钮(异步): {title} (auto_id={auto_id})")
+            return
+        print(f"[WARN] win32 未找到按钮 {title}(auto_id={auto_id})，回退 click_input")
+    except Exception as e:
+        print(f"[WARN] win32 点击 {title} 失败({e})，回退 click_input")
+
+    # 回退: pywinauto 真实鼠标点击
     btn = win.child_window(auto_id=auto_id, control_type="Button")
     btn.wait("ready", timeout=5)
     btn.click_input()
@@ -166,7 +208,7 @@ def press_enter_to_confirm(
                 continue
 
         time.sleep(0.1)
-    print(f"[WARN] 等待弹窗超时({timeout}s),匹配: {dialog_patterns}")
+    print(f"[WARN] 等待弹窗({timeout}s),匹配: {dialog_patterns}")
     return False
 
 
@@ -186,7 +228,7 @@ def confirm_all_dialogs(
     """
     count = 0
     for i in range(1, max_dialogs + 1):
-        print(f"[..] 等待第 {i} 个弹窗 (超时{no_dialog_timeout}s无新弹窗则结束)...")
+        print(f"[WARN] 等待第 {i} 个弹窗 ({no_dialog_timeout}s无新弹窗则结束)...")
         ok = press_enter_to_confirm(main_win=main_win, timeout=per_dialog_timeout)
         if ok:
             count += 1
