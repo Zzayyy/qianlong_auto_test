@@ -150,8 +150,37 @@ def _normalized_text(value: str) -> str:
     return unicodedata.normalize("NFKC", value).replace("\u3000", " ").strip()
 
 
+def _log_duplicate_trees(matches: list[int], visible: list[int]) -> None:
+    """打印多命中诊断，帮助确认第二个菜单树是僵尸/幽灵窗口还是真实次级面板。"""
+    print(
+        f"[WARN] 枚举到 {len(matches)} 个 control_id=1223 的菜单树，"
+        f"其中可见 {len(visible)} 个；诊断如下："
+    )
+    for h in matches:
+        try:
+            rect = win32gui.GetWindowRect(h)
+            parent = win32gui.GetParent(h)
+            pclass = win32gui.GetClassName(parent) if parent else ""
+            ptitle = win32gui.GetWindowText(parent) if parent else ""
+            print(
+                f"  - hwnd={h} visible={win32gui.IsWindowVisible(h)} "
+                f"enabled={win32gui.IsWindowEnabled(h)} rect={rect} "
+                f"parent_class={pclass!r} parent_title={ptitle!r}"
+            )
+        except Exception as exc:  # pragma: no cover - 诊断辅助
+            print(f"  - hwnd={h} 读取诊断失败: {exc}")
+
+
 def find_treeview(parent_hwnd: int, control_id: int = 1223) -> int:
-    """Find the requested descendant ``SysTreeView32`` by control ID."""
+    """Find the requested descendant ``SysTreeView32`` by control ID.
+
+    钱龙等客户端在偶发瞬态下会残留第二个同 ID 的菜单树（幽灵/僵尸窗口或次级
+    面板），导致 ``EnumChildWindows`` 命中多个目标。为兼顾安全与稳健：
+      - 单命中直接返回；
+      - 多命中时优先在“可见”候选中挑选，隐藏的残留树不会被误选；
+      - 仅当可见候选唯一时才自动采用，避免误点；
+      - 仍无法唯一确定时保持 fail-closed（拒绝不确定目标），交由上层回退 UIA。
+    """
     matches: list[int] = []
 
     def _enum(hwnd, _):
@@ -169,11 +198,21 @@ def find_treeview(parent_hwnd: int, control_id: int = 1223) -> int:
         raise NativeTreeError(
             f"未找到菜单树(control_id={control_id}, class=SysTreeView32)"
         )
-    if len(matches) > 1:
-        raise NativeTreeError(
-            f"找到 {len(matches)} 个相同 ID 的菜单树，拒绝选择不确定目标"
+    if len(matches) == 1:
+        return matches[0]
+
+    visible = [h for h in matches if win32gui.IsWindowVisible(h)]
+    _log_duplicate_trees(matches, visible)
+    if len(visible) == 1:
+        print(
+            f"[INFO] 命中 {len(matches)} 个相同 ID 的菜单树，"
+            f"已按可见性选定唯一可见树 hwnd={visible[0]}"
         )
-    return matches[0]
+        return visible[0]
+
+    raise NativeTreeError(
+        f"找到 {len(matches)} 个相同 ID 的菜单树，拒绝选择不确定目标"
+    )
 
 
 def get_tree_count(tree_hwnd: int) -> int:
