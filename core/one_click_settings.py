@@ -10,7 +10,7 @@ import re
 import unicodedata
 from typing import Any, Iterable
 
-from core.settings_status import (
+from core.settings import (
     STATUS_ADDED,
     STATUS_CONFLICT,
     STATUS_DIFFERENCE,

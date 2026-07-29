@@ -15,7 +15,7 @@ from gui.recycle_bin import (
     validate_batch_directory,
 )
 from gui.shell_open import open_path
-from core.settings_report import (
+from core.settings import (
     DEFAULT_BATCH_LIMIT,
     OVERALL_FAIL,
     OVERALL_PASS,
@@ -228,6 +228,8 @@ class SettingsReportPanel:
         tasks = []
         base_params = self.controller.collect_params()
         for script in scripts:
+            if script.get("exclude_from_batch"):
+                continue  # 配置/工具类脚本不参与一键运行全部（如抓取自定义标准）
             params = dict(base_params)
             tasks.append({
                 "category": "交易系统设置",

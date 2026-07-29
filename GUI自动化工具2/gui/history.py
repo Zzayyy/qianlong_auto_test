@@ -21,7 +21,7 @@ STATUS_FAILED = "失败"
 STATUS_ERROR = "异常"
 STATUS_STOPPED = "已停止"
 
-MAX_RECORDS = 200  # 最多保留最近 200 条
+MAX_RECORDS = 100000  # 最多保留最近 10 万条
 
 
 class HistoryManager:

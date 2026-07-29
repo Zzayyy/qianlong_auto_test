@@ -52,7 +52,34 @@ else:
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 # 默认输出目录：普通用户机器上放到桌面（开发者机器路径 E:\Code\3\output 不适用）
 DEFAULT_OUTPUT_DIR = os.path.join(os.path.expanduser("~"), "Desktop")
-CATEGORIES = ["查询", "通知查询", "结算单", "下单", "组合申报", "交易系统设置"]
+
+# GUI 的业务层级。叶子分类仍作为 Task.category 使用，以保持任务中心、历史记录、
+# 输出目录等既有逻辑稳定；MODULE_GROUPS 只负责把这些分类组织成三个一级模块。
+MODULE_GROUPS = {
+    "行情交易": ("查询", "通知查询", "结算单", "下单", "组合申报"),
+    "超级策略": ("超级策略",),
+    "交易系统设置": ("交易系统设置",),
+}
+SUPER_STRATEGY_CATEGORIES = frozenset(MODULE_GROUPS["超级策略"])
+CATEGORIES = [
+    category
+    for categories in MODULE_GROUPS.values()
+    for category in categories
+]
+
+
+def get_module_for_category(category: str) -> str:
+    """返回叶子分类所属的一级模块；未知分类返回空字符串。"""
+    for module, categories in MODULE_GROUPS.items():
+        if category in categories:
+            return module
+    return ""
+
+# 抓取自定义标准（交易系统设置）时可勾选的面板列表。
+# 仅登记已实现 collect_current_settings 的面板；与
+# 交易系统设置/抓取自定义标准.py 的 PANEL_MODULES 保持同步（新增面板接入后在此追加）。
+CAPTURE_STANDARD_PANELS = ["委托设置", "期权设置", "自动拆单设置", "自动追单设置",
+                          "快捷设置", "价格提醒设置", "一键炒单设置"]
 
 
 def load_user_config() -> dict:
@@ -148,13 +175,14 @@ SCRIPTS_CONFIG = {
         {"name": "26. 对账单资金资产", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\查询\对账单资金资产"},
     ],
     "下单": [
-        {"name": "1.期权下单_自动化下单", "path": rf"{PROJECT_ROOT}\下单\自动化下单\4.期权下单(新)_自动化下单_Excel驱动版.py"},
-        #{"name": "2.期权持仓_平仓/反手自动化", "path": rf"{PROJECT_ROOT}\下单\表格\9.Excel驱动_OCR定位_平仓操作.py"},
-        {"name": "2.三键下单_自动化下单", "path": rf"{PROJECT_ROOT}\下单\自动化下单\4.三键下单_自动化下单_Excel驱动版.py"},
-        {"name": "3.四键下单_自动化下单", "path": rf"{PROJECT_ROOT}\下单\自动化下单\4.四键下单_自动化下单_Excel驱动版.py"},
-        {"name": "4.期权持仓_平仓/反手自动化_RapidOCR", "path": rf"{PROJECT_ROOT}\下单\表格\10.Excel驱动_OCR_RapidOCR.py"},
-        {"name": "5.期权下单_一键导出", "path": rf"{PROJECT_ROOT}\下单\自动化导出\期权下单(新)_自动导出.py"},
-        {"name": "6.全选撤单", "path": rf"{PROJECT_ROOT}\撤单\撤单_全选撤单_自动化.py"},
+        {"name": "1.期权下单_自动化下单", "path": rf"{PROJECT_ROOT}\行情交易\下单\自动化下单\4.期权下单(新)_自动化下单_Excel驱动版.py"},
+        #{"name": "2.期权持仓_平仓/反手自动化", "path": rf"{PROJECT_ROOT}\行情交易\下单\表格\9.Excel驱动_OCR定位_平仓操作.py"},
+        {"name": "2.三键下单_自动化下单", "path": rf"{PROJECT_ROOT}\行情交易\下单\自动化下单\4.三键下单_自动化下单_Excel驱动版.py"},
+        {"name": "3.四键下单_自动化下单", "path": rf"{PROJECT_ROOT}\行情交易\下单\自动化下单\4.四键下单_自动化下单_Excel驱动版.py"},
+        {"name": "4.快速下单_自动化下单", "path": rf"{PROJECT_ROOT}\行情交易\下单\自动化下单\4.快速下单_自动化下单_Excel驱动版.py"},
+        {"name": "5.期权持仓_平仓/反手自动化_RapidOCR", "path": rf"{PROJECT_ROOT}\行情交易\下单\表格\10.Excel驱动_OCR_RapidOCR.py"},
+        {"name": "6.期权下单_一键导出", "path": rf"{PROJECT_ROOT}\行情交易\下单\自动化导出\期权下单(新)_自动导出.py"},
+        {"name": "7.全选撤单", "path": rf"{PROJECT_ROOT}\行情交易\撤单\撤单_全选撤单_自动化.py"},
     ],
     # 以下为国泰海通专属菜单
     "通知查询": [
@@ -177,12 +205,20 @@ SCRIPTS_CONFIG = {
         {"name": "10.历史风险信息", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\结算单\历史风险信息"},
     ],
     "组合申报": [
-        {"name": "1.组合申报_全自动", "path": rf"{PROJECT_ROOT}\组合申报\2.组合申报_全自动.py"},
-        {"name": "2.拆分申报_全自动", "path": rf"{PROJECT_ROOT}\组合申报\2.拆分申报_全自动.py"},
+        {"name": "1.组合申报_全自动", "path": rf"{PROJECT_ROOT}\行情交易\组合申报\2.组合申报_全自动.py"},
+        {"name": "2.拆分申报_全自动", "path": rf"{PROJECT_ROOT}\行情交易\组合申报\2.拆分申报_全自动.py"},
         {"name": "3.组合策略持仓查询", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\组合申报\组合策略持仓查询"},
         {"name": "4.组合策略信息查询", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\组合申报\组合策略信息查询"},
         {"name": "5.组合委托流水查询", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\组合申报\组合委托流水查询"},
         {"name": "6.历史组合委托流水", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\组合申报\历史组合委托流水"},
+    ],
+    "超级策略": [
+        {"name": "牛市认沽", "path": rf"{PROJECT_ROOT}\超级策略\牛市认沽_一键开仓.py"},
+        {"name": "牛市认购", "path": rf"{PROJECT_ROOT}\超级策略\牛市认购_一键开仓.py"},
+        {"name": "熊市认沽", "path": rf"{PROJECT_ROOT}\超级策略\熊市认沽_一键开仓.py"},
+        {"name": "熊市认购", "path": rf"{PROJECT_ROOT}\超级策略\熊市认购_一键开仓.py"},
+        {"name": "卖出跨式", "path": rf"{PROJECT_ROOT}\超级策略\卖出跨式_一键开仓.py"},
+        {"name": "卖宽跨式", "path": rf"{PROJECT_ROOT}\超级策略\卖宽跨式_一键开仓.py"},
     ],
     "交易系统设置": [
         {"name": "1.委托设置", "path": rf"{PROJECT_ROOT}\交易系统设置\1_委托设置.py"},
@@ -192,6 +228,7 @@ SCRIPTS_CONFIG = {
         {"name": "5.快捷设置", "path": rf"{PROJECT_ROOT}\交易系统设置\5_快捷设置.py"},
         {"name": "6.一键炒单设置", "path": rf"{PROJECT_ROOT}\交易系统设置\6_一键炒单设置.py"},
         {"name": "7.价格提醒设置", "path": rf"{PROJECT_ROOT}\交易系统设置\6_价格提醒设置.py"},
+        {"name": "8.抓取自定义标准_工具", "path": rf"{PROJECT_ROOT}\交易系统设置\抓取自定义标准.py", "exclude_from_batch": True, "capture_standard": True},  # 两个参数的含义：是否排除出"批量跑整类"    # 是否走"抓取标准"专属面板与逻辑，可以随意改名了
     ],
 }
 

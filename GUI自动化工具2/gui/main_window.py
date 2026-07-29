@@ -4,6 +4,7 @@
 import os
 import sys
 import time
+import shutil
 import logging
 from datetime import datetime
 import tkinter as tk
@@ -18,6 +19,9 @@ except ImportError:
 from config import (
     get_scripts_config,
     CATEGORIES,
+    MODULE_GROUPS,
+    SUPER_STRATEGY_CATEGORIES,
+    get_module_for_category,
     load_user_config,
     save_user_config,
     get_output_dir,
@@ -29,6 +33,7 @@ from config import (
     get_client_ids,
     get_client_name,
     get_default_client_id,
+    CAPTURE_STANDARD_PANELS,
 )
 from engine.runner import ScriptRunner
 from engine.task import Task
@@ -47,7 +52,8 @@ from gui.history import (
 from gui.compare import ComparePanel
 from gui.settings_report import SettingsReportPanel
 from gui.shell_open import open_path
-from core.settings_report import (
+from core.settings_standard import resolve_standard_path, STANDARD_ROOT
+from core.settings import (
     BATCH_COMPLETED,
     BATCH_STOPPED,
     create_run_id,
@@ -78,6 +84,7 @@ class AutomationGUI:
         # 脚本列表 -> 任务队列 的拖拽状态
         self._drag_script = None
         self._drag_category = None   # 拖拽分类根节点时记录分类名
+        self._drag_module = None     # 拖拽一级模块节点时记录模块名
         self._drag_active = False
         self._drag_occurred = False  # 本次按下是否实际发生了拖拽（用于决定是否跳过展开/折叠）
         self._drag_start_y = 0
@@ -104,6 +111,9 @@ class AutomationGUI:
         self.order_qty = tk.IntVar(value=1)
         self.countdown_sec = tk.IntVar(value=3)
         self.xlsx_file = tk.StringVar(value="")
+        self.super_add_underlying = tk.BooleanVar(
+            value=self.user_config.get("super_add_underlying", False)
+        )
 
         # 期权下单_一键导出 参数
         self.export_target_position = tk.BooleanVar(value=True)  # 持仓
@@ -112,6 +122,9 @@ class AutomationGUI:
 
         # 交易系统设置 参数（输出路径可自定义）
         self.settings_output_dir = tk.StringVar(value=get_output_dir(self.user_config, "交易系统设置"))
+
+        # 抓取自定义标准：勾选要抓取的面板（默认全选）
+        self.capture_panels = {name: tk.BooleanVar(value=True) for name in CAPTURE_STANDARD_PANELS}
 
         # 日志目录：打包后放在exe同级目录
         if IS_FROZEN:
@@ -274,7 +287,7 @@ class AutomationGUI:
         self.script_tree.bind('<B1-Motion>', self._on_list_drag_motion)
         self.script_tree.bind('<ButtonRelease-1>', self._on_list_drag_end)
         # 鼠标抬起时展开/折叠分类节点（避免按下即触发，与拖拽到队列冲突）
-        self.script_tree.bind('<ButtonRelease-1>', self._on_tree_release)
+        self.script_tree.bind('<ButtonRelease-1>', self._on_tree_release, add='+')
         # iid -> {"script": 脚本配置, "category": 分类}
         self.tree_script_map = {}
 
@@ -350,8 +363,6 @@ class AutomationGUI:
         self.right_notebook.add(report_frame, text="报告中心")
         self.report_center = SettingsReportPanel(report_frame, self)
         self._report_frame = report_frame
-        self._report_suppress_clear = False
-        self.right_notebook.bind("<<NotebookTabChanged>>", self._on_right_tab_changed)
 
         # 状态栏：钉在窗口底部（始终可见，矮窗口也不会被裁切），
         # 但左右加 10px 内边距与主面板对齐，避免「分层」的割裂感
@@ -413,39 +424,59 @@ class AutomationGUI:
         self.paned.sashpos(0, target)
 
     def _build_script_tree(self):
-        """根据当前客户端重建左侧「分类 -> 脚本」树（对应软件菜单、过滤不支持的）"""
+        """重建左侧「一级模块 -> 分类 -> 脚本」树。"""
         self.script_tree.delete(*self.script_tree.get_children())
         self.tree_script_map.clear()
         scripts_config = get_scripts_config(self.client_id)
-        for category in CATEGORIES:
-            scripts = scripts_config.get(category, [])
-            if not scripts:
-                # 该客户端无此分类的任何脚本，则不显示该分类
+        for module, categories in MODULE_GROUPS.items():
+            available = [c for c in categories if scripts_config.get(c)]
+            if not available:
                 continue
-            cat_iid = f"cat::{category}"
-            self.script_tree.insert("", tk.END, iid=cat_iid, text=category, open=False)
-            for s in scripts:
-                # iid 必须唯一：查询类脚本现已统一指向同一驱动文件，故用 query_key 区分
-                sid_iid = f"script::{category}::{s.get('query_key') or s['path']}"
-                self.script_tree.insert(cat_iid, tk.END, iid=sid_iid, text=s["name"])
-                self.tree_script_map[sid_iid] = {"script": s, "category": category}
+            module_iid = f"module::{module}"
+            self.script_tree.insert(
+                "", tk.END, iid=module_iid, text=module, open=(module == "行情交易")
+            )
+            for category in available:
+                scripts = scripts_config[category]
+                # 超级策略和交易系统设置本身就是一级模块，避免显示同名中间节点。
+                if len(categories) == 1 and category == module:
+                    parent_iid = module_iid
+                else:
+                    parent_iid = f"cat::{category}"
+                    self.script_tree.insert(
+                        module_iid, tk.END, iid=parent_iid, text=category, open=False
+                    )
+                for s in scripts:
+                    # iid 必须唯一：查询类脚本共用驱动文件，故用 query_key 区分。
+                    sid_iid = f"script::{category}::{s.get('query_key') or s['path']}"
+                    self.script_tree.insert(parent_iid, tk.END, iid=sid_iid, text=s["name"])
+                    self.tree_script_map[sid_iid] = {"script": s, "category": category}
 
     def _rebuild_func_menu(self):
-        """重建「功能」菜单，仅列出当前客户端支持的分类"""
+        """重建「功能」菜单，按三个一级模块组织可用分类。"""
         self.func_menu.delete(0, tk.END)
         scripts_config = get_scripts_config(self.client_id)
-        for category in CATEGORIES:
-            if scripts_config.get(category):
-                self.func_menu.add_command(
+        for module, categories in MODULE_GROUPS.items():
+            available = [c for c in categories if scripts_config.get(c)]
+            if not available:
+                continue
+            submenu = tk.Menu(self.func_menu, tearoff=0)
+            for category in available:
+                submenu.add_command(
                     label=category,
-                    command=lambda c=category: self._select_category(c)
+                    command=lambda c=category: self._select_category(c),
                 )
+            self.func_menu.add_cascade(label=module, menu=submenu)
 
     def _select_category(self, category):
         """选中某个功能分类（来自树节点或功能菜单）"""
         self.current_category = category
         self.category_label.config(text=f"当前功能: {category}")
-        # 展开对应分类节点
+        # 展开所属一级模块和对应分类节点。
+        module = get_module_for_category(category)
+        module_iid = f"module::{module}"
+        if module and self.script_tree.exists(module_iid):
+            self.script_tree.item(module_iid, open=True)
         cat_iid = f"cat::{category}"
         if self.script_tree.exists(cat_iid):
             self.script_tree.item(cat_iid, open=True)
@@ -476,7 +507,7 @@ class AutomationGUI:
             self._rebuild_params()
             self._update_paths_for_selected_script()
             self._update_params_for_selected_script()
-        else:
+        elif iid.startswith("cat::"):
             # 选中分类节点：设为当前功能（展开/折叠改到鼠标抬起时处理，见 _on_tree_release）
             category = iid.split("::", 1)[1]
             self.current_category = category
@@ -484,6 +515,9 @@ class AutomationGUI:
             self._rebuild_params()
             # 仅下单显示数据预览（其它分类隐藏并清空残留数据）
             self._update_preview_visibility(category == "下单")
+        else:
+            # 一级模块节点只负责展开/折叠，不把模块名当成可执行分类。
+            self._update_preview_visibility(False)
 
     def _on_tree_double_click(self, event):
         """双击树：仅当双击具体脚本节点时才执行，双击分类节点只展开/收起"""
@@ -535,37 +569,56 @@ class AutomationGUI:
         ttk.Label(left_group, text="状态:").pack(side=tk.LEFT, padx=(0, 2))
         self.history_filter_var = tk.StringVar(value="全部")
         filter_combo = ttk.Combobox(
-            left_group, textvariable=self.history_filter_var, state="readonly", width=8
+            left_group, textvariable=self.history_filter_var, state="readonly", width=6
         )
         filter_combo["values"] = ["全部", "成功", "失败", "异常", "已停止", "运行中"]
         filter_combo.pack(side=tk.LEFT)
-        filter_combo.bind("<<ComboboxSelected>>", lambda e: self._refresh_history())
+        filter_combo.bind("<<ComboboxSelected>>", lambda e: self._history_reset_and_refresh())
 
         # 时间范围筛选
         ttk.Label(left_group, text="时间:").pack(side=tk.LEFT, padx=(8, 2))
         self.history_range_var = tk.StringVar(value="全部")
         range_combo = ttk.Combobox(
-            left_group, textvariable=self.history_range_var, state="readonly", width=8
+            left_group, textvariable=self.history_range_var, state="readonly", width=6
         )
         range_combo["values"] = ["全部", "今天", "近一周", "近一月"]
         range_combo.pack(side=tk.LEFT)
-        range_combo.bind("<<ComboboxSelected>>", lambda e: self._refresh_history())
+        range_combo.bind("<<ComboboxSelected>>", lambda e: self._history_reset_and_refresh())
 
-        # 右侧：信息组（计数 + 清空），锚定在右，内部宽度变化不影响左侧
+        # 分类筛选
+        ttk.Label(left_group, text="分类:").pack(side=tk.LEFT, padx=(8, 2))
+        self.history_category_var = tk.StringVar(value="全部")
+        self.history_category_combo = ttk.Combobox(
+            left_group, textvariable=self.history_category_var, state="readonly", width=10
+        )
+        self.history_category_combo["values"] = ["全部"]
+        self.history_category_combo.pack(side=tk.LEFT)
+        self.history_category_combo.bind("<<ComboboxSelected>>", lambda e: self._history_reset_and_refresh())
+
+        # 分页状态（每页默认 100 条，可在界面切换 50/100/200）
+        self.history_page = 1
+        self.history_page_size = 100
+        self.history_page_size_var = tk.StringVar(value="100")
+
+        # 右侧：信息组（每页 + 清空），锚定在右，内部宽度变化不影响左侧
         right_group = ttk.Frame(tool_frame)
         right_group.pack(side=tk.RIGHT)
 
-        self.history_count_label = ttk.Label(right_group, text="", foreground="gray")
-        self.history_count_label.pack(side=tk.LEFT, padx=(2, 0))
+        ttk.Label(right_group, text="每页:").pack(side=tk.LEFT, padx=(8, 2))
+        page_size_combo = ttk.Combobox(
+            right_group, textvariable=self.history_page_size_var, state="readonly", width=5
+        )
+        page_size_combo["values"] = ["50", "100", "200"]
+        page_size_combo.pack(side=tk.LEFT)
+        page_size_combo.bind("<<ComboboxSelected>>", self._history_change_page_size)
 
-        ttk.Button(
-            right_group, text="清空记录", command=self._clear_history, width=10
-        ).pack(side=tk.LEFT, padx=(8, 0))
+        # 列表区：独立容器充满中间剩余空间，避免 Treeview 撑满导致分页栏被挤到边上
+        list_frame = ttk.Frame(parent)
+        list_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
-        # 列表
         columns = ("time", "task", "category", "status", "elapsed")
         self.history_tree = ttk.Treeview(
-            parent, columns=columns, show="headings", height=15, selectmode=tk.BROWSE
+            list_frame, columns=columns, show="headings", height=15, selectmode=tk.BROWSE
         )
         self.history_tree.heading("time", text="时间")
         self.history_tree.heading("task", text="任务")
@@ -585,13 +638,32 @@ class AutomationGUI:
         self.history_tree.tag_configure("stopped", foreground="#FF8C00")
         self.history_tree.tag_configure("running", foreground="#0000FF")
 
-        v_scroll = ttk.Scrollbar(parent, orient=tk.VERTICAL, command=self.history_tree.yview)
+        v_scroll = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.history_tree.yview)
         self.history_tree.configure(yscrollcommand=v_scroll.set)
         self.history_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         v_scroll.pack(side=tk.RIGHT, fill=tk.Y)
 
         # 双击查看详情
         self.history_tree.bind('<Double-Button-1>', self._show_history_detail)
+
+        # —— 底部分页栏 ——
+        pager = ttk.Frame(parent)
+        pager.pack(side=tk.BOTTOM, fill=tk.X, pady=(5, 0))
+        self.history_prev_btn = ttk.Button(
+            pager, text="上一页", width=8, command=self._history_prev_page
+        )
+        self.history_prev_btn.pack(side=tk.LEFT, padx=2)
+        self.history_page_label = ttk.Label(pager, text="第 1 / 1 页", foreground="#444")
+        self.history_page_label.pack(side=tk.LEFT, padx=6)
+        self.history_next_btn = ttk.Button(
+            pager, text="下一页", width=8, command=self._history_next_page
+        )
+        self.history_next_btn.pack(side=tk.LEFT, padx=2)
+
+        # 清空记录放右下角，避免被工具栏筛选控件挤掉
+        ttk.Button(
+            pager, text="清空记录", command=self._clear_history, width=10
+        ).pack(side=tk.RIGHT, padx=(0, 2))
 
     # ---------- 刷新入口 ----------
     def _refresh_history(self):
@@ -626,12 +698,37 @@ class AutomationGUI:
             self.stat_success.config(foreground="#f44747")
 
     def _refresh_history_list(self):
-        """刷新列表视图（应用状态 + 时间范围筛选）"""
+        """刷新列表视图（应用状态 + 时间范围筛选，并按页渲染）"""
         tree = self.history_tree
         tree.delete(*tree.get_children())
-        total = len(self.history.records)
+
+        # 先按筛选条件过滤（records 最新在前）
         filt = self.history_filter_var.get() if hasattr(self, "history_filter_var") else "全部"
         rng = self.history_range_var.get() if hasattr(self, "history_range_var") else "全部"
+        cat = self.history_category_var.get() if hasattr(self, "history_category_var") else "全部"
+
+        # 分类下拉项根据现有记录动态生成（含「全部」）；若当前选择已无对应记录则回退
+        cats = sorted({rec.get("category", "") for rec in self.history.records if rec.get("category", "")})
+        if hasattr(self, "history_category_combo"):
+            self.history_category_combo["values"] = ["全部"] + cats
+        if cat != "全部" and cat not in cats:
+            self.history_category_var.set("全部")
+            cat = "全部"
+
+        filtered = [
+            rec for rec in self.history.records
+            if (filt == "全部" or rec.get("status", "") == filt)
+            and (rng == "全部" or self._in_range(rec.get("time", ""), rng))
+            and (cat == "全部" or rec.get("category", "") == cat)
+        ]
+
+        total = len(filtered)
+        size = self.history_page_size
+        total_pages = max(1, (total + size - 1) // size)
+        if self.history_page > total_pages:
+            self.history_page = total_pages
+        if self.history_page < 1:
+            self.history_page = 1
 
         status_tag = {
             STATUS_SUCCESS: "success",
@@ -640,14 +737,9 @@ class AutomationGUI:
             STATUS_STOPPED: "stopped",
             STATUS_RUNNING: "running",
         }
-        shown = 0
-        for rec in self.history.records:
+        start = (self.history_page - 1) * size
+        for rec in filtered[start:start + size]:
             status = rec.get("status", "")
-            if filt != "全部" and status != filt:
-                continue
-            if rng != "全部" and not self._in_range(rec.get("time", ""), rng):
-                continue
-            shown += 1
             tag = status_tag.get(status, "")
             elapsed = self.history.format_elapsed(rec.get("elapsed", 0))
             tree.insert(
@@ -663,11 +755,41 @@ class AutomationGUI:
                 tags=(tag,) if tag else (),
             )
 
-        parts = [f"共 {total} 条"]
-        if filt != "全部" or rng != "全部":
-            parts.append(f"显示 {shown} 条")
-        self.history_count_label.config(text=" | ".join(parts))
+        # 计数 + 页码（合并到分页栏，避免工具栏拥挤）
+        self.history_page_label.config(text=f"共 {total} 条 · 第 {self.history_page} / {total_pages} 页")
+        self.history_prev_btn.config(
+            state="normal" if self.history_page > 1 else "disabled"
+        )
+        self.history_next_btn.config(
+            state="normal" if self.history_page < total_pages else "disabled"
+        )
 
+
+    # ---------- 分页控制 ----------
+    def _history_prev_page(self):
+        """上一页"""
+        if self.history_page > 1:
+            self.history_page -= 1
+            self._refresh_history_list()
+
+    def _history_next_page(self):
+        """下一页"""
+        self.history_page += 1
+        self._refresh_history_list()
+
+    def _history_change_page_size(self, event=None):
+        """切换每页条数后回到第 1 页"""
+        try:
+            self.history_page_size = int(self.history_page_size_var.get())
+        except ValueError:
+            self.history_page_size = 100
+        self.history_page = 1
+        self._refresh_history_list()
+
+    def _history_reset_and_refresh(self):
+        """切换筛选 / 时间范围时回到第 1 页再刷新"""
+        self.history_page = 1
+        self._refresh_history()
 
     # ---------- 时间格式化工具 ----------
     @staticmethod
@@ -792,7 +914,12 @@ class AutomationGUI:
         elif self.current_category == "组合申报":
             self._build_combo_params()
         elif self.current_category == "交易系统设置":
-            self._build_settings_params()
+            if self._is_capture_script_selected():
+                self._build_capture_params()
+            else:
+                self._build_settings_params()
+        elif self.current_category in SUPER_STRATEGY_CATEGORIES:
+            self._build_super_strategy_params()
 
     def _update_params_for_selected_script(self):
         """根据选中的脚本更新参数面板"""
@@ -810,7 +937,8 @@ class AutomationGUI:
 
         if self.current_category == "下单":
             # 根据脚本决定是否显示数据预览
-            if script["name"] in ("5.期权下单_一键导出", "6.全选撤单"):
+            order_script_name = get_script_filename(script["name"])
+            if order_script_name in ("期权下单_一键导出", "全选撤单"):
                 # 这两个脚本不需要数据预览
                 self._update_preview_visibility(False)
             else:
@@ -818,14 +946,14 @@ class AutomationGUI:
                 self._update_preview_visibility(True)
 
             # 根据脚本更新参数配置面板
-            if script["name"] == "6.全选撤单":
+            if order_script_name == "全选撤单":
                 # 全选撤单：显示提示信息
                 ttk.Label(
                     self.params_frame,
                     text="该功能无需参数配置，点击执行即可。",
                     foreground="gray"
                 ).pack(pady=20)
-            elif script["name"] == "5.期权下单_一键导出":
+            elif order_script_name == "期权下单_一键导出":
                 # 期权下单_一键导出：显示参数配置
                 self._build_export_params()
             else:
@@ -926,6 +1054,158 @@ class AutomationGUI:
         ).grid(row=1, column=0, columnspan=3, sticky=tk.W, pady=5)
 
         self.params_frame.columnconfigure(1, weight=1)
+
+    def _build_super_strategy_params(self):
+        """超级策略参数：是否在一键开仓前点击“加入标的”。"""
+        ttk.Checkbutton(
+            self.params_frame,
+            text="加入标的（可选）",
+            variable=self.super_add_underlying,
+        ).grid(row=0, column=0, sticky=tk.W, pady=5)
+        ttk.Label(
+            self.params_frame,
+            text="启用后：选择策略 → 加入标的 → 一键开仓；关闭时跳过加入标的。",
+            foreground="gray",
+        ).grid(row=1, column=0, sticky=tk.W, pady=5)
+
+    def _is_capture_script_selected(self) -> bool:
+        """当前选中的脚本是否为“抓取自定义标准”（按元数据标记判断，名字可随意改）"""
+        script = self._get_selected_script()
+        if not script:
+            return False
+        return bool(script.get("capture_standard"))
+
+    def _capturable_panels(self):
+        """当前客户端下可抓取的交易系统设置面板（按 clients.json 的 unsupported 动态过滤）。
+
+        面板名与 SCRIPTS_CONFIG 的菜单名一致；与 get_scripts_config 同样的过滤规则：
+        菜单名或 \\交易系统设置\\<面板名> 出现在客户端 unsupported 中即隐藏。
+        例如钱龙客户端不支持“一键炒单设置”，参数配置里便不显示该项。
+        """
+        client = get_client(self.client_id) if self.client_id else None
+        unsupported = set((client or {}).get("unsupported", []) or [])
+        out = []
+        for name in CAPTURE_STANDARD_PANELS:
+            if name in unsupported:
+                continue
+            if f"\\交易系统设置\\{name}" in unsupported:
+                continue
+            out.append(name)
+        return out
+
+    def _build_capture_params(self):
+        """抓取自定义标准 - 勾选要抓取的面板（按当前客户端动态过滤不支持的面板）"""
+        panels = self._capturable_panels()
+
+        # 标题行：左侧标签，右侧 全选 / 全不选
+        head = ttk.Frame(self.params_frame)
+        head.grid(row=0, column=0, columnspan=4, sticky=tk.EW, pady=(2, 8))
+        head.columnconfigure(0, weight=1)
+        ttk.Label(head, text="选择要抓取的面板:").grid(row=0, column=0, sticky=tk.W)
+        btn_row = ttk.Frame(head)
+        btn_row.grid(row=0, column=1, sticky=tk.E)
+        ttk.Button(
+            btn_row, text="全选",
+            command=lambda: self._set_capture_all(True),
+        ).pack(side=tk.LEFT, padx=(0, 6))
+        ttk.Button(
+            btn_row, text="全不选",
+            command=lambda: self._set_capture_all(False),
+        ).pack(side=tk.LEFT)
+
+        if not panels:
+            ttk.Label(
+                self.params_frame,
+                text="当前客户端不支持任何可抓取的面板。",
+                foreground="gray",
+            ).grid(row=1, column=0, sticky=tk.W, pady=6, columnspan=4)
+            return
+
+        # 勾选框（每行 2 个）
+        cols = 2
+        for idx, name in enumerate(panels):
+            var = self.capture_panels.get(name)
+            if var is None:
+                var = tk.BooleanVar(value=True)
+                self.capture_panels[name] = var
+            r, c = divmod(idx, cols)
+            ttk.Checkbutton(self.params_frame, text=name, variable=var).grid(
+                row=1 + r, column=c, sticky=tk.W, padx=(0, 20), pady=3
+            )
+
+        # 操作按钮：打开标准文件夹 / 恢复默认
+        checkbox_rows = (len(panels) + cols - 1) // cols
+        act_row = ttk.Frame(self.params_frame)
+        act_row.grid(row=1 + checkbox_rows, column=0, columnspan=4, sticky=tk.W, pady=(12, 0))
+        ttk.Button(
+            act_row, text="打开标准文件夹",
+            command=self._open_standard_folder,
+        ).pack(side=tk.LEFT, padx=(0, 6))
+        ttk.Button(
+            act_row, text="恢复默认(删除选中面板JSON)",
+            command=self._restore_default_standards,
+        ).pack(side=tk.LEFT)
+
+    def _set_capture_all(self, value: bool):
+        """全选 / 全不选（仅作用于当前客户端可见的面板）"""
+        for name in self._capturable_panels():
+            var = self.capture_panels.get(name)
+            if var is not None:
+                var.set(value)
+
+    def _open_standard_folder(self):
+        """打开当前客户端的标准目录，便于查看/手动删除 JSON。
+
+        客户端专属目录不存在时回退到标准根目录；根目录也不存在时提示尚未抓取。
+        """
+        client_dir = STANDARD_ROOT / (self.client_id or "default")
+        try:
+            open_path(client_dir)
+            return
+        except FileNotFoundError:
+            pass
+        try:
+            open_path(STANDARD_ROOT)
+        except FileNotFoundError:
+            messagebox.showinfo("提示", "标准目录尚不存在（尚未抓取过任何自定义标准）。")
+
+    def _restore_default_standards(self):
+        """删除勾选面板在当前客户端的自定义标准 JSON，恢复到默认/兜底标准。
+
+        删除前自动备份为 .json.bak；若该面板本就无自定义 JSON，则提示已是默认状态。
+        删除后 load_standard 会回退到 default 兜底目录或脚本内嵌默认值。
+        """
+        selected = [
+            n for n in self._capturable_panels()
+            if self.capture_panels.get(n) and self.capture_panels[n].get()
+        ]
+        if not selected:
+            messagebox.showwarning("提示", "请先勾选要恢复默认的面板")
+            return
+        client_name = get_client_name(self.client_id)
+        detail = "\n".join(f"  · {n}" for n in selected)
+        ans = messagebox.askyesno(
+            "确认恢复默认",
+            f"将删除以下 {len(selected)} 个面板在当前客户端（{client_name}）的\n"
+            f"自定义标准 JSON，恢复到默认/兜底标准：\n\n{detail}\n\n"
+            f"（删除前会自动备份为 .json.bak，可手动还原）",
+        )
+        if not ans:
+            return
+        deleted = []
+        for name in selected:
+            path = resolve_standard_path(name, self.client_id or "default")
+            if path.is_file():
+                try:
+                    shutil.copy2(path, path.with_suffix(".json.bak"))
+                    path.unlink()
+                    deleted.append(name)
+                except Exception as exc:  # noqa: BLE001
+                    messagebox.showerror("错误", f"删除 {name} 标准失败: {exc}")
+        if deleted:
+            messagebox.showinfo("完成", f"已恢复默认标准：{', '.join(deleted)}")
+        else:
+            messagebox.showinfo("完成", "所选面板当前没有自定义标准，已是默认状态。")
 
     def _build_export_params(self):
         """期权下单_一键导出 参数配置"""
@@ -1108,38 +1388,40 @@ class AutomationGUI:
 
     # ====================== 脚本列表 -> 任务队列 拖拽 ======================
     def _on_list_drag_start(self, event):
-        """从树中开始拖拽（记录待拖出的脚本或整个分类）"""
+        """从树中开始拖拽（记录待拖出的脚本、分类或一级模块）"""
+        self._drag_script = None
+        self._drag_category = None
+        self._drag_module = None
+        self._drag_active = False
+        self._drag_occurred = False
         if self.task_center is None or self.task_center.is_running:
-            self._drag_script = None
-            self._drag_category = None
-            self._drag_occurred = False
             return
         iid = self.script_tree.identify_row(event.y)
         if not iid:
-            self._drag_script = None
-            self._drag_category = None
+            return
+        # 一级模块（iid 形如 module::行情交易）：落点时加入模块下全部可用分类。
+        if iid.startswith("module::"):
+            module = iid.split("::", 1)[1]
+            if module in MODULE_GROUPS:
+                self._drag_module = module
+                self._drag_start_y = event.y
             return
         # 拖拽分类根节点（iid 形如 cat::查询）：记录分类名，落点时加入其下全部脚本
         if iid.startswith("cat::"):
             self._drag_category = iid.split("::", 1)[1]
-            self._drag_script = None
-            self._drag_active = False
             self._drag_start_y = event.y
             return
         if iid not in self.tree_script_map:
-            self._drag_script = None
-            self._drag_category = None
             return
         item = self.tree_script_map[iid]
         self._drag_script = dict(item["script"])
         self._drag_script["category"] = item["category"]
-        self._drag_category = None
-        self._drag_active = False
         self._drag_start_y = event.y
 
     def _on_list_drag_motion(self, event):
         """拖动过程中：超过阈值视为拖拽，并在悬停于队列时显示落点"""
-        if self._drag_script is None and self._drag_category is None:
+        if (self._drag_script is None and self._drag_category is None
+                and self._drag_module is None):
             return
         if abs(event.y - self._drag_start_y) < 6:
             return
@@ -1167,18 +1449,21 @@ class AutomationGUI:
         if not over_tree:
             self._drag_script = None
             self._drag_category = None
+            self._drag_module = None
             self._drag_active = False
             if tc is not None:
                 tc._hide_drop_indicator()
         # 在队列上方释放时保留状态，交由 _on_global_drop 处理落点与清理
 
     def _on_global_drop(self, event):
-        """全局捕获释放：处理从脚本列表拖入队列的落点（单个脚本或整个分类）"""
+        """全局捕获释放：处理从脚本列表拖入队列的落点。"""
         script = self._drag_script
         category = self._drag_category
+        module = self._drag_module
         active = self._drag_active
         self._drag_script = None
         self._drag_category = None
+        self._drag_module = None
         self._drag_active = False
         tc = self.task_center
         if tc is not None:
@@ -1190,7 +1475,9 @@ class AutomationGUI:
         tree = tc.tree
         rx, ry = tree.winfo_rootx(), tree.winfo_rooty()
         if rx <= event.x_root <= rx + tree.winfo_width() and ry <= event.y_root <= ry + tree.winfo_height():
-            if category:
+            if module:
+                tc.add_module_from_drop(module, event.y_root - ry)
+            elif category:
                 tc.add_category_from_drop(category, event.y_root - ry)
             elif script is not None:
                 tc.add_script_from_drop(script, event.y_root - ry)
@@ -1205,7 +1492,7 @@ class AutomationGUI:
             self._drag_occurred = False
             return
         iid = self.script_tree.identify_row(event.y)
-        if not iid or not iid.startswith("cat::"):
+        if not iid or not iid.startswith(("cat::", "module::")):
             return
         # 仅当抬起位置就是当前选中的分类节点时才切换
         sel = self.script_tree.selection()
@@ -1232,13 +1519,22 @@ class AutomationGUI:
             return
 
         # 下单需要检查Excel文件（全选撤单和期权下单_一键导出除外）
-        if self.current_category == "下单" and script["name"] not in ("5.期权下单_一键导出", "6.全选撤单") and not self.xlsx_file.get():
+        order_script_name = get_script_filename(script["name"])
+        if self.current_category == "下单" and order_script_name not in ("期权下单_一键导出", "全选撤单") and not self.xlsx_file.get():
             messagebox.showwarning("提示", "请先选择Excel配置文件")
             return
 
+        # 抓取自定义标准需要至少勾选一个面板
+        if self.current_category == "交易系统设置" and self._is_capture_script_selected():
+            selected_panels = [n for n in self._capturable_panels()
+                               if self.capture_panels.get(n) and self.capture_panels[n].get()]
+            if not selected_panels:
+                messagebox.showwarning("提示", "请至少勾选一个要抓取的面板")
+                return
+
         # 期权下单_一键导出需要检查导出目标
         export_targets = []
-        if script["name"] == "5.期权下单_一键导出":
+        if order_script_name == "期权下单_一键导出":
             if self.export_target_position.get():
                 export_targets.append("持仓")
             if self.export_target_order.get():
@@ -1250,6 +1546,7 @@ class AutomationGUI:
         # 保存当前配置
         self.user_config["export_format"] = self.export_format.get()
         self.user_config["auto_open"] = self.auto_open.get()
+        self.user_config["super_add_underlying"] = self.super_add_underlying.get()
         if self.current_category == "交易系统设置":
             set_output_dir(self.user_config, "交易系统设置", self.settings_output_dir.get())
         save_user_config(self.user_config)
@@ -1306,7 +1603,7 @@ class AutomationGUI:
             self._log(f"TXT路径: {self.txt_path.get()}")
             self._log(f"XLS路径: {self.xls_path.get()}")
         elif self.current_category == "下单":
-            if script["name"] == "5.期权下单_一键导出":
+            if order_script_name == "期权下单_一键导出":
                 self._log(f"导出目标: {', '.join(export_targets)}")
                 self._log(f"输出目录: {self.export_output_dir.get()}")
                 self._log(f"文件名格式: 期权下单(新)-持仓-20260629.xls")
@@ -1322,13 +1619,22 @@ class AutomationGUI:
                 self._log(f"TXT路径: {self.txt_path.get()}")
                 self._log(f"XLS路径: {self.xls_path.get()}")
         elif self.current_category == "交易系统设置":
-            self._log(f"输出路径: {self.settings_output_dir.get()}")
+            if self._is_capture_script_selected():
+                self._log(f"抓取面板: {', '.join(n for n in self._capturable_panels() if self.capture_panels.get(n) and self.capture_panels[n].get())}")
+            else:
+                self._log(f"输出路径: {self.settings_output_dir.get()}")
+        elif self.current_category in SUPER_STRATEGY_CATEGORIES:
+            self._log(
+                f"加入标的: {'是' if self.super_add_underlying.get() else '否'}"
+            )
+            self._log("下单动作: 一键开仓")
 
         self._log(f"{'='*60}")
         self.logger.info(f"开始执行: {script['name']}")
 
         # 交给执行引擎在后台线程运行
         self._current_record_id = self.history.add_record(script["name"], self.current_category)
+        self.history_page = 1  # 新任务置顶，回到第 1 页
         self._refresh_history()
         self.runner.run(task)
 
@@ -1345,7 +1651,10 @@ class AutomationGUI:
             "export_targets": export_targets or [],
             "export_output_dir": self.export_output_dir.get(),
             "settings_output_dir": self.settings_output_dir.get(),
+            "super_add_underlying": self.super_add_underlying.get(),
             "client_id": self.client_id,
+            "capture_panels": [n for n in self._capturable_panels()
+                               if self.capture_panels.get(n) and self.capture_panels[n].get()],
         }
 
     def make_task_params(self, script, category):
@@ -1399,27 +1708,13 @@ class AutomationGUI:
     def show_report_center(self, auto_clear=True):
         """切换到交易系统设置报告中心标签页。
 
-        auto_clear=False 用于运行完成后自动跳转展示结果，此时不清空。
+        面板仅在软件打开时清空一次（见 SettingsReportPanel.__init__ 的
+        refresh_batches），切换标签页不再清空，以保留用户正在查看的批次结果。
+        auto_clear 仅保留作兼容参数，已无实际清空作用。
         """
         if not hasattr(self, "_report_frame"):
             return
-        already = self.right_notebook.select() == str(self._report_frame)
-        if not auto_clear:
-            self._report_suppress_clear = True
         self.right_notebook.select(self._report_frame)
-        if not auto_clear and already:
-            self._report_suppress_clear = False
-
-    def _on_right_tab_changed(self, event=None):
-        """用户切到报告中心时清空历史展示；运行完成自动跳转则不清空。"""
-        if not hasattr(self, "_report_frame") or not hasattr(self, "report_center"):
-            return
-        if self.right_notebook.select() != str(self._report_frame):
-            return
-        if getattr(self, "_report_suppress_clear", False):
-            self._report_suppress_clear = False
-            return
-        self.report_center.clear_view()
 
     # ====================== 交易系统设置：统一批次报告 ======================
     def begin_settings_batch(self, source, task_items):
@@ -1574,6 +1869,8 @@ class AutomationGUI:
 
     # ====================== 执行结果回调（运行在 runner 线程，统一切回主线程更新 UI） ======================
     def _on_run_finish(self, return_code, elapsed, task):
+        login_message = getattr(task, "login_required_message", "")
+        trading_time_message = getattr(task, "trading_time_message", "")
         # 任务中心顺序执行模式：回调转交任务中心处理
         if self._task_mode:
             def _tc_finish():
@@ -1590,7 +1887,7 @@ class AutomationGUI:
                 self._set_status(f"完成: {task.name} (用时 {elapsed:.1f}s)")
             else:
                 status = STATUS_FAILED
-                detail = f"退出码: {return_code}"
+                detail = login_message or trading_time_message or f"退出码: {return_code}"
                 self._log(f"\n[错误] {task.name} 执行失败，退出码: {return_code}")
                 self.logger.error(f"执行失败: {task.name}, 退出码: {return_code}")
                 self._set_status(f"失败: {task.name} (用时 {elapsed:.1f}s)")

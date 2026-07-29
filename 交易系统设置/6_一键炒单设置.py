@@ -34,8 +34,6 @@ from typing import Any, Dict, List, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from pywinauto import Application, findwindows
-
 from core.window import find_window, activate_window, countdown, close_settings_dialog
 from core.settings_window import (
     open_settings_dialog as open_settings_dialog_compat,
@@ -47,7 +45,8 @@ from core.one_click_settings import (
     normalize_text,
     parse_shortcut_ocr_tokens,
 )
-from core.settings_result import SettingsTestResult
+from core.settings import SettingsTestResult
+from core.settings_standard import load_standard
 
 
 # GUI 启动时 core.window 会按 GUI_CLIENT_ID 覆盖此值；直接运行本脚本时，
@@ -62,11 +61,21 @@ PROFILE_PATH = Path(__file__).with_name("一键炒单设置标准.json")
 with PROFILE_PATH.open("r", encoding="utf-8-sig") as profile_file:
     VALIDATION_PROFILE = json.load(profile_file)
 
-STANDARD_VALUES = {
+# 标准值（可比字段）：下拉框当前选择 + 默认合约输入值。
+# 优先从 交易系统设置/标准/<客户端>/一键炒单设置.json 读取（抓取脚本可覆盖）；
+# 找不到时用下方由 VALIDATION_PROFILE 推导的兜底，保证离线不崩。
+# 注意（本面板特殊）：完整校验标准仍来自独立 JSON（一键炒单设置标准.json）的
+# VALIDATION_PROFILE，含下拉候选项、默认合约、快捷键表格指纹与 OCR 配置；
+# 此处 STANDARD_VALUES 仅承载会与界面“当前值”比对的扁平字段。
+DEFAULT_STANDARD_VALUES = {
     key: value["selected"]
     for key, value in VALIDATION_PROFILE["dropdowns"].items()
 }
-STANDARD_VALUES.update(VALIDATION_PROFILE["default_contracts"])
+DEFAULT_STANDARD_VALUES.update(VALIDATION_PROFILE["default_contracts"])
+
+# 当前客户端（GUI 启动时由 GUI_CLIENT_ID 环境变量注入；空则用内嵌兜底）
+CLIENT_ID = os.environ.get("GUI_CLIENT_ID", "") or ""
+STANDARD_VALUES = load_standard(PANEL_NAME, CLIENT_ID, DEFAULT_STANDARD_VALUES)
 
 AUTO_ID = {
     "快捷键方案": "2100",
@@ -90,172 +99,10 @@ RESULT_SUBDIR = PANEL_NAME
 COUNTDOWN_SEC = 3
 
 
-def _find_existing_settings_dlg(win=None) -> Optional[Any]:
-    """兼容顶级窗口、#32770 对话框和主窗口子窗口。"""
-    if win is not None:
-        try:
-            spec = win.child_window(title=SETTINGS_DIALOG_TITLE, control_type="Window")
-            if spec.exists(timeout=0.5):
-                dlg = spec.wrapper_object()
-                dlg.wait("ready", timeout=3)
-                print(f"[OK] 已找到设置对话框(子窗口): {SETTINGS_DIALOG_TITLE}")
-                return dlg
-        except Exception:
-            pass
-
-    try:
-        for elem in findwindows.find_elements(top_level_only=True):
-            try:
-                title = elem.window_text() or ""
-                if SETTINGS_DIALOG_TITLE in title:
-                    dlg = Application(backend="uia").connect(handle=elem.handle).window(
-                        handle=elem.handle
-                    )
-                    dlg.wait("ready", timeout=3)
-                    print(f"[OK] 已找到设置对话框(顶级): {title}")
-                    return dlg
-            except Exception:
-                continue
-    except Exception:
-        pass
-
-    try:
-        for elem in findwindows.find_elements(top_level_only=True, class_name="#32770"):
-            try:
-                dlg = Application(backend="uia").connect(
-                    handle=elem.handle, timeout=1
-                ).window(handle=elem.handle)
-                title_bar = dlg.child_window(control_type="TitleBar")
-                value = ""
-                if title_bar.exists(timeout=0.3):
-                    try:
-                        value = title_bar.legacy_properties().get("Value", "") or ""
-                    except Exception:
-                        value = title_bar.element_info.name or ""
-                if SETTINGS_DIALOG_TITLE in value:
-                    dlg.wait("ready", timeout=3)
-                    print(f"[OK] 已找到设置对话框(#32770): {value}")
-                    return dlg
-            except Exception:
-                continue
-    except Exception:
-        pass
-    return None
 
 
-def open_settings_dialog(win):
-    dlg = _find_existing_settings_dlg(win)
-    if dlg is not None:
-        return dlg
-
-    print("\n正在通过工具栏按钮打开'交易系统设置'...")
-    button = win.child_window(
-        auto_id=SETTINGS_BUTTON_AUTO_ID, control_type="Button"
-    )
-    button.wait("enabled", timeout=5)
-    button.click_input()
-    time.sleep(0.5)
-
-    end = time.time() + 4
-    clicked = False
-    while time.time() < end and not clicked:
-        # 国泰海通的设置菜单是原生 #32768 弹出窗口。若先枚举并连接其他
-        # 顶级窗口，菜单会因失去焦点而关闭，因此先用 Win32 直接锁定它。
-        menu_handles = []
-
-        def _collect_popup_menu(hwnd, _):
-            try:
-                if (
-                    win32gui.IsWindowVisible(hwnd)
-                    and win32gui.GetClassName(hwnd) == "#32768"
-                ):
-                    menu_handles.append(hwnd)
-            except Exception:
-                pass
-
-        win32gui.EnumWindows(_collect_popup_menu, None)
-        for handle in menu_handles:
-            try:
-                menu = Application(backend="uia").connect(
-                    handle=handle, timeout=0.5
-                ).window(handle=handle)
-                item = menu.child_window(
-                    auto_id=SETTINGS_MENU_ITEM_AUTO_ID, control_type="MenuItem"
-                )
-                if item.exists(timeout=0.2):
-                    # 高 DPI 下该原生菜单的 UIA 坐标可能按逻辑像素返回，
-                    # click_input 会点击到错误位置；Invoke 不依赖屏幕坐标。
-                    item.invoke()
-                    clicked = True
-                    break
-            except Exception:
-                continue
-
-        # 兼容少数将菜单实现为普通顶级窗口的旧版本。
-        if not clicked:
-            for elem in findwindows.find_elements(top_level_only=True):
-                try:
-                    if elem.class_name == "#32768":
-                        continue
-                    menu = Application(backend="uia").connect(
-                        handle=elem.handle, timeout=0.5
-                    ).window(handle=elem.handle)
-                    item = menu.child_window(
-                        auto_id=SETTINGS_MENU_ITEM_AUTO_ID,
-                        control_type="MenuItem",
-                    )
-                    if item.exists(timeout=0.2):
-                        item.click_input()
-                        clicked = True
-                        break
-                except Exception:
-                    continue
-        if not clicked:
-            time.sleep(0.15)
-
-    end = time.time() + 10
-    while time.time() < end:
-        dlg = _find_existing_settings_dlg(win)
-        if dlg is not None:
-            return dlg
-        time.sleep(0.3)
-    raise RuntimeError("无法打开'交易系统设置'对话框")
 
 
-def switch_to_settings_panel(dlg) -> bool:
-    try:
-        nav = dlg.child_window(auto_id="2210", control_type="List")
-        nav.wait("ready", timeout=5)
-        item = nav.child_window(title=PANEL_NAME, control_type="ListItem")
-        item.wait("visible", timeout=3)
-        # 直接向原生 ListBox 设置选择并发送 LBN_SELCHANGE。该方式与用户
-        # 选择列表项触发相同通知，同时绕开 QLOption 的 DPI 坐标虚拟化。
-        items = nav.descendants(control_type="ListItem")
-        target_index = next(
-            i for i, ctrl in enumerate(items)
-            if (ctrl.window_text() or "").strip() == PANEL_NAME
-        )
-        nav_wrapper = nav.wrapper_object()
-        list_hwnd = int(nav_wrapper.handle)
-        parent_hwnd = win32gui.GetParent(list_hwnd)
-        control_id = win32gui.GetDlgCtrlID(list_hwnd)
-        win32gui.SendMessage(list_hwnd, 0x0186, target_index, 0)  # LB_SETCURSEL
-        win32gui.SendMessage(
-            parent_hwnd,
-            win32con.WM_COMMAND,
-            control_id | (1 << 16),  # LBN_SELCHANGE == 1
-            list_hwnd,
-        )
-        time.sleep(0.8)
-        # 用本面板的唯一控件确认页面确实完成切换，避免只记录“点击成功”。
-        dlg.child_window(
-            auto_id=AUTO_ID["快捷键方案"], control_type="ComboBox"
-        ).wait("exists", timeout=5)
-        print(f"[OK] 已切换到'{PANEL_NAME}'面板")
-        return True
-    except Exception as e:
-        print(f"[WARN] 切换到'{PANEL_NAME}'面板失败: {e}")
-        return False
 
 
 def get_combobox_value(dlg, auto_id: str) -> Optional[str]:
@@ -514,10 +361,13 @@ def test_one_click_trading(dlg, result: SettingsTestResult,
                            artifact_dir: str, timestamp: str):
     print("\n--- 一键炒单设置检查 ---")
     for key, expected in VALIDATION_PROFILE["dropdowns"].items():
+        # 下拉“当前值”的期望值优先用 STANDARD_VALUES（可被抓取脚本覆盖），
+        # 候选项列表仍来自 VALIDATION_PROFILE（特殊，不随比对标准迁移）。
+        expected_selected = STANDARD_VALUES.get(key, expected["selected"])
         try:
             snapshot = get_combobox_snapshot(dlg, AUTO_ID[key])
             result.add_result(
-                f"{key}_当前值", snapshot["current"], expected["selected"],
+                f"{key}_当前值", snapshot["current"], expected_selected,
                 snapshot["source"]
             )
             result.add_result(
@@ -528,18 +378,20 @@ def test_one_click_trading(dlg, result: SettingsTestResult,
             )
         except Exception as error:
             result.add_unverified(
-                f"{key}_当前值", expected["selected"], str(error)
+                f"{key}_当前值", expected_selected, str(error)
             )
             result.add_unverified(
                 f"{key}_候选项列表", "、".join(expected["items"]), str(error)
             )
 
     for key, expected in VALIDATION_PROFILE["default_contracts"].items():
+        # 默认合约期望值优先用 STANDARD_VALUES（可被抓取脚本覆盖）。
+        expected_contract = STANDARD_VALUES.get(key, expected)
         actual = get_edit_value(dlg, AUTO_ID[key])
         if actual is None:
-            result.add_unverified(key, expected, "Edit控件无法读取")
+            result.add_unverified(key, expected_contract, "Edit控件无法读取")
         else:
-            result.add_result(key, actual, expected, "UIA只读")
+            result.add_result(key, actual, expected_contract, "UIA只读")
 
     table = collect_shortcut_table(dlg, artifact_dir, timestamp)
     fingerprint = VALIDATION_PROFILE["fingerprint"]
@@ -581,6 +433,41 @@ def test_one_click_trading(dlg, result: SettingsTestResult,
         f"来源：{table['source']}；只读采集，不发送快捷键、不修改设置",
     )
     result.add_observation("校验标准", str(PROFILE_PATH), "独立JSON配置")
+
+
+def collect_current_settings(dlg) -> dict:
+    """读取当前面板的可比设置值，返回与 STANDARD_VALUES 同构的扁平字典。
+
+    供“抓取自定义标准”脚本把当前客户端界面值采集为新的比对标准。
+    说明（本面板特殊）：
+      - 完整校验标准仍来自独立 JSON（一键炒单设置标准.json）的 VALIDATION_PROFILE，
+        含下拉候选项、默认合约、快捷键表格指纹与 OCR 配置；
+        此处只采集会与 STANDARD_VALUES 比对的“下拉当前选择”与“默认合约输入值”，
+        不采集 OCR 快捷键表格（采集重、且依赖专属 profile，不随比对标准迁移）。
+      - 全程只读：不发送快捷键、不点击“应用”/“恢复默认”，不改变任何设置。
+      - 钱龙客户端无此面板，调用方（抓取脚本）会先因切换面板失败而跳过本面板。
+    """
+    data: dict = {}
+
+    # 下拉框当前选择（selected）
+    for key in VALIDATION_PROFILE["dropdowns"]:
+        try:
+            snapshot = get_combobox_snapshot(dlg, AUTO_ID[key])
+            data[key] = snapshot["current"]
+        except Exception as e:
+            print(f"  [WARN] 采集下拉框({key})失败: {e}")
+            data[key] = ""
+
+    # 默认合约输入框
+    for key in VALIDATION_PROFILE["default_contracts"]:
+        try:
+            val = get_edit_value(dlg, AUTO_ID[key])
+            data[key] = val if val is not None else ""
+        except Exception as e:
+            print(f"  [WARN] 采集默认合约({key})失败: {e}")
+            data[key] = ""
+
+    return data
 
 
 def main():

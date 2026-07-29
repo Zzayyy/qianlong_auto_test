@@ -37,6 +37,9 @@ class Task:
         env["GUI_COUNTDOWN"] = str(p.get("countdown_sec", 3))
         env["GUI_XLSX_FILE"] = p.get("xlsx_file", "")
         env["GUI_CATEGORY"] = self.category
+        env["GUI_SUPER_ADD_UNDERLYING"] = str(
+            bool(p.get("super_add_underlying", False))
+        )
 
         # 期权下单_一键导出 参数
         export_targets = p.get("export_targets", [])
@@ -58,6 +61,10 @@ class Task:
         # 客户端（多客户端支持）：透传 client_id，由子进程 core 解析
         # window_key 与菜单路径，无需在本处耦合具体客户端细节
         env["GUI_CLIENT_ID"] = p.get("client_id", "") or ""
+
+        # 抓取自定义标准：透传 GUI 参数配置中勾选的面板（逗号分隔）
+        capture_panels = p.get("capture_panels", [])
+        env["GUI_CAPTURE_PANELS"] = ",".join(capture_panels)
 
         # 查询类通用驱动所需：指明要执行的具体查询（queries.json 的 key）
         env["GUI_QUERY_KEY"] = self.script.get("query_key", "") or ""

@@ -45,18 +45,18 @@ import ctypes
 import win32gui
 import win32con
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 # 添加项目根目录到路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from pywinauto import Application, findwindows
 from core.window import find_window, activate_window, countdown, close_settings_dialog
 from core.settings_window import (
     open_settings_dialog as open_settings_dialog_compat,
     switch_settings_panel as switch_settings_panel_compat,
 )
-from core.settings_result import SettingsTestResult
+from core.settings import SettingsTestResult
+from core.settings_standard import load_standard
 
 
 # ====================== 可配置参数 ======================
@@ -66,8 +66,10 @@ SETTINGS_MENU_ITEM_AUTO_ID = "20025" # 弹出菜单中"交易系统设置"项 au
 SETTINGS_DIALOG_TITLE = "交易系统设置"  # 设置对话框标题
 PANEL_NAME = "自动拆单设置"           # 左侧树节点名称
 
-# 标准值（恢复默认后应呈现的值），用于比对
-STANDARD_VALUES = {
+# 标准值（恢复默认后应呈现的值），用于比对。
+# 优先从 交易系统设置/标准/<客户端>/自动拆单设置.json 读取（可自定义/抓取覆盖）；
+# 找不到时使用下方内嵌兜底（与 qianlong 默认标准一致），保证离线不崩。
+DEFAULT_STANDARD_VALUES = {
     # 一、随机拆单
     "随机拆单_启用": False,
     "随机拆单_限价_如果下单张数大于": 1,
@@ -88,6 +90,10 @@ STANDARD_VALUES = {
     "固定拆单_市价_以每次": 10,
     "固定拆单_市价_间隔毫秒": 300,
 }
+
+# 当前客户端（GUI 启动时由 GUI_CLIENT_ID 环境变量注入；空则用内嵌兜底）
+CLIENT_ID = os.environ.get("GUI_CLIENT_ID", "") or ""
+STANDARD_VALUES = load_standard(PANEL_NAME, CLIENT_ID, DEFAULT_STANDARD_VALUES)
 
 # 控件 auto_id 映射（来自交易系统设置_自动拆单设置.txt 抓取）
 AUTO_ID = {
@@ -121,184 +127,16 @@ COUNTDOWN_SEC = 3  # 倒计时秒数
 # ========================================================
 
 
-def open_settings_dialog(win) -> Any:
-    """自动打开'交易系统设置'对话框。"""
-    # 方案A: 先检查是否已打开
-    dlg = _find_existing_settings_dlg(win)
-    if dlg is not None:
-        return dlg
-
-    # 方案B: 自动点击打开
-    print("\n正在通过工具栏按钮打开'交易系统设置'...")
-    _click_settings_button(win)
-    _click_context_menu_item(win)
-
-    print("  等待设置对话框弹出...")
-    time.sleep(1.0)
-    end = time.time() + 10
-    while time.time() < end:
-        dlg = _find_existing_settings_dlg(win)
-        if dlg is not None:
-            return dlg
-        time.sleep(0.3)
-
-    print("[WARN] 菜单项未点击成功，尝试键盘降级方案...")
-    time.sleep(2)
-    dlg = _find_existing_settings_dlg(win)
-    if dlg is not None:
-        return dlg
-
-    raise RuntimeError(
-        f"无法打开'{SETTINGS_DIALOG_TITLE}'对话框，请确认:\n"
-        f"  1. 钱龙软件已登录交易账号\n"
-        f"  2. 工具栏设置按钮(auto_id={SETTINGS_BUTTON_AUTO_ID})可见"
-    )
 
 
-def _find_existing_settings_dlg(win=None) -> Optional[Any]:
-    """查找已打开的设置对话框。"""
-    # 1. 顶级窗口，直接按标题匹配
-    try:
-        for elem in findwindows.find_elements(top_level_only=True):
-            try:
-                title = elem.window_text() or ""
-                if SETTINGS_DIALOG_TITLE in title:
-                    app = Application(backend="uia").connect(handle=elem.handle)
-                    dlg = app.window(handle=elem.handle)
-                    dlg.wait("ready", timeout=3)
-                    print(f"[OK] 已找到设置对话框(顶级): {title}")
-                    return dlg
-            except Exception:
-                continue
-    except Exception:
-        pass
-
-    # 2. #32770 对话框：标题仅存在于 TitleBar 的 Value 中
-    try:
-        for elem in findwindows.find_elements(top_level_only=True, class_name="#32770"):
-            try:
-                app = Application(backend="uia").connect(handle=elem.handle, timeout=1)
-                dlg = app.window(handle=elem.handle)
-                tb = dlg.child_window(control_type="TitleBar")
-                if tb.exists(timeout=0.5):
-                    val = ""
-                    try:
-                        legacy = tb.legacy_properties()
-                        val = legacy.get("Value", "") or ""
-                    except Exception:
-                        pass
-                    if not val:
-                        try:
-                            val = tb.element_info.name or ""
-                        except Exception:
-                            pass
-                    if SETTINGS_DIALOG_TITLE in val:
-                        dlg.wait("ready", timeout=3)
-                        print(f"[OK] 已找到设置对话框(#32770): {val}")
-                        return dlg
-            except Exception:
-                continue
-    except Exception:
-        pass
-
-    # 3. 主窗口的子窗口 / 后代窗口兜底
-    if win is not None:
-        try:
-            for child in win.descendants(control_type="Window"):
-                try:
-                    title = child.window_text() or ""
-                    if SETTINGS_DIALOG_TITLE in title:
-                        child.wait("ready", timeout=3)
-                        print(f"[OK] 已找到设置对话框(子窗口): {title}")
-                        return child
-                except Exception:
-                    continue
-        except Exception:
-            pass
-
-    return None
 
 
-def _click_settings_button(win):
-    """点击主窗口上的设置按钮 (auto_id=1008)。"""
-    try:
-        btn = win.child_window(
-            auto_id=SETTINGS_BUTTON_AUTO_ID,
-            control_type="Button"
-        )
-        btn.wait("enabled", timeout=5)
-        btn.click_input()
-        print(f"[OK] 已点击设置按钮 (auto_id={SETTINGS_BUTTON_AUTO_ID})")
-        time.sleep(0.5)
-    except Exception:
-        print(f"[WARN] 用 auto_id 查找设置按钮失败，改用 win32gui...")
-        _click_button_by_auto_id(win.handle, SETTINGS_BUTTON_AUTO_ID)
 
 
-def _click_button_by_auto_id(parent_hwnd: int, auto_id: str):
-    """用 win32gui 枚举子窗口查找指定 auto_id 的按钮并点击。"""
-    import win32gui
-    import win32api
-    import win32con
-
-    def callback(hwnd, _):
-        try:
-            ctrl_id = win32gui.GetDlgCtrlID(hwnd)
-            if str(ctrl_id) == auto_id:
-                rect = win32gui.GetWindowRect(hwnd)
-                x = (rect[0] + rect[2]) // 2
-                y = (rect[1] + rect[3]) // 2
-                win32api.SetCursorPos((x, y))
-                win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0)
-                win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0)
-                print(f"[OK] 已用 win32gui 点击设置按钮 (auto_id={auto_id})")
-        except Exception:
-            pass
-
-    win32gui.EnumChildWindows(parent_hwnd, callback, None)
-    time.sleep(0.5)
 
 
-def _click_context_menu_item(win):
-    """在弹出菜单中选择'交易系统设置' (auto_id=20025)。"""
-    end = time.time() + 4
-    while time.time() < end:
-        for elem in findwindows.find_elements(top_level_only=True):
-            try:
-                menu_app = Application(backend="uia").connect(handle=elem.handle, timeout=0.5)
-                menu_dlg = menu_app.window(handle=elem.handle)
-                item = menu_dlg.child_window(
-                    auto_id=SETTINGS_MENU_ITEM_AUTO_ID,
-                    control_type="MenuItem",
-                )
-                if item.exists(timeout=0.3):
-                    item.wait("visible", timeout=1)
-                    item.click_input()
-                    print(f"[OK] 已点击菜单项 (auto_id={SETTINGS_MENU_ITEM_AUTO_ID})")
-                    return True
-            except Exception:
-                continue
-        time.sleep(0.15)
-
-    return False
 
 
-def switch_to_settings_panel(dlg, panel_name: str = PANEL_NAME) -> bool:
-    """在设置对话框中切换到指定标签页（左侧 ListItem 导航菜单）。"""
-    try:
-        nav_list = dlg.child_window(auto_id="2210", control_type="List")
-        nav_list.wait("ready", timeout=5)
-        nav_list.set_focus()
-
-        item = nav_list.child_window(title=panel_name, control_type="ListItem")
-        item.wait("visible", timeout=3)
-        item.click_input()
-        time.sleep(0.5)
-        print(f"[OK] 已切换到'{panel_name}'面板")
-        return True
-    except Exception as e:
-        print(f"[WARN] 切换到'{panel_name}'面板失败: {e}")
-        return False
 
 
 # ============ Win32 消息加速（与 1_委托设置.py / 2_期权设置.py 一致）============
@@ -524,6 +362,37 @@ def explore_dialog_controls(dlg):
                 print(f"  [?] 获取信息失败: {e}")
     except Exception as e:
         print(f"  探索失败: {e}")
+
+
+def collect_current_settings(dlg) -> dict:
+    """读取当前面板全部设置值，返回与 STANDARD_VALUES 同构的字典。
+
+    供“抓取自定义标准”脚本把当前客户端界面值采集为新的比对标准。
+    逻辑与下方 test_* 函数一致（随机/固定拆单下参数组件始终可见，直接读取），
+    但只返回字典、不写报告、不改任何设置。
+    """
+    data: dict = {}
+
+    # 一、随机拆单
+    random_enabled = get_checkbox_state_by_id(dlg, AUTO_ID["随机拆单_启用"])
+    data["随机拆单_启用"] = bool(random_enabled) if random_enabled is not None else False
+    for key in ("随机拆单_限价_如果下单张数大于", "随机拆单_限价_以最少",
+                "随机拆单_限价_最多", "随机拆单_限价_间隔毫秒",
+                "随机拆单_市价_如果下单张数大于", "随机拆单_市价_以最少",
+                "随机拆单_市价_最多", "随机拆单_市价_间隔毫秒"):
+        val = get_edit_value_by_id(dlg, AUTO_ID[key])
+        data[key] = val if val is not None else 0
+
+    # 二、固定拆单
+    fixed_enabled = get_checkbox_state_by_id(dlg, AUTO_ID["固定拆单_启用"])
+    data["固定拆单_启用"] = bool(fixed_enabled) if fixed_enabled is not None else False
+    for key in ("固定拆单_限价_如果下单张数大于", "固定拆单_限价_以每次",
+                "固定拆单_限价_间隔毫秒", "固定拆单_市价_如果下单张数大于",
+                "固定拆单_市价_以每次", "固定拆单_市价_间隔毫秒"):
+        val = get_edit_value_by_id(dlg, AUTO_ID[key])
+        data[key] = val if val is not None else 0
+
+    return data
 
 
 def main():

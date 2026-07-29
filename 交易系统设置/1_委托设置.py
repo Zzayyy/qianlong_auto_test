@@ -45,18 +45,18 @@ import ctypes
 import win32gui
 import win32con
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import List, Optional
 
 # 添加项目根目录到路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from pywinauto import Application, findwindows, mouse
 from core.window import find_window, activate_window, countdown, close_settings_dialog
 from core.settings_window import (
     open_settings_dialog as open_settings_dialog_compat,
     switch_settings_panel as switch_settings_panel_compat,
 )
-from core.settings_result import SettingsTestResult
+from core.settings import SettingsTestResult
+from core.settings_standard import load_standard
 
 
 # ====================== 可配置参数 ======================
@@ -66,8 +66,10 @@ SETTINGS_MENU_ITEM_AUTO_ID = "20025" # 弹出菜单中"交易系统设置"项 au
 SETTINGS_DIALOG_TITLE = "交易系统设置"  # 设置对话框标题
 PANEL_NAME = "委托设置"               # 左侧树节点名称
 
-# 标准值（恢复默认后应呈现的值），用于比对
-STANDARD_VALUES = {
+# 标准值（恢复默认后应呈现的值），用于比对。
+# 优先从 交易系统设置/标准/<客户端>/委托设置.json 读取（可自定义/抓取覆盖）；
+# 找不到时使用下方内嵌兜底（与 qianlong 默认标准一致），保证离线不崩。
+DEFAULT_STANDARD_VALUES = {
     # 股票买卖委托价格跟盘设置
     "买入缺省价_勾选": True,
     "买入缺省价_选项": "现价",
@@ -101,6 +103,10 @@ STANDARD_VALUES = {
     "委托成交时发出提示音": False,
     "点击持仓联动行情": True,
 }
+
+# 当前客户端（GUI 启动时由 GUI_CLIENT_ID 环境变量注入；空则用内嵌兜底）
+CLIENT_ID = os.environ.get("GUI_CLIENT_ID", "") or ""
+STANDARD_VALUES = load_standard(PANEL_NAME, CLIENT_ID, DEFAULT_STANDARD_VALUES)
 
 # 控件 auto_id 映射（来自交易系统设置_委托设置.txt 抓取）
 AUTO_ID = {
@@ -155,270 +161,18 @@ COUNTDOWN_SEC = 3  # 倒计时秒数
 # ========================================================
 
 
-def open_settings_dialog(win) -> Any:
-    """自动打开'交易系统设置'对话框。
-
-    流程：
-        1. 先检查是否已打开，已打开则直接连接
-        2. 点击工具栏设置按钮 (auto_id=1008)，弹出上下文菜单
-        3. 在弹出菜单中点击"交易系统设置"项 (auto_id=20025)
-        4. 等待设置对话框出现（兼容顶级窗口与子窗口）
-    """
-    # ── 方案A: 先检查是否已打开 ──
-    dlg = _find_existing_settings_dlg(win)
-    if dlg is not None:
-        return dlg
-
-    # ── 方案B: 自动点击打开 ──
-    print("\n正在通过工具栏按钮打开'交易系统设置'...")
-
-    # 1. 点击设置按钮 (auto_id=1008)
-    _click_settings_button(win)
-
-    # 2. 等待弹出菜单出现，选择"交易系统设置"
-    _click_context_menu_item(win)
-
-    # 3. 等待设置对话框出现（先给一点渲染时间，再轮询）
-    print("  等待设置对话框弹出...")
-    time.sleep(1.0)
-    end = time.time() + 10
-    while time.time() < end:
-        dlg = _find_existing_settings_dlg(win)
-        if dlg is not None:
-            return dlg
-        time.sleep(0.3)
-
-    # 降级：尝试键盘方向键选择
-    print("[WARN] 菜单项未点击成功，尝试键盘降级方案...")
-    #_try_keyboard_select(win)
-    time.sleep(2)
-    dlg = _find_existing_settings_dlg(win)
-    if dlg is not None:
-        return dlg
-
-    raise RuntimeError(
-        f"无法打开'{SETTINGS_DIALOG_TITLE}'对话框，请确认:\n"
-        f"  1. 钱龙软件已登录交易账号\n"
-        f"  2. 工具栏设置按钮(auto_id={SETTINGS_BUTTON_AUTO_ID})可见"
-    )
 
 
-def _find_existing_settings_dlg(win=None) -> Optional[Any]:
-    """查找已打开的设置对话框。
-
-    兼容多种形态：
-        - 顶级窗口（window_text 直接含标题）
-        - #32770 对话框（标题只存在于 TitleBar 的 Value 属性中，
-          窗口自身 window_text() 为空，如本软件的交易系统设置）
-        - 主窗口的子窗口 / 后代窗口
-    """
-    # 1. 顶级窗口，直接按标题匹配
-    try:
-        for elem in findwindows.find_elements(top_level_only=True):
-            try:
-                title = elem.window_text() or ""
-                if SETTINGS_DIALOG_TITLE in title:
-                    app = Application(backend="uia").connect(handle=elem.handle)
-                    dlg = app.window(handle=elem.handle)
-                    dlg.wait("ready", timeout=3)
-                    print(f"[OK] 已找到设置对话框(顶级): {title}")
-                    return dlg
-            except Exception:
-                continue
-    except Exception:
-        pass
-
-    # 2. #32770 对话框：标题仅存在于 TitleBar 的 Value 中
-    try:
-        for elem in findwindows.find_elements(top_level_only=True, class_name="#32770"):
-            try:
-                app = Application(backend="uia").connect(handle=elem.handle, timeout=1)
-                dlg = app.window(handle=elem.handle)
-                tb = dlg.child_window(control_type="TitleBar")
-                if tb.exists(timeout=0.5):
-                    val = ""
-                    try:
-                        legacy = tb.legacy_properties()
-                        val = legacy.get("Value", "") or ""
-                    except Exception:
-                        pass
-                    if not val:
-                        try:
-                            val = tb.element_info.name or ""
-                        except Exception:
-                            pass
-                    if SETTINGS_DIALOG_TITLE in val:
-                        dlg.wait("ready", timeout=3)
-                        print(f"[OK] 已找到设置对话框(#32770): {val}")
-                        return dlg
-            except Exception:
-                continue
-    except Exception:
-        pass
-
-    # 3. 主窗口的子窗口 / 后代窗口兜底
-    if win is not None:
-        try:
-            for child in win.descendants(control_type="Window"):
-                try:
-                    title = child.window_text() or ""
-                    if SETTINGS_DIALOG_TITLE in title:
-                        child.wait("ready", timeout=3)
-                        print(f"[OK] 已找到设置对话框(子窗口): {title}")
-                        return child
-                except Exception:
-                    continue
-        except Exception:
-            pass
-
-    return None
 
 
-def _click_settings_button(win):
-    """点击主窗口上的设置按钮 (auto_id=1008)。"""
-    try:
-        # 用 auto_id 直接匹配
-        btn = win.child_window(
-            auto_id=SETTINGS_BUTTON_AUTO_ID,
-            control_type="Button"
-        )
-        btn.wait("enabled", timeout=5)
-        btn.click_input()
-        print(f"[OK] 已点击设置按钮 (auto_id={SETTINGS_BUTTON_AUTO_ID})")
-        time.sleep(0.5)
-    except Exception:
-        # 降级：用 win32gui 枚举子窗口按 auto_id 查找
-        print(f"[WARN] 用 auto_id 查找设置按钮失败，改用 win32gui...")
-        _click_button_by_auto_id(win.handle, SETTINGS_BUTTON_AUTO_ID)
 
 
-def _click_button_by_auto_id(parent_hwnd: int, auto_id: str):
-    """用 win32gui 枚举子窗口查找指定 auto_id 的按钮并点击。"""
-    import win32gui
-    import win32api
-    import win32con
-
-    def callback(hwnd, _):
-        try:
-            ctrl_id = win32gui.GetDlgCtrlID(hwnd)
-            if str(ctrl_id) == auto_id:
-                # 计算中心坐标
-                rect = win32gui.GetWindowRect(hwnd)
-                x = (rect[0] + rect[2]) // 2
-                y = (rect[1] + rect[3]) // 2
-                win32api.SetCursorPos((x, y))
-                win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0)
-                win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0)
-                print(f"[OK] 已用 win32gui 点击设置按钮 (auto_id={auto_id})")
-        except Exception:
-            pass
-
-    win32gui.EnumChildWindows(parent_hwnd, callback, None)
-    time.sleep(0.5)
 
 
-def _click_context_menu_item(win):
-    """在弹出菜单中选择'交易系统设置' (auto_id=20025)。
-
-    弹出菜单是动态创建的，需要遍历顶级窗口匹配 MenuItem。
-    如果 UIA 匹配不到，降级为键盘方向键。
-    """
-    # 尝试用 UIA 匹配菜单项
-    end = time.time() + 4
-    while time.time() < end:
-        for elem in findwindows.find_elements(top_level_only=True):
-            try:
-                menu_app = Application(backend="uia").connect(handle=elem.handle, timeout=0.5)
-                menu_dlg = menu_app.window(handle=elem.handle)
-                item = menu_dlg.child_window(
-                    auto_id=SETTINGS_MENU_ITEM_AUTO_ID,
-                    control_type="MenuItem",
-                )
-                if item.exists(timeout=0.3):
-                    item.wait("visible", timeout=1)
-                    item.click_input()
-                    print(f"[OK] 已点击菜单项 (auto_id={SETTINGS_MENU_ITEM_AUTO_ID})")
-                    return True
-            except Exception:
-                continue
-        time.sleep(0.15)
-
-    return False
 
 
-def _try_keyboard_select(win):
-    """降级方案：用键盘方向键选择菜单项。"""
-    try:
-        win.set_focus()
-        time.sleep(0.2)
-        # 先确定几级菜单才到达"交易系统设置"，尝试不同次数
-        # 通常设置按钮的上下文菜单中"交易系统设置"是第二个或第三个
-        for down_count in [2, 3, 4, 1]:
-            win.type_keys(f"{{DOWN {down_count}}}{{ENTER}}", with_spaces=False)
-            time.sleep(1.5)
-            if _find_existing_settings_dlg(win) is not None:
-                print(f"[OK] 键盘降级方案成功 (按Down {down_count}次 + Enter)")
-                return True
-        print("[WARN] 键盘降级方案未找到确切菜单项")
-    except Exception as e:
-        print(f"[WARN] 键盘选定方案失败: {e}")
 
 
-def switch_to_settings_panel(dlg, panel_name: str = PANEL_NAME) -> bool:
-    """在设置对话框中切换到指定标签页（左侧 ListBox 导航菜单）。
-
-    控件结构（来自抓取文档）：
-        ListBox - '' (auto_id="2210", control_type="List")
-           ├── ListItem - '委托设置'
-           ├── ListItem - '期权设置'
-           └── ...
-
-    优先用 Win32 列表框消息（LB_FINDSTRINGEXACT 定位 + LB_SETCURSEL 选中 +
-    向父窗口发 WM_COMMAND/LBN_SELCHANGE 通知），不依赖 UIA 树遍历与真实点击；
-    失败则降级回 UIA 的 click_input()。
-    """
-    # ── 快速路径：Win32 列表框消息 ──
-    try:
-        hwnd = _get_control_hwnd(dlg, "2210")
-        if hwnd is not None:
-            user32 = _win32_user32()
-            buf = ctypes.create_unicode_buffer(256)
-            count = user32.SendMessageW(hwnd, LB_GETCOUNT, 0, 0)
-            target = -1
-            for i in range(count if isinstance(count, int) and count > 0 else 0):
-                user32.SendMessageW(hwnd, LB_GETTEXT, i, ctypes.addressof(buf))
-                if buf.value.strip() == panel_name:
-                    target = i
-                    break
-            if target >= 0:
-                user32.SendMessageW(hwnd, LB_SETCURSEL, target, 0)
-                # 通知父窗口选择已改变，触发面板切换逻辑
-                parent = win32gui.GetParent(hwnd)
-                ctrl_id = win32gui.GetDlgCtrlID(hwnd)
-                wparam = (LBN_SELCHANGE << 16) | ctrl_id
-                win32gui.SendMessage(parent, WM_COMMAND, wparam, hwnd)
-                time.sleep(0.5)
-                print(f"[OK] 已切换到'{panel_name}'面板(win32)")
-                return True
-            print(f"  [WARN] 在列表框中未找到'{panel_name}'项，降级到 UIA")
-    except Exception as e:
-        print(f"  [WARN] win32 切换面板失败，降级到 UIA: {e}")
-
-    # ── 降级路径：原 UIA 方案 ──
-    try:
-        nav_list = dlg.child_window(auto_id="2210", control_type="List")
-        nav_list.wait("ready", timeout=5)
-        nav_list.set_focus()
-
-        item = nav_list.child_window(title=panel_name, control_type="ListItem")
-        item.wait("visible", timeout=3)
-        item.click_input()
-        time.sleep(0.5)
-        print(f"[OK] 已切换到'{panel_name}'面板(UIA)")
-        return True
-    except Exception as e:
-        print(f"[WARN] 切换到'{panel_name}'面板失败: {e}")
-        return False
 
 
 def get_checkbox_state_by_id(dlg, auto_id: str) -> Optional[bool]:
@@ -588,32 +342,6 @@ _NAV_MENU_ITEMS = {
 }
 
 
-def _toggle_combobox(combo, open_it: bool):
-    """展开/收起下拉框。
-
-    优先点击下拉框内部的“打开”按钮（auto_id=DropDown 或 仅 Button），
-    若找不到按钮（运行时 auto_id 可能不一致），则直接点击 combobox 右侧
-    的下拉箭头区域（绝对坐标），以保证一定能点开/收起。
-    """
-    # 策略1：内部 Button（先按精确 auto_id，再退化为任意 Button）
-    for kwargs in ({"auto_id": "DropDown", "control_type": "Button"},
-                   {"control_type": "Button"}):
-        try:
-            btn = combo.child_window(**kwargs)
-            if btn.exists(timeout=1):
-                btn.click_input()
-                return
-        except Exception:
-            continue
-
-    # 策略2：点击 combobox 右侧下拉箭头区域（相对控件右边缘约 8px，垂直居中）
-    try:
-        rect = combo.rectangle()
-        x = rect.right - 8
-        y = (rect.top + rect.bottom) // 2
-        mouse.click(coords=(x, y))
-    except Exception as e:
-        raise RuntimeError(f"无法点击下拉箭头: {e}")
 
 
 def _read_combobox_items_win32(hwnd: int) -> Optional[List[str]]:
@@ -1098,6 +826,101 @@ def explore_dialog_controls(dlg):
                 print(f"  [?] 获取信息失败: {e}")
     except Exception as e:
         print(f"  探索失败: {e}")
+
+
+def collect_current_settings(dlg) -> dict:
+    """读取当前面板全部设置值，返回与 STANDARD_VALUES 同构的字典。
+
+    供“抓取自定义标准”脚本把当前客户端界面值采集为新的比对标准。
+    逻辑与下方 test_* 函数一致（含为读取数值临时启用再恢复），但只返回字典、
+    不写报告、不改任何设置。
+    """
+    data: dict = {}
+
+    # 一、股票买卖委托价格跟盘设置
+    buy_checked = get_checkbox_state_by_id(dlg, AUTO_ID["买入缺省价"])
+    data["买入缺省价_勾选"] = bool(buy_checked) if buy_checked is not None else False
+    if buy_checked:
+        data["买入缺省价_选项"] = get_combobox_selection_by_id(dlg, AUTO_ID["买入缺省价_下拉"]) or ""
+        buy_items = get_combobox_items_by_id(dlg, AUTO_ID["买入缺省价_下拉"])
+        data["买入缺省价_下拉_选项列表"] = buy_items or []
+    else:
+        data["买入缺省价_选项"] = None
+        data["买入缺省价_下拉_选项列表"] = []
+
+    sell_checked = get_checkbox_state_by_id(dlg, AUTO_ID["卖出缺省价"])
+    data["卖出缺省价_勾选"] = bool(sell_checked) if sell_checked is not None else False
+    if sell_checked:
+        data["卖出缺省价_选项"] = get_combobox_selection_by_id(dlg, AUTO_ID["卖出缺省价_下拉"]) or ""
+        sell_items = get_combobox_items_by_id(dlg, AUTO_ID["卖出缺省价_下拉"])
+        data["卖出缺省价_下拉_选项列表"] = sell_items or []
+    else:
+        data["卖出缺省价_选项"] = None
+        data["卖出缺省价_下拉_选项列表"] = []
+
+    # 二、大单自动分单设置
+    def _collect_split(key: str, cb_id: str, val_id: str):
+        initial = get_checkbox_state_by_id(dlg, cb_id)
+        data[f"{key}_勾选"] = bool(initial) if initial is not None else False
+        need_restore = False
+        if not initial:
+            set_checkbox_by_id(dlg, cb_id, True)
+            need_restore = True
+            time.sleep(0.6)
+        val = get_edit_value_by_id(dlg, val_id)
+        data[f"{key}_数值"] = val if val is not None else 0
+        if need_restore:
+            set_checkbox_by_id(dlg, cb_id, False)
+            time.sleep(0.4)
+
+    _collect_split("股票拆单", AUTO_ID["股票拆单"], AUTO_ID["股票拆单_数值"])
+    _collect_split("基金拆单", AUTO_ID["基金拆单"], AUTO_ID["基金拆单_数值"])
+
+    # 三、委托数量设置
+    def _collect_qty(key: str, cb_id: str, sub):
+        initial = get_checkbox_state_by_id(dlg, cb_id)
+        data[f"{key}_勾选"] = bool(initial) if initial is not None else False
+        need_restore = False
+        if not initial:
+            set_checkbox_by_id(dlg, cb_id, True)
+            need_restore = True
+            time.sleep(0.6)
+        sub()
+        if need_restore:
+            set_checkbox_by_id(dlg, cb_id, False)
+            time.sleep(0.4)
+
+    def _buy_sell_sub(prefix: str):
+        option = None
+        for rid in (AUTO_ID[f"{prefix}_确定数量"], AUTO_ID[f"{prefix}_全部数量"],
+                    AUTO_ID[f"{prefix}_上一次交易数量"]):
+            if get_radiobutton_state_by_id(dlg, rid):
+                option = RADIO_NAMES.get(rid)
+                break
+        data[f"{prefix}_选项"] = option or ""
+        qty = get_edit_value_by_id(dlg, AUTO_ID[f"{prefix}_数值"])
+        data[f"{prefix}_数值"] = qty if qty is not None else 0
+
+    def _trade_sub(prefix: str):
+        qty = get_edit_value_by_id(dlg, AUTO_ID[f"{prefix}_数值"])
+        data[f"{prefix}_数值"] = qty if qty is not None else 0
+
+    _collect_qty("股票买入自动填入数量", AUTO_ID["股票买入自动填入数量"],
+                 lambda: _buy_sell_sub("股票买入"))
+    _collect_qty("股票卖出自动填入数量", AUTO_ID["股票卖出自动填入数量"],
+                 lambda: _buy_sell_sub("股票卖出"))
+    _collect_qty("期权交易自动填入数量", AUTO_ID["期权交易自动填入数量"],
+                 lambda: _trade_sub("期权交易"))
+    _collect_qty("期货交易自动填入数量", AUTO_ID["期货交易自动填入数量"],
+                 lambda: _trade_sub("期货交易"))
+
+    # 四、底部复选框
+    for key in ("静默委托下单模式", "显示期权下单成功提示",
+                "显示期权宝软件风险揭示书", "委托成交时发出提示音", "点击持仓联动行情"):
+        st = get_checkbox_state_by_id(dlg, AUTO_ID[key])
+        data[key] = bool(st) if st is not None else False
+
+    return data
 
 
 def main():
