@@ -71,7 +71,11 @@ class SettingsStatusTests(unittest.TestCase):
 
     def test_all_settings_scripts_use_the_shared_result_model(self):
         settings_dir = Path(__file__).resolve().parents[1] / "交易系统设置"
-        scripts = sorted(settings_dir.glob("*.py"))
+        # “抓取自定义标准.py”是排除批量执行的配置工具，不是设置检查脚本。
+        scripts = sorted(
+            script for script in settings_dir.glob("*.py")
+            if script.name[:1].isdigit()
+        )
         legacy_window_helpers = {
             "open_settings_dialog",
             "_find_existing_settings_dlg",

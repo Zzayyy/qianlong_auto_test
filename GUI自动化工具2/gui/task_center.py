@@ -33,7 +33,7 @@ from gui.history import (
     STATUS_ERROR,
     STATUS_STOPPED,
 )
-from config import get_script_filename, get_scripts_config
+from config import MODULE_GROUPS, get_script_filename, get_scripts_config
 
 # 编队下拉中的占位项：表示当前队列是用户临时编排，未归入任何编队
 GROUP_PLACEHOLDER = "（自定义队列）"
@@ -553,6 +553,7 @@ class TaskCenter:
         # 重置来自脚本列表的拖入状态，避免误判
         self.controller._drag_script = None
         self.controller._drag_category = None
+        self.controller._drag_module = None
         self.controller._drag_active = False
         row = self.tree.identify_row(event.y)
         if not row:
@@ -566,7 +567,11 @@ class TaskCenter:
         """移动超过阈值即视为拖拽（避免与单击选择冲突）"""
         ctrl = self.controller
         # 来自脚本列表的拖入：实时显示落点
-        if getattr(ctrl, "_drag_active", False) and getattr(ctrl, "_drag_script", None) is not None:
+        external_payload = any(
+            getattr(ctrl, name, None) is not None
+            for name in ("_drag_script", "_drag_category", "_drag_module")
+        )
+        if getattr(ctrl, "_drag_active", False) and external_payload:
             if not self.is_running:
                 self._update_drop_indicator(event.y)
             return
@@ -618,7 +623,10 @@ class TaskCenter:
         """在落点处显示一条插入指示线（y 相对 tree 坐标）"""
         children = self.tree.get_children()
         if not children:
-            self._hide_drop_indicator()
+            # 空队列也要给出明确的可放置反馈；此时释放会追加为第一项。
+            height = max(1, self.tree.winfo_height())
+            line_y = max(1, min(int(y), height - 2))
+            self.drop_indicator.place(x=0, y=line_y, relwidth=1.0, height=2)
             return
         row = self.tree.identify_row(y)
         if not row:
@@ -687,23 +695,52 @@ class TaskCenter:
         target = self._drop_target(tree_y)
         self.add_category(category, self._insert_index_from_target(target))
 
+    def add_module_from_drop(self, module, tree_y):
+        """从脚本列表拖入一级模块：批量插入模块下全部可用分类。"""
+        self._hide_drop_indicator()
+        if self.is_running:
+            return
+        target = self._drop_target(tree_y)
+        self.add_module(module, self._insert_index_from_target(target))
+
     def add_category(self, category, index=None):
         """把指定分类下的全部脚本加入队列（index 为插入位置，None 则追加到末尾）"""
         if self.is_running:
-            return
+            return 0
         scripts_config = get_scripts_config(self.controller.client_id)
-        scripts = scripts_config.get(category, [])
-        if not scripts:
-            return
-        # 先收集本分类下可加入的脚本项（跳过文件不存在 / 缺少 Excel 的下单脚本）
+        items, skipped = self._collect_category_items(category, scripts_config)
+        return self._commit_batch_add(f"分类「{category}」", items, skipped, index)
+
+    def add_module(self, module, index=None):
+        """把一级模块下所有可用分类按界面顺序批量加入队列。"""
+        if self.is_running:
+            return 0
+        categories = MODULE_GROUPS.get(module, ())
+        scripts_config = get_scripts_config(self.controller.client_id)
         items = []
-        for s in scripts:
+        skipped = []
+        for category in categories:
+            category_items, category_skipped = self._collect_category_items(
+                category, scripts_config
+            )
+            items.extend(category_items)
+            skipped.extend(category_skipped)
+        return self._commit_batch_add(f"模块「{module}」", items, skipped, index)
+
+    def _collect_category_items(self, category, scripts_config):
+        """收集一个分类可批量加入的任务，同时保留所有跳过原因。"""
+        items = []
+        skipped = []
+        for s in scripts_config.get(category, []):
             if s.get("exclude_from_batch"):
-                continue  # 配置/工具类脚本不参与批量拖入（仍可由叶子节点单独加入）
+                skipped.append((s["name"], "批量排除"))
+                continue
             if not os.path.exists(s["path"]):
+                skipped.append((s["name"], "脚本文件不存在"))
                 continue
             if category == "下单" and get_script_filename(s["name"]) not in ("期权下单_一键导出", "全选撤单"):
                 if not self.controller.xlsx_file.get():
+                    skipped.append((s["name"], "未选择 Excel 配置文件"))
                     continue
             # 每个脚本按其自身默认参数分别快照（路径按各自名称生成）
             params = self.controller.make_task_params(s, category)
@@ -715,19 +752,33 @@ class TaskCenter:
                 "params": params,
                 "status": self.ST_PENDING,
             })
-        if not items:
-            return
-        if index is None or index >= len(self.tasks):
-            for it in items:
-                self.tasks.append(it)
-        else:
-            for k, it in enumerate(items):
-                self.tasks.insert(index + k, it)
-        self._save()
-        self._refresh()
-        self._dirty = True
-        self._update_group_hint()
-        self.gui._log(f"[任务中心] 已批量加入分类「{category}」共 {len(items)} 个脚本")
+        return items, skipped
+
+    def _commit_batch_add(self, scope, items, skipped, index):
+        """一次性插入批量任务并输出包含跳过原因的结果。"""
+        if items:
+            insert_at = len(self.tasks) if index is None else max(
+                0, min(index, len(self.tasks))
+            )
+            self.tasks[insert_at:insert_at] = items
+            self._save()
+            self._refresh()
+            self._dirty = True
+            self._update_group_hint()
+
+        message = f"[任务中心] {scope}已批量加入 {len(items)} 个脚本"
+        if skipped:
+            reason_counts = {}
+            for _, reason in skipped:
+                reason_counts[reason] = reason_counts.get(reason, 0) + 1
+            details = "，".join(
+                f"{reason} {count} 个" for reason, count in reason_counts.items()
+            )
+            message += f"；跳过 {len(skipped)} 个（{details}）"
+        elif not items:
+            message += "；当前客户端下没有可加入的脚本"
+        self.gui._log(message)
+        return len(items)
 
     def add_script(self, script, index=None):
         """把指定脚本加入队列（index 为插入位置，None 则追加）"""

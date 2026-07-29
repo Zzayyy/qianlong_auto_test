@@ -84,6 +84,7 @@ class AutomationGUI:
         # 脚本列表 -> 任务队列 的拖拽状态
         self._drag_script = None
         self._drag_category = None   # 拖拽分类根节点时记录分类名
+        self._drag_module = None     # 拖拽一级模块节点时记录模块名
         self._drag_active = False
         self._drag_occurred = False  # 本次按下是否实际发生了拖拽（用于决定是否跳过展开/折叠）
         self._drag_start_y = 0
@@ -286,7 +287,7 @@ class AutomationGUI:
         self.script_tree.bind('<B1-Motion>', self._on_list_drag_motion)
         self.script_tree.bind('<ButtonRelease-1>', self._on_list_drag_end)
         # 鼠标抬起时展开/折叠分类节点（避免按下即触发，与拖拽到队列冲突）
-        self.script_tree.bind('<ButtonRelease-1>', self._on_tree_release)
+        self.script_tree.bind('<ButtonRelease-1>', self._on_tree_release, add='+')
         # iid -> {"script": 脚本配置, "category": 分类}
         self.tree_script_map = {}
 
@@ -1387,38 +1388,40 @@ class AutomationGUI:
 
     # ====================== 脚本列表 -> 任务队列 拖拽 ======================
     def _on_list_drag_start(self, event):
-        """从树中开始拖拽（记录待拖出的脚本或整个分类）"""
+        """从树中开始拖拽（记录待拖出的脚本、分类或一级模块）"""
+        self._drag_script = None
+        self._drag_category = None
+        self._drag_module = None
+        self._drag_active = False
+        self._drag_occurred = False
         if self.task_center is None or self.task_center.is_running:
-            self._drag_script = None
-            self._drag_category = None
-            self._drag_occurred = False
             return
         iid = self.script_tree.identify_row(event.y)
         if not iid:
-            self._drag_script = None
-            self._drag_category = None
+            return
+        # 一级模块（iid 形如 module::行情交易）：落点时加入模块下全部可用分类。
+        if iid.startswith("module::"):
+            module = iid.split("::", 1)[1]
+            if module in MODULE_GROUPS:
+                self._drag_module = module
+                self._drag_start_y = event.y
             return
         # 拖拽分类根节点（iid 形如 cat::查询）：记录分类名，落点时加入其下全部脚本
         if iid.startswith("cat::"):
             self._drag_category = iid.split("::", 1)[1]
-            self._drag_script = None
-            self._drag_active = False
             self._drag_start_y = event.y
             return
         if iid not in self.tree_script_map:
-            self._drag_script = None
-            self._drag_category = None
             return
         item = self.tree_script_map[iid]
         self._drag_script = dict(item["script"])
         self._drag_script["category"] = item["category"]
-        self._drag_category = None
-        self._drag_active = False
         self._drag_start_y = event.y
 
     def _on_list_drag_motion(self, event):
         """拖动过程中：超过阈值视为拖拽，并在悬停于队列时显示落点"""
-        if self._drag_script is None and self._drag_category is None:
+        if (self._drag_script is None and self._drag_category is None
+                and self._drag_module is None):
             return
         if abs(event.y - self._drag_start_y) < 6:
             return
@@ -1446,18 +1449,21 @@ class AutomationGUI:
         if not over_tree:
             self._drag_script = None
             self._drag_category = None
+            self._drag_module = None
             self._drag_active = False
             if tc is not None:
                 tc._hide_drop_indicator()
         # 在队列上方释放时保留状态，交由 _on_global_drop 处理落点与清理
 
     def _on_global_drop(self, event):
-        """全局捕获释放：处理从脚本列表拖入队列的落点（单个脚本或整个分类）"""
+        """全局捕获释放：处理从脚本列表拖入队列的落点。"""
         script = self._drag_script
         category = self._drag_category
+        module = self._drag_module
         active = self._drag_active
         self._drag_script = None
         self._drag_category = None
+        self._drag_module = None
         self._drag_active = False
         tc = self.task_center
         if tc is not None:
@@ -1469,7 +1475,9 @@ class AutomationGUI:
         tree = tc.tree
         rx, ry = tree.winfo_rootx(), tree.winfo_rooty()
         if rx <= event.x_root <= rx + tree.winfo_width() and ry <= event.y_root <= ry + tree.winfo_height():
-            if category:
+            if module:
+                tc.add_module_from_drop(module, event.y_root - ry)
+            elif category:
                 tc.add_category_from_drop(category, event.y_root - ry)
             elif script is not None:
                 tc.add_script_from_drop(script, event.y_root - ry)
