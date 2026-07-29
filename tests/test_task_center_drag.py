@@ -14,6 +14,7 @@ if str(GUI_ROOT) not in sys.path:
 
 from gui.main_window import AutomationGUI
 from gui.task_center import TaskCenter
+from config import SUPER_STRATEGY_UNDERLYINGS
 
 
 class _Value:
@@ -44,6 +45,31 @@ class _TargetTree:
 
     def winfo_height(self):
         return 240
+
+
+class SuperStrategyParameterUiTests(unittest.TestCase):
+    def test_parameter_panel_uses_readonly_underlying_selector(self):
+        gui = AutomationGUI.__new__(AutomationGUI)
+        gui.params_frame = Mock()
+        gui.super_strategy_underlying = _Value(SUPER_STRATEGY_UNDERLYINGS[0])
+        gui.super_add_underlying = _Value(False)
+        with (
+            patch("gui.main_window.ttk.Label") as label,
+            patch("gui.main_window.ttk.Combobox") as combobox,
+            patch("gui.main_window.ttk.Checkbutton") as checkbutton,
+        ):
+            AutomationGUI._build_super_strategy_params(gui)
+
+        combobox.assert_called_once_with(
+            gui.params_frame,
+            textvariable=gui.super_strategy_underlying,
+            values=SUPER_STRATEGY_UNDERLYINGS,
+            state="readonly",
+            width=28,
+        )
+        label.assert_called()
+        checkbutton.assert_called_once()
+        gui.params_frame.columnconfigure.assert_called_once_with(1, weight=1)
 
 
 class MainWindowDirectoryDragTests(unittest.TestCase):

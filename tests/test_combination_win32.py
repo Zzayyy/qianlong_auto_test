@@ -279,6 +279,17 @@ class GuiTaskEnvironmentTests(unittest.TestCase):
             "True",
         )
 
+    def test_task_environment_passes_selected_super_strategy_underlying(self):
+        task = self.task_module.Task(
+            {"name": "牛市认购", "path": "strategy.py"},
+            "超级策略",
+            {"super_strategy_underlying": "(深)沪深300ETF嘉实"},
+        )
+        self.assertEqual(
+            task.build_env(str(PROJECT_ROOT))["GUI_SUPER_UNDERLYING"],
+            "(深)沪深300ETF嘉实",
+        )
+
 
 class DialogStateMachineTests(unittest.TestCase):
     def test_owner_drawn_idok_is_accepted_as_affirmative(self):

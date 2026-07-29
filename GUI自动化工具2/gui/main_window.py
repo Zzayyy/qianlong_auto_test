@@ -34,6 +34,8 @@ from config import (
     get_client_name,
     get_default_client_id,
     CAPTURE_STANDARD_PANELS,
+    DEFAULT_SUPER_STRATEGY_UNDERLYING,
+    SUPER_STRATEGY_UNDERLYINGS,
 )
 from engine.runner import ScriptRunner
 from engine.task import Task
@@ -114,6 +116,12 @@ class AutomationGUI:
         self.super_add_underlying = tk.BooleanVar(
             value=self.user_config.get("super_add_underlying", False)
         )
+        configured_underlying = self.user_config.get(
+            "super_strategy_underlying", DEFAULT_SUPER_STRATEGY_UNDERLYING
+        )
+        if configured_underlying not in SUPER_STRATEGY_UNDERLYINGS:
+            configured_underlying = DEFAULT_SUPER_STRATEGY_UNDERLYING
+        self.super_strategy_underlying = tk.StringVar(value=configured_underlying)
 
         # 期权下单_一键导出 参数
         self.export_target_position = tk.BooleanVar(value=True)  # 持仓
@@ -1056,17 +1064,31 @@ class AutomationGUI:
         self.params_frame.columnconfigure(1, weight=1)
 
     def _build_super_strategy_params(self):
-        """超级策略参数：是否在一键开仓前点击“加入标的”。"""
+        """超级策略参数：标的选择及是否在开仓前点击“加入标的”。"""
+        ttk.Label(self.params_frame, text="超级策略标的:").grid(
+            row=0, column=0, sticky=tk.W, pady=5
+        )
+        ttk.Combobox(
+            self.params_frame,
+            textvariable=self.super_strategy_underlying,
+            values=SUPER_STRATEGY_UNDERLYINGS,
+            state="readonly",
+            width=28,
+        ).grid(row=0, column=1, sticky=tk.W, pady=5)
         ttk.Checkbutton(
             self.params_frame,
             text="加入标的（可选）",
             variable=self.super_add_underlying,
-        ).grid(row=0, column=0, sticky=tk.W, pady=5)
+        ).grid(row=1, column=0, columnspan=2, sticky=tk.W, pady=5)
         ttk.Label(
             self.params_frame,
-            text="启用后：选择策略 → 加入标的 → 一键开仓；关闭时跳过加入标的。",
+            text=(
+                "执行顺序：选择ETF标的 → 选择策略 → "
+                "可选加入标的 → 一键开仓。"
+            ),
             foreground="gray",
-        ).grid(row=1, column=0, sticky=tk.W, pady=5)
+        ).grid(row=2, column=0, columnspan=2, sticky=tk.W, pady=5)
+        self.params_frame.columnconfigure(1, weight=1)
 
     def _is_capture_script_selected(self) -> bool:
         """当前选中的脚本是否为“抓取自定义标准”（按元数据标记判断，名字可随意改）"""
@@ -1547,6 +1569,9 @@ class AutomationGUI:
         self.user_config["export_format"] = self.export_format.get()
         self.user_config["auto_open"] = self.auto_open.get()
         self.user_config["super_add_underlying"] = self.super_add_underlying.get()
+        self.user_config["super_strategy_underlying"] = (
+            self.super_strategy_underlying.get()
+        )
         if self.current_category == "交易系统设置":
             set_output_dir(self.user_config, "交易系统设置", self.settings_output_dir.get())
         save_user_config(self.user_config)
@@ -1624,6 +1649,7 @@ class AutomationGUI:
             else:
                 self._log(f"输出路径: {self.settings_output_dir.get()}")
         elif self.current_category in SUPER_STRATEGY_CATEGORIES:
+            self._log(f"超级策略标的: {self.super_strategy_underlying.get()}")
             self._log(
                 f"加入标的: {'是' if self.super_add_underlying.get() else '否'}"
             )
@@ -1652,6 +1678,7 @@ class AutomationGUI:
             "export_output_dir": self.export_output_dir.get(),
             "settings_output_dir": self.settings_output_dir.get(),
             "super_add_underlying": self.super_add_underlying.get(),
+            "super_strategy_underlying": self.super_strategy_underlying.get(),
             "client_id": self.client_id,
             "capture_panels": [n for n in self._capturable_panels()
                                if self.capture_panels.get(n) and self.capture_panels[n].get()],
