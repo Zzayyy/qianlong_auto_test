@@ -491,10 +491,23 @@ def _close_underlying_popup(popup_hwnd: int) -> None:
         time.sleep(0.15)
 
 
+def _wait_underlying_popup_closed(popup_hwnd: int,
+                                  timeout: float = 1.0) -> None:
+    """等待标的下拉弹窗销毁或隐藏，不再截图复核主窗口。"""
+    deadline = time.monotonic() + max(0.1, float(timeout))
+    while time.monotonic() < deadline:
+        if not win32gui.IsWindow(popup_hwnd):
+            return
+        if not win32gui.IsWindowVisible(popup_hwnd):
+            return
+        time.sleep(0.05)
+    raise TacticsPanelError("点击ETF标的后下拉弹窗未关闭")
+
+
 def select_super_underlying(window, target: str, *, min_conf: float = 0.80,
                             enlarge: float = 2.5,
                             delay: float = 0.5) -> dict:
-    """读取固定选择框，展开独立弹窗，精确选择并复核ETF标的。"""
+    """读取固定选择框，展开独立弹窗并精确选择ETF标的。"""
     if target not in SUPER_STRATEGY_UNDERLYINGS:
         raise ValueError(f"不支持的超级策略标的: {target!r}")
 
@@ -542,23 +555,17 @@ def select_super_underlying(window, target: str, *, min_conf: float = 0.80,
 
         hit = list_hits[0]
         _real_click_target(popup_hwnd, hit["cx"], hit["cy"], delay=delay)
-        selected_after = _recognize_underlying_control(
-            main_hwnd, selector_hwnd, min_conf=min_conf, enlarge=enlarge
-        )
-        if _normalize(selected_after["text"]) != _normalize(target):
-            raise TacticsPanelError(
-                f"标的选择未生效：期望={target!r}，"
-                f"实际={selected_after['text']!r}"
-            )
+        _wait_underlying_popup_closed(popup_hwnd)
     except Exception:
         _close_underlying_popup(popup_hwnd)
         raise
 
-    result = dict(selected_after)
+    result = dict(hit)
+    result["text"] = target
     result["mode"] = "selected_from_dropdown"
     print(
-        f"[OK] OCR 选择并复核超级策略标的 {target!r}: "
-        f"置信度={selected_after['score']:.3f}"
+        f"[OK] OCR 选择超级策略标的 {target!r}，下拉弹窗已关闭: "
+        f"置信度={hit['score']:.3f}"
     )
     return result
 

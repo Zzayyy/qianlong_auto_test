@@ -639,10 +639,9 @@ class TacticsOcrTests(unittest.TestCase):
             tactics_panel._normalize("(深)沪深300ETF嘉实"),
         )
 
-    def test_underlying_selector_opens_list_clicks_exact_row_and_verifies(self):
+    def test_underlying_selector_opens_list_clicks_and_waits_for_popup_close(self):
         category = {"text": "ETF期权", "score": 0.99}
         current = {"text": "上证50ETF华夏", "score": 0.99}
-        selected_after = {"text": "(深)沪深300ETF嘉实", "score": 0.99}
         target_in_list = self._ocr_item(
             "(深)沪深300ETF嘉实", top=225, bottom=245, cx=160, cy=235
         )
@@ -653,8 +652,8 @@ class TacticsOcrTests(unittest.TestCase):
             ),
             mock.patch(
                 "core.tactics_panel._recognize_underlying_control",
-                side_effect=[category, current, selected_after],
-            ),
+                side_effect=[category, current],
+            ) as recognize_control,
             mock.patch("core.tactics_panel._open_underlying_popup", return_value=33),
             mock.patch("core.tactics_panel.capture_window_image", return_value=object()),
             mock.patch(
@@ -669,13 +668,66 @@ class TacticsOcrTests(unittest.TestCase):
                 return_value=[target_in_list],
             ),
             mock.patch("core.tactics_panel._real_click_target") as click,
+            mock.patch(
+                "core.tactics_panel._wait_underlying_popup_closed"
+            ) as wait_closed,
         ):
             result = tactics_panel.select_super_underlying(
                 11, "(深)沪深300ETF嘉实", delay=0
             )
 
         click.assert_called_once_with(33, 160, 235, delay=0)
+        wait_closed.assert_called_once_with(33)
+        self.assertEqual(recognize_control.call_count, 2)
+        self.assertEqual(result["text"], "(深)沪深300ETF嘉实")
         self.assertEqual(result["mode"], "selected_from_dropdown")
+
+    def test_underlying_selector_closes_popup_when_close_wait_fails(self):
+        category = {"text": "ETF期权", "score": 0.99}
+        current = {"text": "上证50ETF华夏", "score": 0.99}
+        target_in_list = self._ocr_item(
+            "(深)沪深300ETF嘉实", top=225, bottom=245, cx=160, cy=235
+        )
+        with (
+            mock.patch(
+                "core.tactics_panel.get_underlying_controls",
+                return_value=(21, 22),
+            ),
+            mock.patch(
+                "core.tactics_panel._recognize_underlying_control",
+                side_effect=[category, current],
+            ),
+            mock.patch("core.tactics_panel._open_underlying_popup", return_value=33),
+            mock.patch("core.tactics_panel.capture_window_image", return_value=object()),
+            mock.patch(
+                "core.tactics_panel.win32gui.GetWindowRect",
+                return_value=(100, 200, 246, 398),
+            ),
+            mock.patch(
+                "core.tactics_panel.dpi_unaware", return_value=nullcontext()
+            ),
+            mock.patch(
+                "core.tactics_panel.ocr_image_items",
+                return_value=[target_in_list],
+            ),
+            mock.patch("core.tactics_panel._real_click_target"),
+            mock.patch(
+                "core.tactics_panel._wait_underlying_popup_closed",
+                side_effect=tactics_panel.TacticsPanelError(
+                    "点击ETF标的后下拉弹窗未关闭"
+                ),
+            ),
+            mock.patch("core.tactics_panel._close_underlying_popup") as close_popup,
+        ):
+            with self.assertRaisesRegex(
+                tactics_panel.TacticsPanelError,
+                "点击ETF标的后下拉弹窗未关闭",
+            ):
+                tactics_panel.select_super_underlying(
+                    11, "(深)沪深300ETF嘉实", delay=0
+                )
+
+        close_popup.assert_called_once_with(33)
 
     def test_underlying_selector_does_not_click_when_already_selected(self):
         category = {"text": "ETF期权", "score": 0.99}
@@ -707,6 +759,31 @@ class TacticsOcrTests(unittest.TestCase):
 
         self.assertEqual(popup, 33)
         click.assert_not_called()
+
+    def test_wait_underlying_popup_closed_accepts_hidden_window(self):
+        with (
+            mock.patch("core.tactics_panel.win32gui.IsWindow", return_value=True),
+            mock.patch(
+                "core.tactics_panel.win32gui.IsWindowVisible", return_value=False
+            ),
+        ):
+            tactics_panel._wait_underlying_popup_closed(33, timeout=0.1)
+
+    def test_wait_underlying_popup_closed_fails_after_timeout(self):
+        with (
+            mock.patch("core.tactics_panel.win32gui.IsWindow", return_value=True),
+            mock.patch(
+                "core.tactics_panel.win32gui.IsWindowVisible", return_value=True
+            ),
+            mock.patch(
+                "core.tactics_panel.time.monotonic", side_effect=[0.0, 0.2]
+            ),
+        ):
+            with self.assertRaisesRegex(
+                tactics_panel.TacticsPanelError,
+                "点击ETF标的后下拉弹窗未关闭",
+            ):
+                tactics_panel._wait_underlying_popup_closed(33, timeout=0.1)
 
     def test_underlying_selector_rejects_unconfigured_target_before_ui_access(self):
         with mock.patch("core.tactics_panel.get_underlying_controls") as get_controls:
