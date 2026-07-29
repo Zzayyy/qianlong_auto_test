@@ -116,9 +116,9 @@ class QianlongClientProfileTests(unittest.TestCase):
             ["牛市认沽", "牛市认购", "熊市认沽", "熊市认购"],
         )
         for script in scripts["超级策略"]:
-            self.assertIn(
-                f"超级策略\\{script['name']}\\", script["path"]
-            )
+            self.assertTrue(script["path"].endswith(
+                f"超级策略\\{script['name']}_一键开仓.py"
+            ))
 
     def test_both_clients_declare_workspace_fingerprints(self):
         for client in self.clients:

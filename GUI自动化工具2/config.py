@@ -213,10 +213,10 @@ SCRIPTS_CONFIG = {
         {"name": "6.历史组合委托流水", "path": rf"{PROJECT_ROOT}\run_query.py", "query_key": r"\组合申报\历史组合委托流水"},
     ],
     "超级策略": [
-        {"name": "牛市认沽", "path": rf"{PROJECT_ROOT}\超级策略\牛市认沽\牛市认沽_一键开仓.py"},
-        {"name": "牛市认购", "path": rf"{PROJECT_ROOT}\超级策略\牛市认购\牛市认购_一键开仓.py"},
-        {"name": "熊市认沽", "path": rf"{PROJECT_ROOT}\超级策略\熊市认沽\熊市认沽_一键开仓.py"},
-        {"name": "熊市认购", "path": rf"{PROJECT_ROOT}\超级策略\熊市认购\熊市认购_一键开仓.py"},
+        {"name": "牛市认沽", "path": rf"{PROJECT_ROOT}\超级策略\牛市认沽_一键开仓.py"},
+        {"name": "牛市认购", "path": rf"{PROJECT_ROOT}\超级策略\牛市认购_一键开仓.py"},
+        {"name": "熊市认沽", "path": rf"{PROJECT_ROOT}\超级策略\熊市认沽_一键开仓.py"},
+        {"name": "熊市认购", "path": rf"{PROJECT_ROOT}\超级策略\熊市认购_一键开仓.py"},
     ],
     "交易系统设置": [
         {"name": "1.委托设置", "path": rf"{PROJECT_ROOT}\交易系统设置\1_委托设置.py"},

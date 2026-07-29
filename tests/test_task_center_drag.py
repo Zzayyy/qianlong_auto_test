@@ -219,6 +219,27 @@ class TaskCenterBatchDragTests(unittest.TestCase):
             placed,
         )
 
+    def test_saved_task_path_is_resolved_after_script_move(self):
+        center, _logs = self._task_center()
+        current_path = str(PROJECT_ROOT / "超级策略" / "牛市认购_一键开仓.py")
+        row = {
+            "category": "超级策略",
+            "script_name": "牛市认购",
+            "script_path": str(
+                PROJECT_ROOT / "超级策略" / "牛市认购" / "牛市认购_一键开仓.py"
+            ),
+        }
+        scripts = {
+            "超级策略": [
+                {"name": "牛市认购", "path": current_path},
+            ]
+        }
+
+        with patch("gui.task_center.get_scripts_config", return_value=scripts):
+            resolved = center._resolve_script_path(row)
+
+        self.assertEqual(current_path, resolved)
+
 
 if __name__ == "__main__":
     unittest.main()

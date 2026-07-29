@@ -309,12 +309,13 @@ class TaskCenter:
         """把编队中的任务快照载入到当前队列"""
         self.tasks = []
         for row in group.get("tasks", []):
-            if not os.path.exists(row.get("script_path", "")):
+            script_path = self._resolve_script_path(row)
+            if not script_path:
                 continue  # 脚本已不存在则跳过
             self.tasks.append({
                 "category": row["category"],
                 "script_name": row["script_name"],
-                "script_path": row["script_path"],
+                "script_path": script_path,
                 "query_key": row.get("query_key", ""),
                 "params": row.get("params", {}),
                 "status": self.ST_PENDING,
@@ -331,6 +332,24 @@ class TaskCenter:
             "query_key": t.get("query_key", ""),
             "params": t["params"],
         }
+
+    def _resolve_script_path(self, row):
+        """解析持久化任务的当前脚本路径，兼容脚本在项目内移动。"""
+        stored_path = row.get("script_path", "")
+        if os.path.exists(stored_path):
+            return stored_path
+
+        category = row.get("category", "")
+        script_name = row.get("script_name", "")
+        query_key = row.get("query_key", "")
+        scripts = get_scripts_config(self.controller.client_id).get(category, [])
+        for script in scripts:
+            same_script = (
+                bool(query_key) and script.get("query_key", "") == query_key
+            ) or script.get("name", "") == script_name
+            if same_script and os.path.exists(script.get("path", "")):
+                return script["path"]
+        return ""
 
     def save_group(self):
         """把当前队列保存为命名编队（已存在则提示覆盖）"""
@@ -408,12 +427,13 @@ class TaskCenter:
             return
         added = 0
         for row in group.get("tasks", []):
-            if not os.path.exists(row.get("script_path", "")):
+            script_path = self._resolve_script_path(row)
+            if not script_path:
                 continue
             self.tasks.append({
                 "category": row["category"],
                 "script_name": row["script_name"],
-                "script_path": row["script_path"],
+                "script_path": script_path,
                 "query_key": row.get("query_key", ""),
                 "params": row.get("params", {}),
                 "status": self.ST_PENDING,
@@ -1258,12 +1278,13 @@ class TaskCenter:
                 with open(self.file_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 for row in data:
-                    if not os.path.exists(row.get("script_path", "")):
+                    script_path = self._resolve_script_path(row)
+                    if not script_path:
                         continue  # 脚本已不存在则跳过
                     self.tasks.append({
                         "category": row["category"],
                         "script_name": row["script_name"],
-                        "script_path": row["script_path"],
+                        "script_path": script_path,
                         "query_key": row.get("query_key", ""),
                         "params": row.get("params", {}),
                         "status": self.ST_PENDING,
