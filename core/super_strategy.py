@@ -15,7 +15,12 @@ import win32con
 import win32gui
 import win32process
 
-from core.clients import get_client, get_default_client_id
+from core.clients import (
+    DEFAULT_SUPER_STRATEGY_UNDERLYING,
+    SUPER_STRATEGY_UNDERLYINGS,
+    get_client,
+    get_default_client_id,
+)
 from core.tactics_panel import (
     TacticsPanelError,
     capture_window_image,
@@ -23,6 +28,7 @@ from core.tactics_panel import (
     dpi_unaware,
     ocr_image_items,
     ocr_single_line,
+    select_super_underlying,
 )
 from core.window import countdown, find_window
 from core.workspace import WORKSPACE_SUPER, ensure_workspace
@@ -934,11 +940,19 @@ def wait_after_open(main_hwnd: int, before_windows: set[int],
     return result
 
 
-def run_strategy(target: str, *, add_underlying: bool | None = None,
+def run_strategy(target: str, *, underlying: str | None = None,
+                 add_underlying: bool | None = None,
                  execute_open: bool = True) -> dict:
-    """执行：自动进入超级策略 → OCR 选菜单 → 可选加入标的 → 一键开仓。"""
+    """执行：选择ETF标的 → 选策略 → 可选加入标的 → 一键开仓。"""
     if target not in SUPER_STRATEGY_TARGETS:
         raise ValueError(f"不支持的超级策略: {target!r}")
+    if underlying is None:
+        underlying = (
+            os.environ.get("GUI_SUPER_UNDERLYING")
+            or DEFAULT_SUPER_STRATEGY_UNDERLYING
+        ).strip()
+    if underlying not in SUPER_STRATEGY_UNDERLYINGS:
+        raise ValueError(f"不支持的超级策略标的: {underlying!r}")
     client_id = os.environ.get("GUI_CLIENT_ID") or get_default_client_id()
     client = get_client(client_id)
     if not client:
@@ -950,6 +964,8 @@ def run_strategy(target: str, *, add_underlying: bool | None = None,
     print("[OK] 已将交易客户端切换到前台")
     ensure_workspace(main_hwnd, WORKSPACE_SUPER, client)
 
+    print(f"[INFO] 超级策略标的: {underlying}")
+    underlying_hit = select_super_underlying(main_hwnd, underlying)
     print(f"[INFO] 超级策略目标: {target}")
     menu_hit = click_tactics_item(main_hwnd, target)
 
@@ -979,8 +995,10 @@ def run_strategy(target: str, *, add_underlying: bool | None = None,
 
     result = {
         "target": target,
+        "underlying": underlying,
         "add_underlying": bool(add_underlying),
         "add_result": None,
+        "underlying_hit": underlying_hit,
         "menu_hit": menu_hit,
         "open_triggered": False,
     }

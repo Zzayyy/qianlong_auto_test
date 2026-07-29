@@ -36,6 +36,13 @@ clients.json 结构示例：
 import os
 import json
 
+# 超级策略的固定ETF标的选项同时供 GUI 参数和核心自动化使用。
+SUPER_STRATEGY_UNDERLYINGS = (
+    "上证50ETF华夏",
+    "(深)沪深300ETF嘉实",
+)
+DEFAULT_SUPER_STRATEGY_UNDERLYING = SUPER_STRATEGY_UNDERLYINGS[0]
+
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.dirname(_HERE)
 

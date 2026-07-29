@@ -35,6 +35,8 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from core.clients import (  # noqa: E402
+    DEFAULT_SUPER_STRATEGY_UNDERLYING,
+    SUPER_STRATEGY_UNDERLYINGS,
     load_clients,
     get_clients,
     get_client,

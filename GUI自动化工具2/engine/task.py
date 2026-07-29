@@ -40,6 +40,7 @@ class Task:
         env["GUI_SUPER_ADD_UNDERLYING"] = str(
             bool(p.get("super_add_underlying", False))
         )
+        env["GUI_SUPER_UNDERLYING"] = p.get("super_strategy_underlying", "")
 
         # 期权下单_一键导出 参数
         export_targets = p.get("export_targets", [])

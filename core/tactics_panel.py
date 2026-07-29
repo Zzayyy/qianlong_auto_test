@@ -15,13 +15,21 @@ from PIL import Image
 import win32api
 import win32con
 import win32gui
+import win32process
 import win32ui
+
+from core.clients import SUPER_STRATEGY_UNDERLYINGS
 
 
 TACTICS_PANEL_CONTROL_ID = 103
 TACTICS_SCROLLBAR_CONTROL_ID = 104
 TACTICS_PANEL_CLASS = "AfxWnd140u"
 TACTICS_PANEL_TEXT = "TacticsPanel"
+UNDERLYING_CATEGORY_TEXT = "ETF期权"
+UNDERLYING_CATEGORY_CONTROL_ID = 100
+UNDERLYING_SELECTOR_CONTROL_ID = 101
+UNDERLYING_CONTROL_CLASS = "Static"
+UNDERLYING_POPUP_CLASS = "CQlComboDropList"
 SUPER_TARGETS = {
     "牛市认购",
     "牛市认沽",
@@ -65,7 +73,12 @@ def dpi_unaware():
 
 
 def _normalize(value: str) -> str:
-    return unicodedata.normalize("NFKC", str(value or "")).replace("\u3000", " ").strip()
+    return (
+        unicodedata.normalize("NFKC", str(value or ""))
+        .replace("\u3000", " ")
+        .strip()
+        .casefold()
+    )
 
 
 def _as_hwnd(window) -> int:
@@ -359,6 +372,195 @@ def _ocr_current_panel(main_hwnd: int, panel_hwnd: int, *,
         ),
         panel_image,
     )
+
+
+def get_underlying_controls(window) -> tuple[int, int]:
+    """定位固定在策略列表上方的类别和标的 Static 控件。"""
+    main_hwnd = _as_hwnd(window)
+    controls = []
+    for control_id in (
+        UNDERLYING_CATEGORY_CONTROL_ID,
+        UNDERLYING_SELECTOR_CONTROL_ID,
+    ):
+        matches = _find_children(
+            main_hwnd,
+            class_name=UNDERLYING_CONTROL_CLASS,
+            control_id=control_id,
+            visible=True,
+        )
+        valid = []
+        for hwnd in matches:
+            with dpi_unaware():
+                left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+            if 100 <= right - left <= 300 and 15 <= bottom - top <= 40:
+                valid.append(hwnd)
+        if len(valid) != 1:
+            raise TacticsPanelError(
+                f"超级策略标的控件定位不唯一（control_id={control_id}, "
+                f"匹配数={len(valid)}）"
+            )
+        controls.append(valid[0])
+    category_hwnd, selector_hwnd = controls
+    if win32gui.GetParent(category_hwnd) != win32gui.GetParent(selector_hwnd):
+        raise TacticsPanelError("超级策略类别与标的控件不属于同一页面")
+    return category_hwnd, selector_hwnd
+
+
+def _recognize_underlying_control(main_hwnd: int, control_hwnd: int, *,
+                                  min_conf: float, enlarge: float) -> dict:
+    main_image = capture_window_image(main_hwnd)
+    control_image, _ = crop_child_from_main(
+        main_image, main_hwnd, control_hwnd, right_crop=16
+    )
+    hit = ocr_single_line(control_image, min_conf=min_conf, enlarge=enlarge)
+    if hit is None:
+        artifact = _save_failure(control_image, "标的固定选择框")
+        raise TacticsPanelError(f"超级策略标的固定选择框OCR失败；截图={artifact}")
+    return hit
+
+
+def _real_click_target(target_hwnd: int, screen_x: float, screen_y: float, *,
+                       delay: float) -> None:
+    """在已校验的固定控件或下拉弹窗内执行真实鼠标点击。"""
+    x, y = int(round(screen_x)), int(round(screen_y))
+    with dpi_unaware():
+        left, top, right, bottom = win32gui.GetWindowRect(int(target_hwnd))
+        if not (left <= x < right and top <= y < bottom):
+            raise TacticsPanelError(
+                f"真实点击坐标越界: point={(x, y)}, rect={(left, top, right, bottom)}"
+            )
+        point_hwnd = win32gui.WindowFromPoint((x, y))
+        if point_hwnd != int(target_hwnd) and not win32gui.IsChild(
+            int(target_hwnd), point_hwnd
+        ):
+            raise TacticsPanelError("超级策略标的点击位置被其他窗口遮挡")
+        win32api.SetCursorPos((x, y))
+        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0)
+        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0)
+    time.sleep(delay)
+
+
+def _underlying_popups(main_hwnd: int) -> list[int]:
+    pid = int(win32process.GetWindowThreadProcessId(int(main_hwnd))[1])
+    matches = []
+
+    def callback(hwnd, _):
+        try:
+            if not win32gui.IsWindowVisible(hwnd):
+                return True
+            if win32gui.GetClassName(hwnd) != UNDERLYING_POPUP_CLASS:
+                return True
+            if int(win32process.GetWindowThreadProcessId(hwnd)[1]) != pid:
+                return True
+            if win32gui.GetWindow(hwnd, win32con.GW_OWNER) != int(main_hwnd):
+                return True
+            matches.append(hwnd)
+        except Exception:
+            pass
+        return True
+
+    win32gui.EnumWindows(callback, None)
+    return matches
+
+
+def _open_underlying_popup(main_hwnd: int, selector_hwnd: int,
+                           timeout: float = 1.5) -> int:
+    existing = _underlying_popups(main_hwnd)
+    if len(existing) > 1:
+        raise TacticsPanelError(f"ETF下拉弹窗不唯一（匹配数={len(existing)}）")
+    if len(existing) == 1:
+        return existing[0]
+
+    with dpi_unaware():
+        left, top, right, bottom = win32gui.GetWindowRect(selector_hwnd)
+    _real_click_target(selector_hwnd, right - 6, (top + bottom) / 2, delay=0.2)
+    deadline = time.monotonic() + max(0.1, float(timeout))
+    while time.monotonic() < deadline:
+        matches = _underlying_popups(main_hwnd)
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            raise TacticsPanelError(f"ETF下拉弹窗不唯一（匹配数={len(matches)}）")
+        time.sleep(0.05)
+    raise TacticsPanelError("点击固定标的选择框后未出现ETF下拉弹窗")
+
+
+def _close_underlying_popup(popup_hwnd: int) -> None:
+    if win32gui.IsWindow(popup_hwnd):
+        win32gui.PostMessage(popup_hwnd, win32con.WM_CLOSE, 0, 0)
+        time.sleep(0.15)
+
+
+def select_super_underlying(window, target: str, *, min_conf: float = 0.80,
+                            enlarge: float = 2.5,
+                            delay: float = 0.5) -> dict:
+    """读取固定选择框，展开独立弹窗，精确选择并复核ETF标的。"""
+    if target not in SUPER_STRATEGY_UNDERLYINGS:
+        raise ValueError(f"不支持的超级策略标的: {target!r}")
+
+    main_hwnd = _as_hwnd(window)
+    category_hwnd, selector_hwnd = get_underlying_controls(main_hwnd)
+    category = _recognize_underlying_control(
+        main_hwnd, category_hwnd, min_conf=min_conf, enlarge=enlarge
+    )
+    if _normalize(category["text"]) != _normalize(UNDERLYING_CATEGORY_TEXT):
+        raise TacticsPanelError(
+            f"超级策略类别校验失败：期望={UNDERLYING_CATEGORY_TEXT!r}，"
+            f"实际={category['text']!r}"
+        )
+    selected = _recognize_underlying_control(
+        main_hwnd, selector_hwnd, min_conf=min_conf, enlarge=enlarge
+    )
+
+    if _normalize(selected["text"]) == _normalize(target):
+        selected = dict(selected)
+        selected["mode"] = "already_selected"
+        print(f"[OK] 超级策略标的已是 {target!r}，无需切换")
+        return selected
+
+    popup_hwnd = _open_underlying_popup(main_hwnd, selector_hwnd)
+    try:
+        popup_image = capture_window_image(popup_hwnd)
+        with dpi_unaware():
+            popup_left, popup_top, _, _ = win32gui.GetWindowRect(popup_hwnd)
+        list_items = ocr_image_items(
+            popup_image,
+            screen_origin=(popup_left, popup_top),
+            min_conf=min_conf,
+            enlarge=enlarge,
+        )
+        list_hits = [
+            item for item in list_items
+            if _normalize(item["text"]) == _normalize(target)
+        ]
+        if len(list_hits) != 1:
+            artifact = _save_failure(popup_image, f"标的_{target}")
+            raise TacticsPanelError(
+                f"ETF下拉列表未唯一识别到 {target!r}"
+                f"（匹配数={len(list_hits)}）；截图={artifact}"
+            )
+
+        hit = list_hits[0]
+        _real_click_target(popup_hwnd, hit["cx"], hit["cy"], delay=delay)
+        selected_after = _recognize_underlying_control(
+            main_hwnd, selector_hwnd, min_conf=min_conf, enlarge=enlarge
+        )
+        if _normalize(selected_after["text"]) != _normalize(target):
+            raise TacticsPanelError(
+                f"标的选择未生效：期望={target!r}，"
+                f"实际={selected_after['text']!r}"
+            )
+    except Exception:
+        _close_underlying_popup(popup_hwnd)
+        raise
+
+    result = dict(selected_after)
+    result["mode"] = "selected_from_dropdown"
+    print(
+        f"[OK] OCR 选择并复核超级策略标的 {target!r}: "
+        f"置信度={selected_after['score']:.3f}"
+    )
+    return result
 
 
 def list_tactics_items(window, *, min_conf: float = 0.80, enlarge: float = 2.5,

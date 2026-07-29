@@ -262,6 +262,10 @@ class StrategyStartupTests(unittest.TestCase):
         {"GUI_CLIENT_ID": "guotai_haitong", "GUI_COUNTDOWN": "3"},
         clear=False,
     )
+    @mock.patch(
+        "core.super_strategy.select_super_underlying",
+        return_value={"text": "上证50ETF华夏"},
+    )
     @mock.patch("core.super_strategy.click_tactics_item", return_value={"text": "牛市认沽"})
     @mock.patch("core.super_strategy.ensure_workspace")
     @mock.patch("core.super_strategy._activate_main_window")
@@ -272,26 +276,39 @@ class StrategyStartupTests(unittest.TestCase):
     )
     @mock.patch("core.super_strategy.countdown")
     def test_strategy_counts_down_and_activates_before_navigation(
-        self, countdown, _, find_window, activate, ensure, click_menu
+        self, countdown, _, find_window, activate, ensure, click_menu,
+        select_underlying
     ):
         manager = mock.Mock()
         manager.attach_mock(countdown, "countdown")
         manager.attach_mock(find_window, "find_window")
         manager.attach_mock(activate, "activate")
         manager.attach_mock(ensure, "ensure")
+        manager.attach_mock(select_underlying, "select_underlying")
         manager.attach_mock(click_menu, "click_menu")
 
         result = super_strategy.run_strategy(
-            "牛市认沽", add_underlying=False, execute_open=False
+            "牛市认沽",
+            underlying="上证50ETF华夏",
+            add_underlying=False,
+            execute_open=False,
         )
 
         self.assertFalse(result["open_triggered"])
         self.assertEqual(
             [call[0] for call in manager.mock_calls],
-            ["countdown", "find_window", "activate", "ensure", "click_menu"],
+            [
+                "countdown",
+                "find_window",
+                "activate",
+                "ensure",
+                "select_underlying",
+                "click_menu",
+            ],
         )
         countdown.assert_called_once_with(3)
         activate.assert_called_once_with(11)
+        select_underlying.assert_called_once_with(11, "上证50ETF华夏")
 
     @mock.patch.dict(
         "os.environ",
@@ -318,6 +335,10 @@ class StrategyStartupTests(unittest.TestCase):
             mock.patch("core.super_strategy.find_window", return_value=11),
             mock.patch("core.super_strategy._activate_main_window"),
             mock.patch("core.super_strategy.ensure_workspace"),
+            mock.patch(
+                "core.super_strategy.select_super_underlying",
+                return_value={"text": "上证50ETF华夏"},
+            ),
             mock.patch(
                 "core.super_strategy.click_tactics_item",
                 return_value={"text": "牛市认沽"},
@@ -346,7 +367,10 @@ class StrategyStartupTests(unittest.TestCase):
             ) as wait_after_open,
         ):
             result = super_strategy.run_strategy(
-                "牛市认沽", add_underlying=True, execute_open=True
+                "牛市认沽",
+                underlying="上证50ETF华夏",
+                add_underlying=True,
+                execute_open=True,
             )
 
         self.assertEqual(
@@ -559,6 +583,22 @@ class RealMouseClickTests(unittest.TestCase):
 
 
 class TacticsOcrTests(unittest.TestCase):
+    @staticmethod
+    def _ocr_item(text, *, top, bottom, cx=150, cy=None, score=0.99):
+        if cy is None:
+            cy = (top + bottom) / 2
+        return {
+            "text": text,
+            "score": score,
+            "left": 110,
+            "top": top,
+            "right": 190,
+            "bottom": bottom,
+            "cx": cx,
+            "cy": cy,
+            "ocr_elapsed": 0.01,
+        }
+
     def test_six_formal_targets_have_distinct_fast_ocr_cells(self):
         self.assertEqual(set(tactics_panel.FORMAL_TARGET_CELLS), tactics_panel.SUPER_TARGETS)
         self.assertEqual(
@@ -592,6 +632,87 @@ class TacticsOcrTests(unittest.TestCase):
             fuzzy_threshold=0.8,
         )
         self.assertEqual(hit["text"], "牛市认购")
+
+    def test_underlying_normalization_ignores_ocr_letter_case(self):
+        self.assertEqual(
+            tactics_panel._normalize("(深)沪深300ETf嘉实"),
+            tactics_panel._normalize("(深)沪深300ETF嘉实"),
+        )
+
+    def test_underlying_selector_opens_list_clicks_exact_row_and_verifies(self):
+        category = {"text": "ETF期权", "score": 0.99}
+        current = {"text": "上证50ETF华夏", "score": 0.99}
+        selected_after = {"text": "(深)沪深300ETF嘉实", "score": 0.99}
+        target_in_list = self._ocr_item(
+            "(深)沪深300ETF嘉实", top=225, bottom=245, cx=160, cy=235
+        )
+        with (
+            mock.patch(
+                "core.tactics_panel.get_underlying_controls",
+                return_value=(21, 22),
+            ),
+            mock.patch(
+                "core.tactics_panel._recognize_underlying_control",
+                side_effect=[category, current, selected_after],
+            ),
+            mock.patch("core.tactics_panel._open_underlying_popup", return_value=33),
+            mock.patch("core.tactics_panel.capture_window_image", return_value=object()),
+            mock.patch(
+                "core.tactics_panel.win32gui.GetWindowRect",
+                return_value=(100, 200, 246, 398),
+            ),
+            mock.patch(
+                "core.tactics_panel.dpi_unaware", return_value=nullcontext()
+            ),
+            mock.patch(
+                "core.tactics_panel.ocr_image_items",
+                return_value=[target_in_list],
+            ),
+            mock.patch("core.tactics_panel._real_click_target") as click,
+        ):
+            result = tactics_panel.select_super_underlying(
+                11, "(深)沪深300ETF嘉实", delay=0
+            )
+
+        click.assert_called_once_with(33, 160, 235, delay=0)
+        self.assertEqual(result["mode"], "selected_from_dropdown")
+
+    def test_underlying_selector_does_not_click_when_already_selected(self):
+        category = {"text": "ETF期权", "score": 0.99}
+        selected = {"text": "上证50ETF华夏", "score": 0.99}
+        with (
+            mock.patch(
+                "core.tactics_panel.get_underlying_controls",
+                return_value=(21, 22),
+            ),
+            mock.patch(
+                "core.tactics_panel._recognize_underlying_control",
+                side_effect=[category, selected],
+            ),
+            mock.patch("core.tactics_panel._open_underlying_popup") as open_popup,
+        ):
+            result = tactics_panel.select_super_underlying(
+                11, "上证50ETF华夏", delay=0
+            )
+
+        open_popup.assert_not_called()
+        self.assertEqual(result["mode"], "already_selected")
+
+    def test_open_underlying_popup_reuses_existing_popup(self):
+        with (
+            mock.patch("core.tactics_panel._underlying_popups", return_value=[33]),
+            mock.patch("core.tactics_panel._real_click_target") as click,
+        ):
+            popup = tactics_panel._open_underlying_popup(11, 22)
+
+        self.assertEqual(popup, 33)
+        click.assert_not_called()
+
+    def test_underlying_selector_rejects_unconfigured_target_before_ui_access(self):
+        with mock.patch("core.tactics_panel.get_underlying_controls") as get_controls:
+            with self.assertRaisesRegex(ValueError, "不支持的超级策略标的"):
+                tactics_panel.select_super_underlying(11, "未知ETF")
+        get_controls.assert_not_called()
 
 
 if __name__ == "__main__":
