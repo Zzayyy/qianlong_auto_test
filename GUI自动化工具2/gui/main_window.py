@@ -1107,6 +1107,12 @@ class AutomationGUI:
             ),
             foreground="gray",
         ).grid(row=2, column=0, columnspan=2, sticky=tk.W, pady=5)
+        ttk.Label(
+            self.params_frame,
+            text="注意：选择加入标的请先手动登录。",
+            foreground="#d32f2f",
+            font=("Microsoft YaHei", 9, "bold"),
+        ).grid(row=3, column=0, columnspan=2, sticky=tk.W, pady=(0, 5))
         self.params_frame.columnconfigure(1, weight=1)
 
     def _is_capture_script_selected(self) -> bool:
