@@ -1,0 +1,112 @@
+Control Identifiers:
+
+Dialog - '组合申报'    (L750, T360, R1103, B595)
+['Dialog', '组合申报', '组合申报Dialog']
+child_window(title="组合申报", control_type="Window")
+   | 
+   | ComboBox - ''    (L818, T397, R1013, B418)
+   | ['ComboBox6.GUI模块化 - 获取组件.py - CodeBuddy CN [管理员]', 'ComboBox6.GUI模块化', 'ComboBoxWorkBuddy', 'ComboBox任务管理器', 'ComboBoxv2rayN - V7.22.5 - X64 - 以管理员身份运行', 'ComboBox', 'ComboBoxCode', 'ComboBox钱龙模拟期权宝 \u3000\u3000当前账号 | 期权：20241216003(20241216003)', '市场ComboBox', 'ComboBox任务栏', 'ComboBoxNVIDIA GeForce Overlay', 'ComboBox国泰海通证券期权宝(仿真行情) \u3000\u3000当前账号 | 期权：章绍龙1(130375)', 'ComboBoxunittest需要安装吗_百度搜索 - Google Chrome', 'ComboBox打包.txt - 记事本', 'ComboBoxProgram Manager', 'ComboBox项目必知.txt - 记事本', 'ComboBox6.GUI模块化 - 获取组件.py - CodeBuddy CN [管理员]0', 'ComboBox6.GUI模块化 - 获取组件.py - CodeBuddy CN [管理员]1', 'ComboBox6.GUI模块化0', 'ComboBox6.GUI模块化1', 'ComboBoxWorkBuddy0', 'ComboBoxWorkBuddy1', 'ComboBox任务管理器0', 'ComboBox任务管理器1', 'ComboBoxv2rayN - V7.22.5 - X64 - 以管理员身份运行0', 'ComboBoxv2rayN - V7.22.5 - X64 - 以管理员身份运行1', 'ComboBox0', 'ComboBox1', 'ComboBoxCode0', 'ComboBoxCode1', 'ComboBox钱龙模拟期权宝 \u3000\u3000当前账号 | 期权：20241216003(20241216003)0', 'ComboBox钱龙模拟期权宝 \u3000\u3000当前账号 | 期权：20241216003(20241216003)1', 'ComboBox任务栏0', 'ComboBox任务栏1', 'ComboBoxNVIDIA GeForce Overlay0', 'ComboBoxNVIDIA GeForce Overlay1', 'ComboBox国泰海通证券期权宝(仿真行情) \u3000\u3000当前账号 | 期权：章绍龙1(130375)0', 'ComboBox国泰海通证券期权宝(仿真行情) \u3000\u3000当前账号 | 期权：章绍龙1(130375)1', 'ComboBoxunittest需要安装吗_百度搜索 - Google Chrome0', 'ComboBoxunittest需要安装吗_百度搜索 - Google Chrome1', 'ComboBox打包.txt - 记事本0', 'ComboBox打包.txt - 记事本1', 'ComboBoxProgram Manager0', 'ComboBoxProgram Manager1', 'ComboBox项目必知.txt - 记事本0', 'ComboBox项目必知.txt - 记事本1']
+   | child_window(auto_id="9059", control_type="ComboBox")
+   |    | 
+   |    | Static - ''    (L3, T3, R175, B18)
+   |    | ['Static', 'Static0', 'Static1']
+   |    | 
+   |    | Button - '打开'    (L994, T399, R1011, B416)
+   |    | ['打开Button', '打开', 'Button', '打开Button0', '打开Button1', '打开0', '打开1', 'Button0', 'Button1']
+   |    | child_window(title="打开", auto_id="DropDown", control_type="Button")
+   | 
+   | ComboBox - ''    (L818, T422, R1013, B443)
+   | ['策略ComboBox', 'ComboBox6.GUI模块化 - 获取组件.py - CodeBuddy CN [管理员]2', 'ComboBox6.GUI模块化2', 'ComboBoxWorkBuddy2', 'ComboBox任务管理器2', 'ComboBoxv2rayN - V7.22.5 - X64 - 以管理员身份运行2', 'ComboBox2', 'ComboBoxCode2', 'ComboBox钱龙模拟期权宝 \u3000\u3000当前账号 | 期权：20241216003(20241216003)2', 'ComboBox任务栏2', 'ComboBoxNVIDIA GeForce Overlay2', 'ComboBox国泰海通证券期权宝(仿真行情) \u3000\u3000当前账号 | 期权：章绍龙1(130375)2', 'ComboBoxunittest需要安装吗_百度搜索 - Google Chrome2', 'ComboBox打包.txt - 记事本2', 'ComboBoxProgram Manager2', 'ComboBox项目必知.txt - 记事本2']
+   | child_window(auto_id="9040", control_type="ComboBox")
+   |    | 
+   |    | Static - ''    (L3, T3, R175, B18)
+   |    | ['Static2']
+   |    | 
+   |    | Button - '打开'    (L994, T424, R1011, B441)
+   |    | ['打开Button2', '打开2', 'Button2']
+   |    | child_window(title="打开", auto_id="DropDown", control_type="Button")
+   | 
+   | ComboBox - ''    (L818, T446, R1013, B467)
+   | ['ComboBox6.GUI模块化 - 获取组件.py - CodeBuddy CN [管理员]3', 'ComboBox6.GUI模块化3', 'ComboBoxWorkBuddy3', 'ComboBox任务管理器3', 'ComboBoxv2rayN - V7.22.5 - X64 - 以管理员身份运行3', 'ComboBox3', 'ComboBoxCode3', 'ComboBox钱龙模拟期权宝 \u3000\u3000当前账号 | 期权：20241216003(20241216003)3', 'ComboBox任务栏3', 'ComboBoxNVIDIA GeForce Overlay3', 'ComboBox国泰海通证券期权宝(仿真行情) \u3000\u3000当前账号 | 期权：章绍龙1(130375)3', 'ComboBoxunittest需要安装吗_百度搜索 - Google Chrome3', '合约一ComboBox', 'ComboBox打包.txt - 记事本3', 'ComboBoxProgram Manager3', 'ComboBox项目必知.txt - 记事本3']
+   | child_window(auto_id="9067", control_type="ComboBox")
+   |    | 
+   |    | Static - ''    (L3, T3, R175, B18)
+   |    | ['Static3']
+   |    | 
+   |    | Button - '打开'    (L994, T448, R1011, B465)
+   |    | ['打开Button3', '打开3', 'Button3']
+   |    | child_window(title="打开", auto_id="DropDown", control_type="Button")
+   | 
+   | ComboBox - ''    (L818, T471, R1013, B492)
+   | ['ComboBox6.GUI模块化 - 获取组件.py - CodeBuddy CN [管理员]4', 'ComboBox6.GUI模块化4', 'ComboBoxWorkBuddy4', 'ComboBox任务管理器4', 'ComboBoxv2rayN - V7.22.5 - X64 - 以管理员身份运行4', 'ComboBox4', 'ComboBoxCode4', 'ComboBox钱龙模拟期权宝 \u3000\u3000当前账号 | 期权：20241216003(20241216003)4', 'ComboBox任务栏4', 'ComboBoxNVIDIA GeForce Overlay4', 'ComboBox国泰海通证券期权宝(仿真行情) \u3000\u3000当前账号 | 期权：章绍龙1(130375)4', 'ComboBoxunittest需要安装吗_百度搜索 - Google Chrome4', '合约二ComboBox', 'ComboBox打包.txt - 记事本4', 'ComboBoxProgram Manager4', 'ComboBox项目必知.txt - 记事本4']
+   | child_window(auto_id="9068", control_type="ComboBox")
+   |    | 
+   |    | Static - ''    (L3, T3, R175, B18)
+   |    | ['Static4']
+   |    | 
+   |    | Button - '打开'    (L994, T473, R1011, B490)
+   |    | ['打开Button4', '打开4', 'Button4']
+   |    | child_window(title="打开", auto_id="DropDown", control_type="Button")
+   | 
+   | Edit - ''    (L818, T495, R997, B515)
+   | ['Edit', '组合数量Edit']
+   | child_window(auto_id="9057", control_type="Edit")
+   | 
+   | UpDown - ''    (L995, T495, R1013, B515)
+   | ['组合数量UpDown', 'UpDown']
+   | child_window(auto_id="9050", control_type="Spinner")
+   |    | 
+   |    | Button - '多'    (L995, T495, R1013, B505)
+   |    | ['多', 'Button5', '多Button']
+   |    | child_window(title="多", auto_id="MoreButton", control_type="Button")
+   |    | 
+   |    | Button - '少'    (L995, T505, R1013, B515)
+   |    | ['少Button', 'Button6', '少']
+   |    | child_window(title="少", auto_id="LessButton", control_type="Button")
+   | 
+   | Button - '申报'    (L827, T537, R902, B560)
+   | ['申报Button', '申报', 'Button7']
+   | child_window(title="申报", auto_id="1", control_type="Button")
+   | 
+   | Static - '市场'    (L788, T401, R814, B414)
+   | ['市场', 'Static5', '市场Static']
+   | child_window(title="市场", control_type="Text")
+   | 
+   | Static - '策略'    (L788, T427, R814, B440)
+   | ['策略Static', 'Static6', '策略']
+   | child_window(title="策略", control_type="Text")
+   | 
+   | Static - '合约一'    (L776, T451, R814, B464)
+   | ['合约一', 'Static7', '合约一Static']
+   | child_window(title="合约一", control_type="Text")
+   | 
+   | Static - '合约二'    (L776, T475, R814, B488)
+   | ['Static8', '合约二', '合约二Static']
+   | child_window(title="合约二", control_type="Text")
+   | 
+   | Static - '组合数量'    (L764, T498, R814, B511)
+   | ['组合数量Static', '组合数量', 'Static9']
+   | child_window(title="组合数量", control_type="Text")
+   | 
+   | Button - '清空合约'    (L936, T537, R1011, B560)
+   | ['清空合约', '清空合约Button', 'Button8']
+   | child_window(title="清空合约", auto_id="2366", control_type="Button")
+   | 
+   | Static - '买认购'    (L1019, T449, R1082, B462)
+   | ['买认购', 'Static10', '买认购Static']
+   | child_window(title="买认购", auto_id="9070", control_type="Text")
+   | 
+   | Static - '卖认购'    (L1019, T474, R1082, B487)
+   | ['Static11', '卖认购Static', '卖认购']
+   | child_window(title="卖认购", auto_id="9071", control_type="Text")
+   | 
+   | Static - '≤ 1'    (L1019, T498, R1082, B511)
+   | ['≤ 1Static', 'Static12', '≤ 1']
+   | child_window(title="≤ 1", auto_id="9072", control_type="Text")
+   | 
+   | TitleBar - ''    (L753, T363, R1100, B386)
+   | ['TitleBar']
+   |    | 
+   |    | Button - '关闭'    (L1067, T361, R1101, B386)
+   |    | ['关闭', 'Button9', '关闭Button']
+   |    | child_window(title="关闭", control_type="Button")

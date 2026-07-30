@@ -36,6 +36,8 @@ from config import (
     CAPTURE_STANDARD_PANELS,
     DEFAULT_SUPER_STRATEGY_UNDERLYING,
     SUPER_STRATEGY_UNDERLYINGS,
+    SUPER_STRATEGY_COMBO_MARKETS,
+    SUPER_STRATEGY_COMBO_STRATEGIES,
 )
 from engine.runner import ScriptRunner
 from engine.task import Task
@@ -68,6 +70,10 @@ class AutomationGUI:
 
     # 组合申报：全自动脚本只配置委托数量，查询类脚本配置导出参数
     COMBO_AUTO_SCRIPTS = ("1.组合申报_全自动", "2.拆分申报_全自动")
+
+    # 超级策略分类下需要选择"市场/策略/组合数量"参数（但合约一/合约二不固定，
+    # 由运行期按持仓派生）的脚本：组合申报填表申报。
+    SUPER_STRATEGY_COMBO_SCRIPTS = ("组合申报",)
 
     def __init__(self, root):
         self.root = root
@@ -123,6 +129,19 @@ class AutomationGUI:
         if configured_underlying not in SUPER_STRATEGY_UNDERLYINGS:
             configured_underlying = DEFAULT_SUPER_STRATEGY_UNDERLYING
         self.super_strategy_underlying = tk.StringVar(value=configured_underlying)
+
+        # 超级策略 -> 组合申报 填表参数：市场 / 策略（均可多选打勾）/ 组合数量。
+        # 合约一/合约二 不在此选择，由运行期按持仓派生。
+        # 市场/策略用复选框（BooleanVar 字典），运行时按“市场 × 策略”逐个组合。
+        self.super_combo_market_vars = {
+            m: tk.BooleanVar(value=(m == SUPER_STRATEGY_COMBO_MARKETS[0]))
+            for m in SUPER_STRATEGY_COMBO_MARKETS
+        }
+        self.super_combo_strategy_vars = {
+            s: tk.BooleanVar(value=(s == SUPER_STRATEGY_COMBO_STRATEGIES[0]))
+            for s in SUPER_STRATEGY_COMBO_STRATEGIES
+        }
+        self.super_combo_qty = tk.IntVar(value=1)
 
         # 期权下单_一键导出 参数
         self.export_target_position = tk.BooleanVar(value=True)  # 持仓
@@ -367,7 +386,7 @@ class AutomationGUI:
         self.right_notebook.add(compare_frame, text="结果比对")
         self.compare_panel = ComparePanel(compare_frame, self)
 
-        # —— 交易系统设置报告中心（位于“结果比对”右侧） ——
+        # —— 交易系统设置报告中心（位于"结果比对"右侧） ——
         report_frame = ttk.Frame(self.right_notebook, padding="5")
         self.right_notebook.add(report_frame, text="报告中心")
         self.report_center = SettingsReportPanel(report_frame, self)
@@ -498,6 +517,13 @@ class AutomationGUI:
         module_iid = f"module::{module}"
         if module and self.script_tree.exists(module_iid):
             self.script_tree.item(module_iid, open=True)
+            self.script_tree.update_idletasks()
+            self.script_tree.after_idle(
+                lambda i=module_iid: self.script_tree.see(i)
+            )
+            self.script_tree.after(
+                80, lambda i=module_iid: self.script_tree.see(i)
+            )
         # 清空脚本选择（避免沿用上一次选中的具体脚本）
         cur_sel = self.script_tree.selection()
         if cur_sel:
@@ -543,6 +569,12 @@ class AutomationGUI:
             module = iid.split("::", 1)[1]
             self.category_label.config(text=f"当前功能: {self._format_current_function(module)}")
             self._update_preview_visibility(False)
+        # 确保选中项在视口中可见（_rebuild_params 会改变参数面板尺寸，
+        # 进而压缩脚本树区域——list_frame 用 expand=True）。仅 after_idle 不够，
+        # resize 通常在下一次事件循环才真正生效，需配合短延迟做兜底。
+        self.script_tree.update_idletasks()
+        self.script_tree.after_idle(lambda i=iid: self.script_tree.see(i))
+        self.script_tree.after(80, lambda i=iid: self.script_tree.see(i))
 
     def _on_tree_double_click(self, event):
         """双击树：仅当双击具体脚本节点时才执行，双击分类/模块节点不执行，
@@ -1083,7 +1115,14 @@ class AutomationGUI:
         self.params_frame.columnconfigure(1, weight=1)
 
     def _build_super_strategy_params(self):
-        """超级策略参数：标的选择及是否在开仓前点击“加入标的”。"""
+        """超级策略参数：标的选择及是否在开仓前点击"加入标的"。
+
+        组合申报需要选择市场/策略/组合数量（合约一/合约二按持仓派生，不在此选择）。
+        """
+        script = self._get_selected_script() if getattr(self, "script_tree", None) else None
+        if script and script["name"] in self.SUPER_STRATEGY_COMBO_SCRIPTS:
+            self._build_combination_declare_params()
+            return
         ttk.Label(self.params_frame, text="超级策略标的:").grid(
             row=0, column=0, sticky=tk.W, pady=5
         )
@@ -1115,8 +1154,92 @@ class AutomationGUI:
         ).grid(row=3, column=0, columnspan=2, sticky=tk.W, pady=(0, 5))
         self.params_frame.columnconfigure(1, weight=1)
 
+    def _build_combination_declare_params(self):
+        """组合申报（超级策略分类）参数面板：市场 / 策略（复选）/ 组合数量。
+
+        市场、策略均可用复选框打勾多选；运行时按“市场 × 策略”逐个打开组合申报对话框
+        并组合。合约一 / 合约二 不在此选择——运行期会按对话框下拉候选项与所选策略
+        从持仓派生配对（用户此前已用一键开仓建立对应组合）。
+        """
+        # ---------- 市场 ----------
+        ttk.Label(self.params_frame, text="市场（可多选）:").grid(
+            row=0, column=0, sticky=tk.NW, pady=5
+        )
+        market_frame = ttk.Frame(self.params_frame)
+        market_frame.grid(row=0, column=1, sticky=tk.W, pady=5)
+        for i, m in enumerate(SUPER_STRATEGY_COMBO_MARKETS):
+            ttk.Checkbutton(
+                market_frame, text=m, variable=self.super_combo_market_vars[m]
+            ).grid(row=0, column=i, padx=(0, 10), sticky=tk.W)
+        col = len(SUPER_STRATEGY_COMBO_MARKETS)
+        ttk.Separator(market_frame, orient=tk.VERTICAL).grid(
+            row=0, column=col, sticky=tk.NS, padx=(0, 6)
+        )
+        ttk.Button(
+            market_frame, text="全选", width=4,
+            command=lambda: self._toggle_combo_checkboxes("market", True),
+        ).grid(row=0, column=col + 1, padx=(0, 2))
+        ttk.Button(
+            market_frame, text="全不选", width=5,
+            command=lambda: self._toggle_combo_checkboxes("market", False),
+        ).grid(row=0, column=col + 2)
+
+        # ---------- 策略 ----------
+        ttk.Label(self.params_frame, text="策略（可多选，逐个组合）:").grid(
+            row=1, column=0, sticky=tk.NW, pady=5
+        )
+        strategy_frame = ttk.Frame(self.params_frame)
+        strategy_frame.grid(row=1, column=1, sticky=tk.W, pady=5)
+        for i, s in enumerate(SUPER_STRATEGY_COMBO_STRATEGIES):
+            ttk.Checkbutton(
+                strategy_frame, text=s, variable=self.super_combo_strategy_vars[s]
+            ).grid(row=i, column=0, sticky=tk.W)
+        # 全选/全不选按钮行
+        action_row = len(SUPER_STRATEGY_COMBO_STRATEGIES)
+        ttk.Separator(
+            strategy_frame, orient=tk.HORIZONTAL
+        ).grid(row=action_row, column=0, columnspan=2, sticky=tk.EW, pady=(4, 2))
+        ttk.Button(
+            strategy_frame, text="全选", width=4,
+            command=lambda: self._toggle_combo_checkboxes("strategy", True),
+        ).grid(row=action_row + 1, column=0, sticky=tk.W)
+        ttk.Button(
+            strategy_frame, text="全不选", width=5,
+            command=lambda: self._toggle_combo_checkboxes("strategy", False),
+        ).grid(row=action_row + 1, column=1, sticky=tk.W)
+
+        ttk.Label(self.params_frame, text="组合数量:").grid(
+            row=2, column=0, sticky=tk.W, pady=5
+        )
+        ttk.Entry(
+            self.params_frame,
+            textvariable=self.super_combo_qty,
+            width=10,
+        ).grid(row=2, column=1, sticky=tk.W, pady=5)
+
+        ttk.Label(
+            self.params_frame,
+            text=(
+                "勾选多个市场/策略时，会按“市场 × 策略”逐个打开组合申报并组合；\n"
+                "合约一 / 合约二 由运行期按持仓派生，无需在此选择。"
+            ),
+            foreground="gray",
+            justify=tk.LEFT,
+        ).grid(row=3, column=0, columnspan=2, sticky=tk.W, pady=(8, 0))
+        self.params_frame.columnconfigure(1, weight=1)
+
+    def _toggle_combo_checkboxes(self, target: str, value: bool) -> None:
+        """全选/全不选组合申报的复选框。"""
+        vars_dict = (
+            self.super_combo_market_vars
+            if target == "market"
+            else self.super_combo_strategy_vars
+        )
+        for var in vars_dict.values():
+            var.set(value)
+
     def _is_capture_script_selected(self) -> bool:
-        """当前选中的脚本是否为“抓取自定义标准”（按元数据标记判断，名字可随意改）"""
+        """当前选中的脚本是否为"抓取自定义标准"（按元数据标记判断，名字可随意改）"""
         script = self._get_selected_script()
         if not script:
             return False
@@ -1127,7 +1250,7 @@ class AutomationGUI:
 
         面板名与 SCRIPTS_CONFIG 的菜单名一致；与 get_scripts_config 同样的过滤规则：
         菜单名或 \\交易系统设置\\<面板名> 出现在客户端 unsupported 中即隐藏。
-        例如钱龙客户端不支持“一键炒单设置”，参数配置里便不显示该项。
+        例如钱龙客户端不支持"一键炒单设置"，参数配置里便不显示该项。
         """
         client = get_client(self.client_id) if self.client_id else None
         unsupported = set((client or {}).get("unsupported", []) or [])
@@ -1556,6 +1679,10 @@ class AutomationGUI:
             self._suppress_next_release = False
             return
         self.script_tree.item(iid, open=not self.script_tree.item(iid, "open"))
+        # 展开/折叠后确保当前节点在视口中可见（idle 队列处理避免布局未稳定）
+        self.script_tree.update_idletasks()
+        self.script_tree.after_idle(lambda i=iid: self.script_tree.see(i))
+        self.script_tree.after(80, lambda i=iid: self.script_tree.see(i))
 
     def _execute_script(self):
         """执行脚本"""
@@ -1689,11 +1816,20 @@ class AutomationGUI:
             else:
                 self._log(f"输出路径: {self.settings_output_dir.get()}")
         elif self.current_category in SUPER_STRATEGY_CATEGORIES:
-            self._log(f"超级策略标的: {self.super_strategy_underlying.get()}")
-            self._log(
-                f"加入标的: {'是' if self.super_add_underlying.get() else '否'}"
-            )
-            self._log("下单动作: 一键开仓")
+            if script["name"] in self.SUPER_STRATEGY_COMBO_SCRIPTS:
+                markets = [m for m, v in self.super_combo_market_vars.items() if v.get()]
+                strategies = [s for s, v in self.super_combo_strategy_vars.items() if v.get()]
+                self._log(f"市场: {', '.join(markets) or '(未选)'}")
+                self._log(f"策略: {', '.join(strategies) or '(未选)'}")
+                self._log(f"组合数量: {self.super_combo_qty.get()}")
+                self._log(f"将依次组合 {len(markets) * len(strategies)} 个组合")
+                self._log("合约一/合约二: 运行期按持仓派生")
+            else:
+                self._log(f"超级策略标的: {self.super_strategy_underlying.get()}")
+                self._log(
+                    f"加入标的: {'是' if self.super_add_underlying.get() else '否'}"
+                )
+                self._log("下单动作: 一键开仓")
 
         self._log(f"{'='*60}")
         self.logger.info(f"开始执行: {script['name']}")
@@ -1719,6 +1855,13 @@ class AutomationGUI:
             "settings_output_dir": self.settings_output_dir.get(),
             "super_add_underlying": self.super_add_underlying.get(),
             "super_strategy_underlying": self.super_strategy_underlying.get(),
+            "super_combo_markets": [
+                m for m, v in self.super_combo_market_vars.items() if v.get()
+            ],
+            "super_combo_strategies": [
+                s for s, v in self.super_combo_strategy_vars.items() if v.get()
+            ],
+            "super_combo_qty": self.super_combo_qty.get(),
             "client_id": self.client_id,
             "capture_panels": [n for n in self._capturable_panels()
                                if self.capture_panels.get(n) and self.capture_panels[n].get()],

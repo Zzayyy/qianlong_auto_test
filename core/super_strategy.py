@@ -32,6 +32,8 @@ from core.tactics_panel import (
 )
 from core.window import countdown, find_window
 from core.workspace import WORKSPACE_SUPER, ensure_workspace
+# 复用组合/拆分申报的 Win32 控件原语（下拉映射、控件查找、弹窗处理等）
+from core import combination_order as _combo_mod
 
 
 ACTION_PANEL_CONTROL_ID = 128
@@ -46,8 +48,13 @@ SUPER_STRATEGY_TARGETS = frozenset({
 })
 ADD_UNDERLYING_TEXT = "加入标的"
 OPEN_POSITION_TEXT = "一键开仓"
+COMBINATION_DECLARE_TEXT = "组合申报"
 ACTION_CACHE_VERSION = 1
-ACTION_CACHE_TARGETS = (ADD_UNDERLYING_TEXT, OPEN_POSITION_TEXT)
+ACTION_CACHE_TARGETS = (
+    ADD_UNDERLYING_TEXT,
+    OPEN_POSITION_TEXT,
+    COMBINATION_DECLARE_TEXT,
+)
 LOGIN_REQUIRED_EXIT_CODE = 3
 TRADING_TIME_BLOCKED_EXIT_CODE = 4
 RESULT_QUIET_PERIOD = 1.2
@@ -938,6 +945,462 @@ def wait_after_open(main_hwnd: int, before_windows: set[int],
     if expect_add_result:
         result["add_result"] = result["followup_results"][0]
     return result
+
+
+def _find_combination_dialog(main_hwnd: int, timeout: float = 3.0) -> int:
+    """等待并返回目标进程内新出现的“组合申报”原生对话框。"""
+    pid = _process_id(main_hwnd)
+    deadline = time.monotonic() + max(0.1, float(timeout))
+    while time.monotonic() < deadline:
+        for hwnd in _visible_process_surfaces(pid, main_hwnd):
+            if "组合申报" in _native_window_text(hwnd):
+                return int(hwnd)
+        time.sleep(0.05)
+    raise SuperStrategyError("点击“组合申报”后未检测到组合申报弹窗")
+
+
+def main_combination_declare() -> None:
+    try:
+        # 参数来自 GUI/任务中心写入的环境变量；市场/策略为逗号分隔的多选列表，
+        # 合约一/合约二默认留空，由 run_combination_declare 按持仓派生（从对话框下拉候选项推导配对）。
+        markets_raw = os.environ.get("GUI_COMBO_MARKET") or ""
+        strategies_raw = os.environ.get("GUI_COMBO_STRATEGY") or ""
+        markets = [m for m in markets_raw.split(",") if m] or [COMBO_MARKETS[0]]
+        strategies = [s for s in strategies_raw.split(",") if s] or [COMBO_STRATEGIES[0]]
+        qty = int(os.environ.get("GUI_ORDER_QTY") or 1)
+        execute = os.environ.get("GUI_COMBO_EXECUTE", "1") != "0"
+        run_combination_declare_all(
+            markets=markets,
+            strategies=strategies,
+            qty=qty,
+            execute=execute,
+        )
+    except LoginRequiredError as exc:
+        print(f"[LOGIN_REQUIRED] {exc}")
+        raise SystemExit(LOGIN_REQUIRED_EXIT_CODE)
+    except TradingTimeBlockedError as exc:
+        print(f"[TRADING_TIME_BLOCKED] {exc}")
+        raise SystemExit(TRADING_TIME_BLOCKED_EXIT_CODE)
+    except (SuperStrategyError, TacticsPanelError) as exc:
+        print(f"[错误] {exc}")
+        raise SystemExit(1)
+
+
+# ====================== 组合申报（填表申报） ======================
+# 超级策略 -> 组合申报 页签打开的对话框控件 ID（与 行情交易组合申报页 同族）
+COMBO_DLG_MARKET_CID = 9059
+COMBO_DLG_STRATEGY_CID = 9040
+COMBO_DLG_CONTRACT1_CID = 9067
+COMBO_DLG_CONTRACT2_CID = 9068
+COMBO_DLG_QTY_CID = 9057
+COMBO_DLG_SUBMIT_CID = 1
+COMBO_DLG_CLEAR_CID = 2366
+
+# 市场/策略为固定枚举（国泰海通实测抓取）
+COMBO_MARKETS = ("上证", "深证")
+COMBO_STRATEGIES = (
+    "认购牛市价差策略",
+    "认购熊市价差策略",
+    "宽跨式空头策略",
+    "跨式空头策略",
+    "认沽牛市价差策略",
+    "认沽熊市价差策略",
+)
+
+# 合约代码解析：如 "50ETF购8月2850" -> 标的=50ETF, 类型=购, 到期=8月, 行权价=2850
+# under 允许数字/字母/汉字，但排除 购/沽（否则会被吞进前缀）
+_CONTRACT_RE = re.compile(
+    r"^(?P<under>(?:(?!购|沽)[0-9A-Za-z一-龥])+?)"
+    r"(?P<type>[购沽])(?P<month>\d+月)(?P<strike>\d+)$"
+)
+
+
+def parse_contract(code: str) -> dict | None:
+    """解析期权合约代码；无法解析返回 None。"""
+    m = _CONTRACT_RE.match((code or "").strip())
+    if not m:
+        return None
+    return {
+        "under": m.group("under"),
+        "type": m.group("type"),       # 购=call / 沽=put
+        "month": m.group("month"),
+        "strike": int(m.group("strike")),
+    }
+
+
+def _pair_matches(strategy: str, c1: str, c2: str) -> bool:
+    """判断 (c1, c2) 是否构成所选策略要求的两条腿。"""
+    p1, p2 = parse_contract(c1), parse_contract(c2)
+    if not p1 or not p2:
+        return False
+    if p1["under"] != p2["under"] or p1["month"] != p2["month"]:
+        return False
+
+    if strategy in (
+        "认购牛市价差策略", "认购熊市价差策略",
+        "认沽牛市价差策略", "认沽熊市价差策略",
+    ):
+        # 同类型两腿、不同行权价
+        want = "购" if strategy.startswith("认购") else "沽"
+        if p1["type"] != want or p2["type"] != want:
+            return False
+        return p1["strike"] != p2["strike"]
+    if strategy == "跨式空头策略":
+        # 一购一沽、同行权价
+        return p1["type"] != p2["type"] and p1["strike"] == p2["strike"]
+    if strategy == "宽跨式空头策略":
+        # 一购一沽、不同行权价
+        return p1["type"] != p2["type"] and p1["strike"] != p2["strike"]
+    return False
+
+
+def derive_contract_pair(strategy: str, c1_opts, c2_opts):
+    """从 合约一/合约二 下拉候选项中推导符合策略的配对。
+
+    优先以 合约二 候选项为锚点（券商已按策略过滤），在 合约一 中找配对；
+    否则退而在 合约一 候选项内部两两配对。找不到抛出 SuperStrategyError。
+    """
+    c1_opts = list(c1_opts)
+    c2_opts = list(c2_opts)
+    valid = []
+    for c2 in c2_opts:
+        for c1 in c1_opts:
+            if c1 == c2:
+                continue
+            if _pair_matches(strategy, c1, c2):
+                valid.append((c1, c2))
+    if valid:
+        # 价差类：合约一取较低行权价（多头腿），合约二保持锚点
+        if strategy in ("认购牛市价差策略", "认沽牛市价差策略"):
+            valid.sort(key=lambda p: parse_contract(p[0])["strike"])
+        return valid[0]
+    # 两腿都在 合约一 下拉内的情况
+    for i, c1 in enumerate(c1_opts):
+        for c2 in c1_opts[i + 1:]:
+            if _pair_matches(strategy, c1, c2):
+                return (c1, c2)
+    raise SuperStrategyError(
+        f"未从下拉候选项中找到符合策略'{strategy}'的合约一/合约二配对"
+    )
+
+
+def _combo_dlg_control(dlg, cid):
+    ctrl = _combo_mod.find_visible_child(int(dlg), cid)
+    if not ctrl:
+        raise SuperStrategyError(f"组合申报对话框未找到控件(auto_id={cid})")
+    return ctrl
+
+
+def _read_combo_items(dlg, cid):
+    """读取下拉框候选项；跨进程回退 UIA 遍历。选过合约一后合约二候选项会变，
+    必须清缓存后重读，否则拿到旧列表。"""
+    ctrl = _combo_dlg_control(dlg, cid)
+    _combo_mod._combo_maps.pop(ctrl, None)
+    _combo_mod._combo_sources.pop(ctrl, None)
+    return _combo_mod.build_combo_map(ctrl)
+
+
+def _set_combo_qty(dlg, qty):
+    edit = _combo_dlg_control(dlg, COMBO_DLG_QTY_CID)
+    val = str(int(qty))
+    win32gui.SendMessage(edit, win32con.WM_SETTEXT, 0, val)
+    if _combo_mod.get_edit_text(edit) != val:
+        # 回退：先全选清除再逐字符输入，兼容自绘编辑框
+        try:
+            _combo_mod._send_timeout(edit, 0x00B1, 0, -1)   # EM_SETSEL 0,-1
+            _combo_mod._send_timeout(edit, 0x0303, 0, 0)    # WM_CLEAR
+            for ch in val:
+                _combo_mod._send_timeout(edit, 0x0102, ord(ch), 1)  # WM_CHAR
+        except Exception:
+            pass
+    if _combo_mod.get_edit_text(edit) != val:
+        raise SuperStrategyError(f"组合数量设置失败: 期望={val}")
+    print(f"[OK] 组合数量已设为 {val}")
+
+
+def _close_combo_leftover_dialogs(main_hwnd):
+    """关闭目标进程内残留的 组合申报/警告/确认/提示 模态对话框，
+    避免其禁用操作面板子窗口导致真实点击被拒。"""
+    pid = _process_id(main_hwnd)
+    targets = []
+
+    def cb(hwnd, _):
+        try:
+            if not win32gui.IsWindowVisible(hwnd):
+                return True
+            if _combo_mod._dlg_pid(hwnd) != pid:
+                return True
+            if win32gui.GetClassName(hwnd) != "#32770":
+                return True
+            title = win32gui.GetWindowText(hwnd)
+            if any(k in title for k in ("组合申报", "警告", "确认", "提示")):
+                targets.append(hwnd)
+        except Exception:
+            pass
+        return True
+
+    win32gui.EnumWindows(cb, None)
+    for d in targets:
+        print(f"[INFO] 关闭残留对话框: {win32gui.GetWindowText(d)!r}")
+        win32gui.PostMessage(d, win32con.WM_CLOSE, 0, 0)
+        time.sleep(0.3)
+
+
+def _wait_combo_submit_dialog(main_hwnd, base_dlg, timeout=3.0):
+    """等待点击申报后新出现的确认/提示弹窗（排除基础组合申报对话框）。"""
+    pid = _process_id(main_hwnd)
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        for h in _combo_mod.find_all_dialogs(pid):
+            if h == int(base_dlg) or not win32gui.IsWindowVisible(h):
+                continue
+            title = win32gui.GetWindowText(h)
+            if any(k in title for k in ("组合申报", "确认", "提示", "警告")):
+                return h
+        time.sleep(0.1)
+    return 0
+
+
+def _submit_combination(dlg, main_hwnd, cancel_only=False):
+    """点击申报并处置后续弹窗。
+
+    cancel_only=True 用于安全验证：点击申报后取消确认弹窗，绝不真正下单。
+    否则填数量（若确认框含数量）、点确定、处理后续警告，返回是否提交成功。
+    """
+    btn = _combo_dlg_control(dlg, COMBO_DLG_SUBMIT_CID)
+    win32gui.PostMessage(btn, win32con.BM_CLICK, 0, 0)
+    print("[OK] 已点击申报（异步）")
+    time.sleep(0.5)
+
+    new_dlg = _wait_combo_submit_dialog(main_hwnd, dlg)
+    if not new_dlg:
+        print("[WARN] 点击申报后未检测到确认弹窗")
+        return False
+
+    if cancel_only:
+        _combo_mod.cancel_dialog(new_dlg)
+        print("[OK] 已取消申报（安全验证，未真正提交）")
+        return False
+
+    # 真实提交：确认框若含数量编辑框则先填数量
+    if _combo_mod.has_control(new_dlg, COMBO_DLG_QTY_CID):
+        _set_combo_qty(new_dlg, _combo_mod.get_edit_text(
+            _combo_mod.find_visible_child(int(dlg), COMBO_DLG_QTY_CID)) or 1)
+    ok = _combo_mod._find_dialog_button(new_dlg, affirmative=True)
+    if not ok:
+        print("[ERROR] 未找到申报确认按钮")
+        return False
+    win32gui.PostMessage(ok, win32con.BM_CLICK, 0, 0)
+    if not _combo_mod.confirm_dialog(main_hwnd, new_dlg, attempts=3):
+        print("[ERROR] 申报确认后弹窗未正常结束")
+        return False
+    if not _combo_mod.handle_dialogs(main_hwnd):
+        print("[ERROR] 申报后续弹窗未正常结束")
+        return False
+    print("[OK] 组合申报已提交")
+    return True
+
+
+def _fill_combo_dialog(dlg, main_hwnd, *, market=None, strategy=None,
+                        contract1=None, contract2=None, qty=1,
+                        execute=True, close_after=False) -> dict:
+    """在已打开的组合申报对话框内选市场/策略/合约、填数量，并选择性地提交。"""
+    market = market or COMBO_MARKETS[0]
+    if not _combo_mod.combo_select(
+        _combo_dlg_control(dlg, COMBO_DLG_MARKET_CID), market
+    ):
+        print(f"[WARN] 市场选择失败: {market}")
+    else:
+        print(f"[OK] 已选择市场: {market}")
+
+    strategy = strategy or COMBO_STRATEGIES[0]
+    if not _combo_mod.combo_select(
+        _combo_dlg_control(dlg, COMBO_DLG_STRATEGY_CID), strategy
+    ):
+        print(f"[WARN] 策略选择失败: {strategy}")
+    else:
+        print(f"[OK] 已选择策略: {strategy}")
+    time.sleep(0.4)  # 等合约一下拉联动刷新
+
+    c1_opts = list(_read_combo_items(dlg, COMBO_DLG_CONTRACT1_CID).keys())
+    c2_opts = list(_read_combo_items(dlg, COMBO_DLG_CONTRACT2_CID).keys())
+    print(f"[INFO] 合约一候选项({len(c1_opts)}): {c1_opts}")
+    print(f"[INFO] 合约二候选项({len(c2_opts)}): {c2_opts}")
+
+    if contract1 and contract2:
+        c1, c2 = contract1, contract2
+        if c1 not in c1_opts:
+            raise SuperStrategyError(f"指定合约一不在候选项: {c1}")
+    else:
+        c1, c2 = derive_contract_pair(strategy, c1_opts, c2_opts)
+    print(f"[INFO] 推导合约一={c1} 合约二={c2}")
+
+    if not _combo_mod.combo_select(
+        _combo_dlg_control(dlg, COMBO_DLG_CONTRACT1_CID), c1
+    ):
+        raise SuperStrategyError(f"合约一选择失败: {c1}")
+    print(f"[OK] 已选择合约一: {c1}")
+    time.sleep(0.3)
+
+    # 选过合约一后合约二候选项可能变化，重读并重新推导
+    c2_opts2 = list(_read_combo_items(dlg, COMBO_DLG_CONTRACT2_CID).keys())
+    if c2 not in c2_opts2:
+        print("[WARN] 选完合约一后合约二候选项变化，重新推导")
+        c1, c2 = derive_contract_pair(strategy, c1_opts, c2_opts2)
+        if not _combo_mod.combo_select(
+            _combo_dlg_control(dlg, COMBO_DLG_CONTRACT1_CID), c1
+        ):
+            raise SuperStrategyError(f"合约一重选失败: {c1}")
+        print(f"[OK] 已重新选择合约一: {c1}")
+        time.sleep(0.3)
+        c2_opts2 = list(_read_combo_items(dlg, COMBO_DLG_CONTRACT2_CID).keys())
+
+    if not _combo_mod.combo_select(
+        _combo_dlg_control(dlg, COMBO_DLG_CONTRACT2_CID), c2
+    ):
+        raise SuperStrategyError(f"合约二选择失败: {c2}")
+    print(f"[OK] 已选择合约二: {c2}")
+
+    _set_combo_qty(dlg, qty)
+
+    result = {
+        "target": COMBINATION_DECLARE_TEXT,
+        "dialog_hwnd": dlg,
+        "main_hwnd": main_hwnd,
+        "market": market,
+        "strategy": strategy,
+        "contract1": c1,
+        "contract2": c2,
+        "qty": qty,
+        "submitted": False,
+    }
+    if execute:
+        result["submitted"] = _submit_combination(dlg, main_hwnd)
+    elif close_after:
+        _close_combo_leftover_dialogs(main_hwnd)
+        result["closed"] = True
+    return result
+
+
+def run_combination_declare(*, market=None, strategy=None, qty=1,
+                            contract1=None, contract2=None,
+                            execute=True, cleanup_leftover=True,
+                            close_after=False, do_setup=True,
+                            main_hwnd=None, combo_dlg=None) -> dict:
+    """在超级策略界面填表并提交组合申报（单个 市场×策略 组合）。
+
+    参数：
+      market/strategy : 市场(上证/深证)、策略；为空则用各自首项。
+      qty             : 组合数量。
+      contract1/2     : 指定合约一/合约二（从下拉候选项选）；留空则按持仓派生
+                         （从对话框下拉候选项按合约属性推导配对）。
+      execute         : True 点击申报并提交；False 仅填表校验（安全）。
+      close_after     : 填表后关闭对话框（不提交时用于清理现场，避免遗留模态框）。
+      do_setup        : True 时执行倒计时/找窗/激活/切工作区（批量模式仅首次）。
+      main_hwnd       : 已定位的主窗口句柄（do_setup=False 时复用，避免重复找窗）。
+      combo_dlg       : 已有组合申报对话框句柄（批量模式复用，跳过关闭重开）。
+    """
+    client_id = os.environ.get("GUI_CLIENT_ID") or get_default_client_id()
+    client = get_client(client_id)
+    if not client:
+        raise SuperStrategyError(f"客户端档案不存在: {client_id!r}")
+    if do_setup:
+        countdown_sec = max(0, int(os.environ.get("GUI_COUNTDOWN") or 3))
+        countdown(countdown_sec)
+        main_hwnd = find_window(client.get("window_key") or client.get("name") or "")
+        _activate_main_window(main_hwnd)
+        print("[OK] 已将交易客户端切换到前台")
+        ensure_workspace(main_hwnd, WORKSPACE_SUPER, client)
+    elif main_hwnd is None:
+        main_hwnd = find_window(client.get("window_key") or client.get("name") or "")
+
+    if combo_dlg is not None:
+        # 复用已有对话框：确保前台激活后直接填表，跳过关闭/重开
+        dlg = combo_dlg
+        _activate_main_window(main_hwnd)
+        print(f"[OK] 复用已有组合申报对话框: hwnd={dlg}")
+    else:
+        if cleanup_leftover:
+            _close_combo_leftover_dialogs(main_hwnd)
+        print(f"[INFO] 准备点击: {COMBINATION_DECLARE_TEXT}")
+        action_panel = get_action_panel(main_hwnd)
+        click_action(
+            main_hwnd,
+            COMBINATION_DECLARE_TEXT,
+            panel=action_panel,
+            delay=0.8,
+        )
+        dlg = _find_combination_dialog(main_hwnd)
+        print(f"[OK] 组合申报弹窗已出现: hwnd={dlg}")
+
+    return _fill_combo_dialog(
+        dlg, main_hwnd,
+        market=market, strategy=strategy,
+        contract1=contract1, contract2=contract2,
+        qty=qty, execute=execute, close_after=close_after,
+    )
+
+
+def run_combination_declare_all(*, markets, strategies, qty=1,
+                                execute=True, cleanup_leftover=True):
+    """批量组合申报：对 (市场 × 策略) 的每个组合依次填表/提交。
+
+    仅在首次做完整环境准备（倒计时/找窗/激活/切工作区 + 打开组合申报对话框），
+    后续组合复用同一个对话框句柄，直接更改字段并提交，避免关闭对话框再重新打开。
+    某一组合失败时记录错误并继续；全部结束后统一清理残留对话框。
+    """
+    import itertools
+
+    market_list = list(markets) or [COMBO_MARKETS[0]]
+    strategy_list = list(strategies) or [COMBO_STRATEGIES[0]]
+    pairs = list(itertools.product(market_list, strategy_list))
+    if not pairs:
+        raise SuperStrategyError("未选择任何市场/策略组合")
+
+    # 首次：完整环境准备 + 打开组合申报对话框
+    first_market, first_strategy = pairs[0]
+    res0 = run_combination_declare(
+        market=first_market, strategy=first_strategy, qty=qty,
+        execute=execute, cleanup_leftover=cleanup_leftover,
+        close_after=False, do_setup=True,
+    )
+    results = [res0]
+    main_hwnd = res0.get("main_hwnd")
+    combo_dlg = res0.get("dialog_hwnd")  # 保存对话框句柄，后续迭代复用
+
+    errors = []
+    for market, strategy in pairs[1:]:
+        try:
+            # 复用同一个对话框，仅更改下拉选项和数量
+            res = run_combination_declare(
+                market=market, strategy=strategy, qty=qty,
+                execute=execute, cleanup_leftover=False,
+                close_after=False, do_setup=False,
+                main_hwnd=main_hwnd, combo_dlg=combo_dlg,
+            )
+            results.append(res)
+        except SuperStrategyError as exc:
+            msg = f"组合失败 市场={market} 策略={strategy}: {exc}"
+            print(f"[ERROR] {msg}")
+            errors.append(msg)
+            # 对话框如果仍可见，后续继续复用；否则标记为 None，下次自动打开
+            try:
+                if not (
+                    win32gui.IsWindow(combo_dlg)
+                    and win32gui.IsWindowVisible(combo_dlg)
+                ):
+                    combo_dlg = None
+            except Exception:
+                combo_dlg = None
+
+    # 全部结束后关闭对话框
+    _close_combo_leftover_dialogs(main_hwnd)
+
+    if errors:
+        print(f"[汇总] {len(errors)} 个组合未成功: " + "; ".join(errors))
+    else:
+        print(f"[OK] 批量组合申报完成: 共 {len(results)} 个组合全部处理")
+    return results
 
 
 def run_strategy(target: str, *, underlying: str | None = None,

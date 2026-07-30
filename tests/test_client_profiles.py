@@ -120,12 +120,15 @@ class QianlongClientProfileTests(unittest.TestCase):
                 "熊市认购",
                 "卖出跨式",
                 "卖宽跨式",
+                "组合申报",
             ],
         )
         for script in scripts["超级策略"]:
-            self.assertTrue(script["path"].endswith(
-                f"超级策略\\{script['name']}_一键开仓.py"
-            ))
+            if script["name"] == "组合申报":
+                expected_suffix = f"超级策略\\{script['name']}.py"
+            else:
+                expected_suffix = f"超级策略\\{script['name']}_一键开仓.py"
+            self.assertTrue(script["path"].endswith(expected_suffix))
             self.assertTrue(Path(script["path"]).is_file())
 
     def test_both_clients_declare_workspace_fingerprints(self):

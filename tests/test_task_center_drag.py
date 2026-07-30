@@ -71,6 +71,55 @@ class SuperStrategyParameterUiTests(unittest.TestCase):
         checkbutton.assert_called_once()
         gui.params_frame.columnconfigure.assert_called_once_with(1, weight=1)
 
+    def test_combination_declare_builds_checkbox_panel(self):
+        """组合申报（超级策略分类）参数面板用复选框多选市场/策略 + 组合数量输入框。"""
+        from config import SUPER_STRATEGY_COMBO_MARKETS, SUPER_STRATEGY_COMBO_STRATEGIES
+
+        gui = AutomationGUI.__new__(AutomationGUI)
+        gui.params_frame = Mock()
+        gui.super_combo_market_vars = {
+            m: _Value(m == SUPER_STRATEGY_COMBO_MARKETS[0])
+            for m in SUPER_STRATEGY_COMBO_MARKETS
+        }
+        gui.super_combo_strategy_vars = {
+            s: _Value(s == SUPER_STRATEGY_COMBO_STRATEGIES[0])
+            for s in SUPER_STRATEGY_COMBO_STRATEGIES
+        }
+        gui.super_combo_qty = _Value(1)
+        gui.script_tree = Mock()
+        gui.script_tree.selection.return_value = ["script::组合申报"]
+        gui.tree_script_map = {
+            "script::组合申报": {"script": {"name": "组合申报"}},
+        }
+        with (
+            patch("gui.main_window.ttk.Label") as label,
+            patch("gui.main_window.ttk.Frame") as frame,
+            patch("gui.main_window.ttk.Combobox") as combobox,
+            patch("gui.main_window.ttk.Checkbutton") as checkbutton,
+            patch("gui.main_window.ttk.Entry") as entry,
+        ):
+            AutomationGUI._build_super_strategy_params(gui)
+
+        # 不应构造下拉框（改用复选框）
+        combobox.assert_not_called()
+        # 每个市场/策略各一个复选框，无“加入标的”勾选框
+        self.assertEqual(
+            checkbutton.call_count,
+            len(SUPER_STRATEGY_COMBO_MARKETS) + len(SUPER_STRATEGY_COMBO_STRATEGIES),
+        )
+        # 应构造组合数量 Entry
+        entry.assert_called_once()
+        # 不应出现“无需参数配置”提示
+        texts = [
+            c.kwargs.get("text")
+            for c in label.call_args_list
+            if c.kwargs.get("text")
+        ]
+        self.assertFalse(
+            any("无需参数配置" in (t or "") for t in texts),
+            msg=f"不应出现无需参数配置提示, labels={texts}",
+        )
+
 
 class MainWindowDirectoryDragTests(unittest.TestCase):
     def _gui(self, iid):

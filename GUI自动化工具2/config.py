@@ -63,6 +63,20 @@ MODULE_GROUPS = {
     "交易系统设置": ("交易系统设置",),
 }
 SUPER_STRATEGY_CATEGORIES = frozenset(MODULE_GROUPS["超级策略"])
+
+# ====================== 超级策略 - 组合申报参数选项 ======================
+# 市场 / 策略 为固定枚举（国泰海通 组合申报对话框实测抓取）。
+# 必须与 core/super_strategy.py 中的 COMBO_MARKETS / COMBO_STRATEGIES 保持一致；
+# 组合申报的 合约一/合约二 不固定，由运行期按持仓派生，故此处不提供下拉项。
+SUPER_STRATEGY_COMBO_MARKETS = ("上证", "深证")
+SUPER_STRATEGY_COMBO_STRATEGIES = (
+    "认购牛市价差策略",
+    "认购熊市价差策略",
+    "宽跨式空头策略",
+    "跨式空头策略",
+    "认沽牛市价差策略",
+    "认沽熊市价差策略",
+)
 CATEGORIES = [
     category
     for categories in MODULE_GROUPS.values()
@@ -221,6 +235,7 @@ SCRIPTS_CONFIG = {
         {"name": "熊市认购", "path": rf"{PROJECT_ROOT}\超级策略\熊市认购_一键开仓.py"},
         {"name": "卖出跨式", "path": rf"{PROJECT_ROOT}\超级策略\卖出跨式_一键开仓.py"},
         {"name": "卖宽跨式", "path": rf"{PROJECT_ROOT}\超级策略\卖宽跨式_一键开仓.py"},
+        {"name": "组合申报", "path": rf"{PROJECT_ROOT}\超级策略\组合申报.py"},
     ],
     "交易系统设置": [
         {"name": "1.委托设置", "path": rf"{PROJECT_ROOT}\交易系统设置\1_委托设置.py"},

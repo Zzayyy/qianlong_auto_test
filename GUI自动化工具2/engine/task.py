@@ -42,6 +42,11 @@ class Task:
         )
         env["GUI_SUPER_UNDERLYING"] = p.get("super_strategy_underlying", "")
 
+        # 超级策略 - 组合申报 填表参数（市场/策略为 GUI 复选框多选，逗号分隔；
+        # 合约一/合约二运行期派生）。核心按“市场 × 策略”逐个组合。
+        env["GUI_COMBO_MARKET"] = ",".join(p.get("super_combo_markets", []) or [])
+        env["GUI_COMBO_STRATEGY"] = ",".join(p.get("super_combo_strategies", []) or [])
+
         # 期权下单_一键导出 参数
         export_targets = p.get("export_targets", [])
         env["GUI_EXPORT_TARGETS"] = ",".join(export_targets)
