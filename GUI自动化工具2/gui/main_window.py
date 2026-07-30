@@ -76,6 +76,7 @@ class AutomationGUI:
 
         self.is_running = False
         self.current_category = "查询"
+        self.current_script_name = None   # 当前选中的具体脚本（None 表示仅选中分类）
 
         # 自身引用（供任务中心等子模块访问主窗口能力）
         self.gui = self
@@ -476,10 +477,22 @@ class AutomationGUI:
                 )
             self.func_menu.add_cascade(label=module, menu=submenu)
 
+    def _format_current_function(self, category, script_name=None):
+        """拼出「当前功能」的完整面包屑：一级模块 / 分类 / 脚本（如选中具体脚本）"""
+        module = get_module_for_category(category) or ""
+        if module and module != category:
+            parts = [module, category]
+        else:
+            parts = [category] if category else []
+        if script_name:
+            parts.append(script_name)
+        return " / ".join(parts)
+
     def _select_category(self, category):
         """选中某个功能分类（来自树节点或功能菜单）"""
         self.current_category = category
-        self.category_label.config(text=f"当前功能: {category}")
+        self.current_script_name = None
+        self.category_label.config(text=f"当前功能: {self._format_current_function(category)}")
         # 仅展开所属一级模块；分类节点保持折叠，避免运行后默认展开（如「下单」）。
         module = get_module_for_category(category)
         module_iid = f"module::{module}"
@@ -496,7 +509,7 @@ class AutomationGUI:
         self.logger.info(f"切换分类: {category}")
         # 空闲时同步状态栏（运行中不覆盖）
         if not self.is_running:
-            self._set_status(f"就绪 - 当前功能: {category}")
+            self._set_status(f"就绪 - 当前功能: {self._format_current_function(category)}")
 
     def _on_tree_select(self, event=None):
         """树选择事件：脚本节点 -> 选中脚本；分类节点 -> 设为当前功能并展开"""
@@ -508,7 +521,10 @@ class AutomationGUI:
         if item:
             # 选中具体脚本
             self.current_category = item["category"]
-            self.category_label.config(text=f"当前功能: {item['category']}")
+            self.current_script_name = item["script"]["name"]
+            self.category_label.config(
+                text=f"当前功能: {self._format_current_function(item['category'], item['script']['name'])}"
+            )
             self._rebuild_params()
             self._update_paths_for_selected_script()
             self._update_params_for_selected_script()
@@ -516,19 +532,25 @@ class AutomationGUI:
             # 选中分类节点：设为当前功能（展开/折叠改到鼠标抬起时处理，见 _on_tree_release）
             category = iid.split("::", 1)[1]
             self.current_category = category
-            self.category_label.config(text=f"当前功能: {category}")
+            self.current_script_name = None
+            self.category_label.config(text=f"当前功能: {self._format_current_function(category)}")
             self._rebuild_params()
             # 仅下单显示数据预览（其它分类隐藏并清空残留数据）
             self._update_preview_visibility(category == "下单")
         else:
-            # 一级模块节点只负责展开/折叠，不把模块名当成可执行分类。
+            # 一级模块节点只负责展开/折叠，不把模块名当成可执行分类；
+            # 但仍更新「当前功能」标签，给出当前所在的模块层级反馈。
+            module = iid.split("::", 1)[1]
+            self.category_label.config(text=f"当前功能: {self._format_current_function(module)}")
             self._update_preview_visibility(False)
 
     def _on_tree_double_click(self, event):
-        """双击树：仅当双击具体脚本节点时才执行，双击分类节点只展开/收起"""
+        """双击树：仅当双击具体脚本节点时才执行，双击分类/模块节点不执行，
+        但需标记抑制紧接着的第二次释放翻转，使双击根节点等价于单击一次。"""
         iid = self.script_tree.identify_row(event.y)
         if not iid or iid not in self.tree_script_map:
-            return  # 分类节点：不执行
+            self._suppress_next_release = True
+            return  # 分类/模块节点：不执行
         self._execute_script()
 
     # ====================== 任务历史标签页 ======================
@@ -1414,6 +1436,7 @@ class AutomationGUI:
         self._drag_active = False
         self._drag_occurred = False
         self._drag_iid = None
+        self._suppress_next_release = False
         if self.task_center is None or self.task_center.is_running:
             return
         iid = self.script_tree.identify_row(event.y)
@@ -1520,6 +1543,11 @@ class AutomationGUI:
         # 仅当抬起位置就是当前选中的分类节点时才切换
         sel = self.script_tree.selection()
         if not sel or sel[0] != iid:
+            return
+        # 双击根节点时，第二次按下会触发 <Double-Button-1> 并标记抑制，
+        # 此处跳过本次翻转，使双击等价于单击一次（避免两次翻转互相抵消）。
+        if getattr(self, "_suppress_next_release", False):
+            self._suppress_next_release = False
             return
         self.script_tree.item(iid, open=not self.script_tree.item(iid, "open"))
 
