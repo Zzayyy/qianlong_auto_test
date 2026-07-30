@@ -104,3 +104,91 @@ def save_standard(
         fh.write("\n")
     os.replace(tmp, path)
     return path
+
+
+# ---- 超价参数模板（行表，与面板比对标准分开存储） ----
+# 超价参数弹窗的“品种/买超价步长/卖超价步长”是一张行表，不是扁平字典，
+# 因此不走 load_standard 的 standards 字段，单独按客户端解析：
+#   标准/<client_id>/超价设置.json -> 标准/default/超价设置.json -> 内置兜底。
+SUPER_PRICE_TEMPLATE_FILE = "超价设置.json"
+
+_BUILTIN_SUPER_PRICE_ROWS = [
+    {"品种": "510050期权", "买": 1, "卖": -1},
+    {"品种": "沪510300期权", "买": 1, "卖": -1},
+    {"品种": "510500期权", "买": 1, "卖": -1},
+    {"品种": "588000期权", "买": 1, "卖": -1},
+    {"品种": "588080期权", "买": 1, "卖": -1},
+    {"品种": "159901期权", "买": 1, "卖": -1},
+    {"品种": "159915期权", "买": 1, "卖": -1},
+    {"品种": "深159919期权", "买": 1, "卖": -1},
+    {"品种": "159922期权", "买": 1, "卖": -1},
+]
+
+
+def _load_full_json(path: Path) -> Optional[Dict[str, Any]]:
+    """读取整个 JSON 文件（不仅限于 standards 字段）。缺失/损坏返回 None。"""
+    if not path.is_file():
+        return None
+    try:
+        with path.open("r", encoding="utf-8-sig") as fh:
+            return json.load(fh)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[WARN] 读取 JSON 失败 {path}: {exc}")
+        return None
+
+
+def load_super_price_template(
+    client_id: str,
+    default: Optional[list] = None,
+) -> list:
+    """返回超价参数模板行列表 [{"品种":.., "买":.., "卖":..}, ...]。
+
+    解析顺序：
+        1. 标准/<client_id>/超价设置.json 的 rows
+        2. 标准/default/超价设置.json 的 rows
+        3. 调用方传入的 default（脚本内兜底）
+        4. 模块内置 _BUILTIN_SUPER_PRICE_ROWS（离线不崩）
+    """
+    if client_id:
+        data = _load_full_json(STANDARD_ROOT / client_id / SUPER_PRICE_TEMPLATE_FILE)
+        rows = data.get("rows") if isinstance(data, dict) else None
+        if rows:
+            return rows
+    data = _load_full_json(STANDARD_ROOT / "default" / SUPER_PRICE_TEMPLATE_FILE)
+    rows = data.get("rows") if isinstance(data, dict) else None
+    if rows:
+        return rows
+    if default:
+        return list(default)
+    return list(_BUILTIN_SUPER_PRICE_ROWS)
+
+
+def save_super_price_template(
+    client_id: str,
+    rows: list,
+    *,
+    description: str = "",
+    backup: bool = True,
+) -> Path:
+    """把超价参数行表写回 标准/<client_id>/超价设置.json。
+
+    与 load_super_price_template 对称：覆盖前若已存在旧文件，先复制为
+    同目录 .json.bak 备份。返回最终写出的 JSON 路径。
+    """
+    path = resolve_standard_path("超价设置", client_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if backup and path.is_file():
+        shutil.copy2(path, path.with_suffix(".json.bak"))
+    payload = {
+        "schema_version": SCHEMA_VERSION,
+        "client": client_id,
+        "panel": "超价设置",
+        "description": description or "自定义超价参数比对模板；可直接编辑，或用抓取脚本覆盖。",
+        "rows": rows,
+    }
+    tmp = path.with_suffix(".json.tmp")
+    with tmp.open("w", encoding="utf-8") as fh:
+        json.dump(payload, fh, ensure_ascii=False, indent=2)
+        fh.write("\n")
+    os.replace(tmp, path)
+    return path

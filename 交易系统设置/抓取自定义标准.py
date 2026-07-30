@@ -26,7 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.window import find_window, activate_window, countdown, close_settings_dialog
 from core.settings_window import open_settings_dialog, switch_settings_panel
-from core.settings_standard import save_standard
+from core.settings_standard import save_standard, save_super_price_template
 
 try:
     from core.clients import get_client, get_default_client_id
@@ -78,6 +78,8 @@ def main():
     parser = argparse.ArgumentParser(description="抓取当前客户端自定义标准")
     parser.add_argument("--client", default="", help="客户端 id，如 guotai_haitong")
     parser.add_argument("--panel", nargs="*", default=None, help="只抓取指定面板")
+    parser.add_argument("--super-price", action="store_true",
+                        help="额外采集超价参数弹窗全部行，写 标准/<client_id>/超价设置.json")
     args = parser.parse_args()
 
     client_id = _resolve_client_id(args.client)
@@ -135,6 +137,26 @@ def main():
             data = collector(dlg)
             path = save_standard(panel, client_id, data)
             print(f"[OK] 已保存 {panel} 标准 -> {path}（共 {len(data)} 项）")
+
+        # 超价参数弹窗（多页滚动采集，按客户端生成 超价设置.json）
+        if args.super_price:
+            if not client_id:
+                print("[跳过] 未指定 --client，超价参数按客户端保存需要 client_id")
+            else:
+                try:
+                    mod = _import_panel(PANEL_MODULES["期权设置"])
+                    collect = getattr(mod, "collect_super_price_rows", None)
+                    if collect is None:
+                        print("[跳过] 2_期权设置.py 未实现 collect_super_price_rows")
+                    else:
+                        sp_rows = collect(dlg)
+                        if sp_rows:
+                            sp_path = save_super_price_template(client_id, sp_rows)
+                            print(f"[OK] 已保存 超价设置 标准 -> {sp_path}（共 {len(sp_rows)} 行）")
+                        else:
+                            print("[WARN] 超价参数采集为空，未写入文件")
+                except Exception as e:
+                    print(f"[错误] 超价参数采集失败: {e}")
 
         print("\n=== 抓取完成 ===")
     except KeyboardInterrupt:

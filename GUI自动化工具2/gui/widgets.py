@@ -21,12 +21,20 @@ class ColoredLogText(scrolledtext.ScrolledText):
         self.tag_configure("info", foreground="#569cd6")
         self.tag_configure("separator", foreground="#808080")
         self.tag_configure("highlight", foreground="#ce9178")
+        # 交易系统设置的状态标签“执行失败”(core.settings.STATUS_EXECUTION_FAILED)
+        # 是状态而非运行异常，用中性金色区分于 error 红。
+        self.tag_configure("status_fail", foreground="#d7ba7d")
 
     @staticmethod
     def _get_tag(message):
         """根据日志内容动态返回颜色标签"""
         msg_lower = message.lower()
         msg_stripped = message.strip()
+
+        # 交易系统设置的状态“执行失败”是状态标签而非运行异常，单独用中性金色，
+        # 避免被下方“失败”关键字误判为红色错误。
+        if "执行失败" in message:
+            return "status_fail"
 
         # 成功类（绿色）
         if any(kw in msg_lower for kw in ["成功", "完成", "success", "[ok]", "已找到", "已切换", "已点击", "已设置", "已选择", "主动打开"]):

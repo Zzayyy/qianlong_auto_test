@@ -3,6 +3,7 @@ import unittest
 from core.one_click_settings import (
     canonical_hotkey,
     evaluate_shortcuts,
+    filter_phantom_rows,
     merge_shortcut_pages,
     normalize_text,
     parse_shortcut_ocr_tokens,
@@ -18,6 +19,12 @@ def token(text, x, y, score=0.99):
     }
 
 
+def _strip_anchor(rows):
+    """parse_shortcut_ocr_tokens 会在行内附带内部字段 _anchor(供调用方做按键复核定位)，
+    该字段在返回前会被调用方剔除；单测只关注业务字段，这里去掉它。"""
+    return [{k: v for k, v in row.items() if k != "_anchor"} for row in rows]
+
+
 class NormalizeTests(unittest.TestCase):
     def test_normalizes_hotkey_spacing_and_width(self):
         self.assertEqual(normalize_text("  ＣＴＲＬ＋Ｓ  "), "CTRL+S")
@@ -27,14 +34,14 @@ class NormalizeTests(unittest.TestCase):
 
 class OcrParserTests(unittest.TestCase):
     def test_groups_split_shortcut_tokens_by_row_and_column(self):
-        rows = parse_shortcut_ocr_tokens(
+        rows = _strip_anchor(parse_shortcut_ocr_tokens(
             [
                 token("5", 30, 50),
                 token("平合约1义务仓", 100, 50),
                 token("小键盘", 250, 50),
                 token("4", 310, 50),
             ]
-        )
+        ))
         self.assertEqual(
             rows,
             [{
@@ -47,11 +54,11 @@ class OcrParserTests(unittest.TestCase):
         )
 
     def test_applies_explicit_ocr_name_alias(self):
-        rows = parse_shortcut_ocr_tokens(
+        rows = _strip_anchor(parse_shortcut_ocr_tokens(
             [token("10", 30, 50), token("全撒", 100, 50, 0.8),
              token("小键盘.", 250, 50, 0.9)],
             name_aliases={"全撒": "全撤"},
-        )
+        ))
         self.assertEqual(rows[0]["name"], "全撤")
         self.assertEqual(rows[0]["shortcut"], "小键盘.")
         self.assertEqual(rows[0]["confidence"], 0.8)
@@ -66,6 +73,47 @@ class OcrParserTests(unittest.TestCase):
             ]
         )
         self.assertEqual(merged[0]["shortcut"], "小键盘-")
+
+    def test_recovers_separated_hotkey_key(self):
+        # OCR 把“小键盘”后的细按键“-”单独成行(竖直偏移超出分组容差)时，
+        # 仍应从邻近右侧找回并拼回，得到完整的“小键盘-”。
+        rows = _strip_anchor(parse_shortcut_ocr_tokens(
+            [
+                token("12", 30, 50),
+                token("减少张数", 100, 50),
+                token("小键盘", 250, 50),
+                token("-", 320, 60),
+            ]
+        ))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["name"], "减少张数")
+        self.assertEqual(rows[0]["shortcut"], "小键盘-")
+
+    def test_does_not_recover_when_key_present(self):
+        # 按键已正常拼回时不应重复找回。
+        rows = _strip_anchor(parse_shortcut_ocr_tokens(
+            [
+                token("6", 30, 50),
+                token("买合约2", 100, 50),
+                token("小键盘", 250, 50),
+                token("5", 320, 50),
+            ]
+        ))
+        self.assertEqual(rows[0]["shortcut"], "小键盘5")
+
+
+class PhantomRowTests(unittest.TestCase):
+    def test_filters_rows_outside_table_range(self):
+        rows = [
+            {"sequence": 6, "name": "买合约2", "shortcut": "小键盘5"},
+            {"sequence": 12, "name": "减少张数", "shortcut": "小键盘-"},
+            {"sequence": 40, "name": "一务内", "shortcut": ""},
+        ]
+        self.assertEqual(filter_phantom_rows(rows, 12), rows[:2])
+
+    def test_keeps_all_rows_when_row_count_unknown(self):
+        rows = [{"sequence": 40, "name": "一务内", "shortcut": ""}]
+        self.assertEqual(filter_phantom_rows(rows, -1), rows)
 
 
 class ShortcutEvaluationTests(unittest.TestCase):

@@ -74,7 +74,7 @@ from core.settings_window import (
     switch_settings_panel as switch_settings_panel_compat,
 )
 from core.settings import SettingsTestResult
-from core.settings_standard import load_standard
+from core.settings_standard import load_standard, load_super_price_template
 
 
 # ====================== 可配置参数 ======================
@@ -218,10 +218,8 @@ OUTPUT_DIR = os.environ.get("GUI_OUTPUT_DIR", "") or _OUTPUT_DIR_DEFAULT
 RESULT_SUBDIR = "期权设置"
 COUNTDOWN_SEC = 3  # 倒计时秒数
 
-# 超价参数弹窗比对用的模板 Excel（与脚本同目录）
-SUPER_PRICE_XLSX = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "超价设置模板.xlsx"
-)
+# 超价参数弹窗比对模板（品种/买超价步长/卖超价步长）。
+# 由 load_super_price_template(CLIENT_ID) 按客户端解析，不再依赖 xlsx。
 
 # RapidOCR 识别最低置信度
 OCR_MIN_CONF = 0.30
@@ -1077,15 +1075,128 @@ def close_popup_dialog(popup):
     print("[WARN] 未能自动关闭弹窗，请手动关闭")
 
 
+def _find_popup_table(popup):
+    """在超价参数弹窗内定位可滚动的表格/列表控件；找不到则返回弹窗本身。"""
+    try:
+        for ctrl in popup.descendants():
+            cls = (ctrl.element_info.class_name or "").lower()
+            ctype = (ctrl.element_info.control_type or "")
+            if ("list" in cls) or ctype in ("Table", "DataGrid", "List"):
+                return ctrl
+    except Exception:
+        pass
+    return popup
+
+
+def capture_popup_super_price_rows(popup, *, max_pages: int = 16):
+    """多页滚动采集超价参数弹窗内的全部行。
+
+    回到列表顶部后循环：截图 -> RapidOCR -> 解析行 -> 按品种合并去重；
+    每次向下翻页，连续 2 页无新行或达到 max_pages 时停止。
+    兼容钱龙单页（不滚动也能一次采完）与国泰多页（需下滚）。
+    返回 list of {"品种", "买", "卖"}。
+    """
+    table = _find_popup_table(popup)
+    try:
+        table_hwnd = int(table.handle)
+    except Exception:
+        table_hwnd = None
+
+    # 复位到列表顶部（钱龙只有一页，SB_TOP 也无害）
+    if table_hwnd:
+        try:
+            win32gui.SendMessage(table_hwnd, win32con.WM_VSCROLL, win32con.SB_TOP, 0)
+            time.sleep(0.3)
+        except Exception:
+            pass
+
+    merged = {}
+    stale = 0
+    for page in range(max(1, max_pages)):
+        arr = _grab_window_as_array(int(popup.handle))
+        tokens = ocr_image(arr)
+        rows = parse_super_price_popup(tokens)
+
+        new_count = 0
+        for r in rows:
+            key = r.get("品种")
+            if key and key not in merged:
+                merged[key] = r
+                new_count += 1
+
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        try:
+            shot = os.path.join(OUTPUT_DIR, RESULT_SUBDIR, f"超价参数弹窗_p{page+1}_{ts}.png")
+            os.makedirs(os.path.dirname(shot), exist_ok=True)
+            Image.fromarray(arr).save(shot)
+        except Exception:
+            pass
+
+        print(f"[超价采集] 第{page+1}页: 解析{len(rows)}行, 新增{new_count}行, 累计{len(merged)}行")
+        if new_count == 0:
+            stale += 1
+            if stale >= 2:
+                print("[超价采集] 连续两页无新行，结束采集")
+                break
+        else:
+            stale = 0
+
+        if table_hwnd:
+            try:
+                win32gui.SendMessage(table_hwnd, win32con.WM_VSCROLL, win32con.SB_PAGEDOWN, 0)
+                time.sleep(0.3)
+            except Exception:
+                break
+        else:
+            break
+
+    return list(merged.values())
+
+
+def collect_super_price_rows(dlg):
+    """采集当前客户端超价参数弹窗的全部行（多页滚动）。
+
+    供“抓取自定义标准”脚本生成 标准/<client_id>/超价设置.json。
+    只读取、不改任何设置。调用前需已打开交易系统设置对话框。
+    """
+    if not switch_settings_panel_compat(dlg, PANEL_NAME):
+        print(f"[WARN] 无法切换至{PANEL_NAME}面板，跳过超价参数采集")
+        return []
+    time.sleep(0.5)
+
+    try:
+        btn = dlg.child_window(auto_id=AUTO_ID["超价参数"], control_type="Button")
+        btn.wait("enabled", timeout=3)
+        btn.click_input()
+    except Exception as e:
+        print(f"[WARN] 点击'超价参数'按钮失败: {e}")
+        return []
+    time.sleep(1.0)
+
+    popup = find_popup_dialog(dlg)
+    if popup is None:
+        print("[WARN] 未检测到超价参数弹窗")
+        return []
+
+    try:
+        rows = capture_popup_super_price_rows(popup)
+        print(f"[OK] 超价参数采集完成, 共 {len(rows)} 行")
+        return rows
+    finally:
+        close_popup_dialog(popup)
+        time.sleep(0.3)
+
+
 def test_super_price_params(dlg, result: SettingsTestResult):
-    """测试九、超价参数：点击按钮 → 弹窗 → RapidOCR 识别表格 → 与模板比对。
+    """测试九、超价参数：点击按钮 → 弹窗 → 多页滚动 RapidOCR → 与模板比对。
 
     流程：
         1. 点击“超价参数”按钮 (auto_id=2007)，弹出设置对话框
-        2. 对弹窗截图（numpy 数组）
-        3. RapidOCR 识别弹窗内表格文本
-        4. 解析为 {品种, 买超价步长, 卖超价步长} 行
-        5. 与 超价设置模板.xlsx 逐行比对
+        2. 多页滚动采集弹窗表格（回到顶部 -> 截图OCR -> 下滚 -> 合并去重，
+           兼容钱龙单页与国泰多页）
+        3. 解析为 {品种, 买超价步长, 卖超价步长} 行
+        4. 与 load_super_price_template(CLIENT_ID) 的模板逐行比对（原 xlsx 已迁移为 JSON）
+        5. 检查弹窗内“超价的基准价”下拉框
         6. 关闭弹窗
     """
     print("\n--- [9/9] 超价参数弹窗 (RapidOCR 比对) ---")
@@ -1111,50 +1222,28 @@ def test_super_price_params(dlg, result: SettingsTestResult):
         return
     result.add_result("超价参数_弹窗", "已打开", "已打开")
 
-    # 3. 截图弹窗为 numpy 数组（同时保存 PNG 便于核对）
+    # 3. 多页滚动采集弹窗表格全部行（兼容钱龙单页 / 国泰多页下滚）
     try:
-        rect = popup.rectangle()
-        popup_arr = _grab_rect_as_array(rect)
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        shot = os.path.join(OUTPUT_DIR, RESULT_SUBDIR, f"超价参数弹窗_{ts}.png")
-        os.makedirs(os.path.dirname(shot), exist_ok=True)
-        Image.fromarray(popup_arr).save(shot)
-        print(f"[OK] 弹窗截图已保存: {shot}")
+        ocr_rows = capture_popup_super_price_rows(popup)
+        print(f"[OK] 超价参数弹窗共解析到 {len(ocr_rows)} 行")
     except Exception as e:
-        print(f"  [WARN] 弹窗截图失败: {e}")
+        print(f"  [WARN] 多页采集失败: {e}")
         close_popup_dialog(popup)
         return
 
-    # 4. RapidOCR 识别
-    try:
-        tokens = ocr_image(popup_arr)
-        print(f"[OK] 超价参数弹窗 OCR 识别到 {len(tokens)} 条文本")
-    except Exception as e:
-        print(f"  [WARN] OCR 识别失败: {e}")
-        close_popup_dialog(popup)
-        return
-
-    # 5. 解析 + 读取模板 + 比对
-    ocr_rows = parse_super_price_popup(tokens)
-    print(f"[OK] 解析到 {len(ocr_rows)} 行超价参数数据: {ocr_rows}")
-
-    if not os.path.exists(SUPER_PRICE_XLSX):
-        print(f"[WARN] 模板文件不存在: {SUPER_PRICE_XLSX}")
-        result.add_result("超价参数_模板文件", "不存在", SUPER_PRICE_XLSX)
-        close_popup_dialog(popup)
-        return
-
-    try:
-        template_rows = read_super_price_template(SUPER_PRICE_XLSX)
-        print(f"[OK] 模板读取到 {len(template_rows)} 行: {template_rows}")
-    except Exception as e:
-        print(f"  [WARN] 读取模板失败: {e}")
-        close_popup_dialog(popup)
-        return
-
+    # 4. 读取模板 + 比对
+    template_rows = load_super_price_template(CLIENT_ID)
+    print(f"[OK] 超价模板读取到 {len(template_rows)} 行")
     compare_super_price(template_rows, ocr_rows, result)
 
-    # 7. 超价设置弹窗内的“超价的基准价”下拉框检查
+    # 5. 超价设置弹窗内的“超价的基准价”下拉框检查
+    #    采集时表格已滚到底部，先复位到顶部再读取下拉框，避免控件被滚出可视区
+    try:
+        _tbl = _find_popup_table(popup)
+        win32gui.SendMessage(int(_tbl.handle), win32con.WM_VSCROLL, win32con.SB_TOP, 0)
+        time.sleep(0.3)
+    except Exception:
+        pass
     print("\n  [弹窗] 检查‘超价的基准价’下拉框...")
     base_cb = find_popup_combobox(popup, AUTO_ID["超价的基准价"], "超价的基准价")
     if base_cb is None:
@@ -1233,6 +1322,48 @@ def _grab_rect_as_array(rect) -> np.ndarray:
     return rgb
 
 
+def _grab_window_as_array(hwnd) -> np.ndarray:
+    """用 PrintWindow 截取控件/窗口自身位图为 numpy RGB 数组。
+
+    用于弹窗等子窗口：PrintWindow 渲染窗口自身像素，不受其上方的
+    其它窗口（如聊天界面）遮挡影响；mss 按屏幕坐标截图会被遮挡窗口
+    的内容覆盖，故超价参数弹窗改用本函数。
+    """
+    import ctypes
+    import win32gui
+    import win32ui
+    import win32con
+    from PIL import Image
+
+    hwnd = int(hwnd)
+    user32 = ctypes.windll.user32
+    setter = getattr(user32, "SetThreadDpiAwarenessContext", None)
+    old = setter(ctypes.c_void_p(-1)) if setter is not None else None
+    try:
+        left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+        width, height = max(1, right - left), max(1, bottom - top)
+        hwnd_dc = win32gui.GetWindowDC(hwnd)
+        src = win32ui.CreateDCFromHandle(hwnd_dc)
+        mem = src.CreateCompatibleDC()
+        bmp = win32ui.CreateBitmap()
+        bmp.CreateCompatibleBitmap(src, width, height)
+        mem.SelectObject(bmp)
+        ctypes.windll.user32.PrintWindow(hwnd, mem.GetSafeHdc(), 2)
+        info = bmp.GetInfo()
+        bits = bmp.GetBitmapBits(True)
+        img = Image.frombuffer(
+            "RGB", (info["bmWidth"], info["bmHeight"]), bits, "raw", "BGRX", 0, 1
+        ).copy()
+        win32gui.DeleteObject(bmp.GetHandle())
+        mem.DeleteDC()
+        src.DeleteDC()
+        win32gui.ReleaseDC(hwnd, hwnd_dc)
+        return np.array(img)
+    finally:
+        if old is not None and setter is not None:
+            setter(ctypes.c_void_p(old))
+
+
 def _box_center(box):
     xs = [p[0] for p in box]
     ys = [p[1] for p in box]
@@ -1306,43 +1437,6 @@ def parse_super_price_popup(tokens):
                 "卖": nums[1] if len(nums) > 1 else None,
             })
     return data_rows
-
-
-def read_super_price_template(filepath: str):
-    """读取超价设置模板.xlsx → list of {品种, 买, 卖}。
-
-    要求列名（trim 后）：品种 / 买超价步长 / 卖超价步长
-    """
-    import pandas as pd
-    df = pd.read_excel(filepath)
-    df.columns = [str(c).strip() for c in df.columns]
-
-    col_map = {}
-    aliases = {
-        "品种": ["品种", "合约", "名称"],
-        "买超价步长": ["买超价步长", "买超价", "买步长"],
-        "卖超价步长": ["卖超价步长", "卖超价", "卖步长"],
-    }
-    for key, alist in aliases.items():
-        for a in alist:
-            if a in df.columns:
-                col_map[key] = a
-                break
-    missing = [k for k in ("品种", "买超价步长", "卖超价步长") if k not in col_map]
-    if missing:
-        raise ValueError(f"Excel 缺少必需列: {missing}（实际列: {list(df.columns)}）")
-
-    rows = []
-    for _, row in df.iterrows():
-        品种 = str(row[col_map["品种"]]).strip()
-        if 品种 in ("", "nan"):
-            continue
-        rows.append({
-            "品种": 品种,
-            "买": _extract_int(str(row[col_map["买超价步长"]])),
-            "卖": _extract_int(str(row[col_map["卖超价步长"]])),
-        })
-    return rows
 
 
 def compare_super_price(template_rows, ocr_rows, result: SettingsTestResult):
