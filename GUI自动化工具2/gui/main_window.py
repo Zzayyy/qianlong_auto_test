@@ -480,14 +480,11 @@ class AutomationGUI:
         """选中某个功能分类（来自树节点或功能菜单）"""
         self.current_category = category
         self.category_label.config(text=f"当前功能: {category}")
-        # 展开所属一级模块和对应分类节点。
+        # 仅展开所属一级模块；分类节点保持折叠，避免运行后默认展开（如「下单」）。
         module = get_module_for_category(category)
         module_iid = f"module::{module}"
         if module and self.script_tree.exists(module_iid):
             self.script_tree.item(module_iid, open=True)
-        cat_iid = f"cat::{category}"
-        if self.script_tree.exists(cat_iid):
-            self.script_tree.item(cat_iid, open=True)
         # 清空脚本选择（避免沿用上一次选中的具体脚本）
         cur_sel = self.script_tree.selection()
         if cur_sel:
@@ -1416,11 +1413,13 @@ class AutomationGUI:
         self._drag_module = None
         self._drag_active = False
         self._drag_occurred = False
+        self._drag_iid = None
         if self.task_center is None or self.task_center.is_running:
             return
         iid = self.script_tree.identify_row(event.y)
         if not iid:
             return
+        self._drag_iid = iid
         # 一级模块（iid 形如 module::行情交易）：落点时加入模块下全部可用分类。
         if iid.startswith("module::"):
             module = iid.split("::", 1)[1]
@@ -1513,7 +1512,9 @@ class AutomationGUI:
         if getattr(self, "_drag_occurred", False):
             self._drag_occurred = False
             return
-        iid = self.script_tree.identify_row(event.y)
+        # 用按下时记录的节点（而非释放时重新识别），避免切换分类触发预览面板
+        # 收起导致布局回流、释放坐标错位而无法展开节点。
+        iid = getattr(self, "_drag_iid", None)
         if not iid or not iid.startswith(("cat::", "module::")):
             return
         # 仅当抬起位置就是当前选中的分类节点时才切换
@@ -1583,22 +1584,27 @@ class AutomationGUI:
         # 收集运行时参数，构造任务
         params = self.collect_params(export_targets)
         if self.current_category == "交易系统设置":
-            batch_item = {
-                "category": "交易系统设置",
-                "script_name": script["name"],
-                "script_path": script["path"],
-                "params": params,
-                "status": TaskCenter.ST_PENDING,
-            }
-            try:
-                self._single_settings_batch = self.begin_settings_batch(
-                    "单独运行", [batch_item]
-                )
-            except OSError as exc:
-                messagebox.showerror("报告中心", f"无法创建报告批次:\n{exc}")
-                return
-            params.update(batch_item.get("_settings_runtime", {}))
-            self._single_stop_requested = False
+            if self._is_capture_script_selected():
+                # 抓取自定义标准是只读采集，不产生比对差异，
+                # 不创建报告中心批次，运行结果也不在报告中心显示。
+                self._single_settings_batch = None
+            else:
+                batch_item = {
+                    "category": "交易系统设置",
+                    "script_name": script["name"],
+                    "script_path": script["path"],
+                    "params": params,
+                    "status": TaskCenter.ST_PENDING,
+                }
+                try:
+                    self._single_settings_batch = self.begin_settings_batch(
+                        "单独运行", [batch_item]
+                    )
+                except OSError as exc:
+                    messagebox.showerror("报告中心", f"无法创建报告批次:\n{exc}")
+                    return
+                params.update(batch_item.get("_settings_runtime", {}))
+                self._single_stop_requested = False
         task = Task(script, self.current_category, params)
 
         self.is_running = True
