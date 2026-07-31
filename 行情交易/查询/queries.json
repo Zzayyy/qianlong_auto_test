@@ -5,6 +5,9 @@
     "client_overrides": {
       "guotai_haitong": {
         "export_type": null
+      },
+      "zhongtai": {
+        "export_type": null
       }
     }
   },
@@ -35,11 +38,14 @@
     "client_overrides": {
       "guotai_haitong": {
         "export_type": "xls_only"
+      },
+      "zhongtai": {
+        "export_type": "xls_only"
       }
     }
   },
   "\\查询\\资金查询": {
-    "settle_delay": 1.0
+    "settle_delay": 3.0
   },
   "\\查询\\当日行权被指派查询": {
     "settle_delay": 1.0
@@ -101,6 +107,9 @@
   "\\组合申报\\历史组合委托流水": {
     "settle_delay": 1.0
   },
+  "\\组合申报\\历史组合策略持仓查询": {
+    "settle_delay": 1.0
+  },
   "\\结算单\\历史交收明细": {
     "settle_delay": 1.0
   },
@@ -142,6 +151,9 @@
     "settle_delay": 1.0
   },
   "\\通知查询\\当日风险通知": {
+    "settle_delay": 1.0
+  },
+  "\\通知查询\\历史风险通知(风控专用)": {
     "settle_delay": 1.0
   }
 }

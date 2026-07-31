@@ -132,3 +132,29 @@ def resolve_panel_path(config, client_id=None):
             return menu_map[std_path]
 
     return std_path
+
+
+def normalize_menu_path_for_client(panel_path, client_id=None):
+    """按客户端菜单别名归一化面板路径（替换叶子节点名），否则原样返回。
+
+    用途：Excel/配置里可能写别名菜单名（如 期权下单(新)），而客户端真实菜单是
+    期权下单。在导航入口先归一化，文本定位即可直接命中，避免依赖位置指纹
+    （中泰等客户端的功能树节点数会随展开状态浮动，精确指纹兜底不可靠）。
+
+    clients.json 中客户端可配置 menu_aliases，例如：
+      {"期权下单(新)": "期权下单"}
+    """
+    client = get_client(client_id) if client_id else None
+    aliases = (client or {}).get("menu_aliases") or {}
+    if not aliases:
+        return panel_path
+    normalized = panel_path.replace("/", "\\")
+    parts = [part for part in normalized.split("\\") if part]
+    if not parts:
+        return panel_path
+    leaf = parts[-1]
+    if leaf not in aliases:
+        return panel_path
+    parts[-1] = aliases[leaf]
+    prefix = "\\" if normalized.startswith("\\") else ""
+    return prefix + "\\".join(parts)

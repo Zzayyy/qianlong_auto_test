@@ -8,7 +8,11 @@ from win32gui import (
     GetWindowText,
     IsWindowVisible
 )
-from core.clients import get_client, get_clients
+from core.clients import (
+    get_client,
+    get_clients,
+    normalize_menu_path_for_client,
+)
 from core.native_tree import (
     NativeTreeAccessError,
     select_tree_path,
@@ -199,6 +203,12 @@ def switch_panel(win, panel_path: str, use_title: bool = False):
         panel_path: 树形面板路径,如 r"\查询\资金持仓" 或 "撤单"
         use_title: 是否用title定位TreeItem(历史委托/历史成交需要)
     """
+    client = _resolve_client_for_window(win)
+    # 客户端菜单别名归一：Excel/配置里可能写别名（如 期权下单(新)），替换为真实
+    # 菜单名后文本定位即可直接命中，避免依赖位置指纹（部分客户端树节点数随展开浮动）。
+    panel_path = normalize_menu_path_for_client(
+        panel_path, (client or {}).get("id")
+    )
     panel_name = panel_path.replace("/", "\\").rsplit("\\", 1)[-1]
     native_error = None
     try:
@@ -216,7 +226,6 @@ def switch_panel(win, panel_path: str, use_title: bool = False):
         native_error = e
         print(f"[WARN] 原生 TreeView 定位失败: {e}")
 
-    client = _resolve_client_for_window(win)
     position_profile = (client or {}).get("native_tree_profile")
     position_error = None
     if position_profile:

@@ -475,8 +475,12 @@ class AutomationGUI:
                         module_iid, tk.END, iid=parent_iid, text=category, open=False
                     )
                 for s in scripts:
-                    # iid 必须唯一：查询类脚本共用驱动文件，故用 query_key 区分。
-                    sid_iid = f"script::{category}::{s.get('query_key') or s['path']}"
+                    # iid 必须唯一：查询类脚本共用驱动文件，故用 query_key 区分；
+                    # 中泰等客户端脚本重定向后 path 可能重复，故再拼上脚本名。
+                    sid_iid = (
+                        f"script::{category}::{s.get('query_key') or s['path']}"
+                        f"::{s['name']}"
+                    )
                     self.script_tree.insert(parent_iid, tk.END, iid=sid_iid, text=s["name"])
                     self.tree_script_map[sid_iid] = {"script": s, "category": category}
 

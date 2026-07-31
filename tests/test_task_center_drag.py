@@ -178,6 +178,70 @@ class MainWindowDirectoryDragTests(unittest.TestCase):
         self.assertFalse(gui._drag_active)
 
 
+class TaskCenterReorderTests(unittest.TestCase):
+    """任务中心内部拖拽重排（_reorder）的边界场景。"""
+
+    def _center(self, names, same_path=True):
+        center = TaskCenter.__new__(TaskCenter)
+        center.is_running = False
+        center.tasks = [
+            {
+                "category": "查询",
+                "script_name": name,
+                # 查询类脚本共用同一个驱动文件（run_query.py），path 完全相同
+                "script_path": (r"X:\行情交易\查询\run_query.py" if same_path
+                                else f"X:\\{name}.py"),
+                "query_key": f"\\查询\\{name}",
+                "params": {},
+                "status": center.ST_PENDING,
+            }
+            for name in names
+        ]
+        center._save = Mock()
+        center._refresh = Mock()
+        center._update_group_hint = Mock()
+        center._dirty = False
+        center.tree = Mock()
+        return center
+
+    def test_reorder_works_when_all_tasks_share_same_script_path(self):
+        """共用同一驱动文件的队列（如全查询脚本），拖动也必须换位。
+
+        回归：此前用 script_path 列表判断"是否无变化"，同路径脚本重排前后
+        path 序列不变，被误判为无变化而 return，导致拖拽不生效。
+        """
+        center = self._center(["委托查询", "持仓查询", "资金查询", "委托流水查询"])
+        center._reorder(0, 1, True)  # 委托查询 拖到 持仓查询 之后
+        self.assertEqual(
+            ["持仓查询", "委托查询", "资金查询", "委托流水查询"],
+            [t["script_name"] for t in center.tasks],
+        )
+        center._save.assert_called_once_with()
+        center._refresh.assert_called_once_with()
+        center._update_group_hint.assert_called_once_with()
+        self.assertTrue(center._dirty)
+
+    def test_reorder_same_position_is_noop(self):
+        """拖回原位置不应触发保存/刷新。"""
+        center = self._center(["A", "B", "C"])
+        center._reorder(0, 0, False)
+        center._save.assert_not_called()
+        center._refresh.assert_not_called()
+        self.assertFalse(center._dirty)
+
+    def test_reorder_up_and_down_with_distinct_paths(self):
+        """不同路径脚本的常规上移/下移仍正常。"""
+        center = self._center(["A", "B", "C", "D"], same_path=False)
+        center._reorder(3, 0, False)  # D 拖到 A 之前
+        self.assertEqual(
+            ["D", "A", "B", "C"], [t["script_name"] for t in center.tasks]
+        )
+        center._reorder(1, 2, True)  # A 拖到 B 之后（当前第 2 位是 B）
+        self.assertEqual(
+            ["D", "B", "A", "C"], [t["script_name"] for t in center.tasks]
+        )
+
+
 class TaskCenterBatchDragTests(unittest.TestCase):
     def _task_center(self, xlsx_file=""):
         logs = []

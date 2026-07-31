@@ -504,14 +504,31 @@ def select_tree_path_by_position(parent_hwnd: int, panel_path: str,
         )
 
     expected_count = profile.get("expected_node_count")
-    if not isinstance(expected_count, int) or expected_count <= 0:
+    if isinstance(expected_count, list):
+        # 允许一组已实测的节点数（如中泰在 72/73 两态间浮动）；
+        # 仅接受显式列出的值，其它一律 fail-closed。
+        allowed_counts = [
+            value for value in expected_count
+            if isinstance(value, int) and value > 0
+        ]
+        if not allowed_counts:
+            raise NativeTreeError("位置配置的 expected_node_count 无效")
+        expected_desc = "、".join(str(value) for value in allowed_counts)
+    elif isinstance(expected_count, int) and expected_count > 0:
+        allowed_counts = None
+        expected_desc = str(expected_count)
+    else:
         raise NativeTreeError("位置配置缺少 expected_node_count 安全指纹")
 
     tree_hwnd = find_treeview(parent_hwnd, control_id)
     actual_count = get_tree_count(tree_hwnd)
-    if actual_count != expected_count:
+    if allowed_counts is not None:
+        count_ok = actual_count in allowed_counts
+    else:
+        count_ok = actual_count == expected_count
+    if not count_ok:
         raise NativeTreeError(
-            f"菜单树节点数已变化（期望 {expected_count}，实际 {actual_count}），"
+            f"菜单树节点数已变化（期望 {expected_desc}，实际 {actual_count}），"
             "为避免误点，已停用位置定位"
         )
 

@@ -206,6 +206,8 @@ SCRIPTS_CONFIG = {
         {"name": "2.合约信息变更明细", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\通知查询\合约信息变更明细"},
         {"name": "3.当日风险通知", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\通知查询\当日风险通知"},
         {"name": "4.历史风险通知", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\通知查询\历史风险通知"},
+        # 以下为中泰证券期权宝专属菜单（钱龙/国泰无此菜单，由 clients.json 的 unsupported 过滤）
+        {"name": "5.历史风险通知(风控专用)", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\通知查询\历史风险通知(风控专用)"},
     ],
     # 以下为国泰海通专属菜单
     "结算单": [
@@ -227,6 +229,8 @@ SCRIPTS_CONFIG = {
         {"name": "4.组合策略信息查询", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\组合申报\组合策略信息查询"},
         {"name": "5.组合委托流水查询", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\组合申报\组合委托流水查询"},
         {"name": "6.历史组合委托流水", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\组合申报\历史组合委托流水"},
+        # 以下为中泰证券期权宝专属菜单（钱龙/国泰无此菜单，由 clients.json 的 unsupported 过滤）
+        {"name": "7.历史组合策略持仓查询", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\组合申报\历史组合策略持仓查询"},
     ],
     "超级策略": [
         {"name": "牛市认沽", "path": rf"{PROJECT_ROOT}\超级策略\牛市认沽_一键开仓.py"},
@@ -266,12 +270,24 @@ def get_scripts_config(client_id=None) -> dict:
       1. 该客户端 unsupported 中出现的脚本（去掉编号后的菜单名 / 菜单路径键）
          将被过滤掉，不在界面显示；
       2. 命中 menu_map 的脚本，其显示名替换为该客户端软件中的真实菜单名
-         （保留原编号前缀，仅替换菜单文本）。
+         （保留原编号前缀，仅替换菜单文本）；
+      3. 命中 script_redirects 的脚本，其运行路径替换为目标脚本（显示名不变）。
+         典型场景：中泰的 快速下单 界面与 期权下单 相同，故“快速下单”条目
+         改跑 期权下单 脚本。键/值为 \\分类\\菜单名，目标须是 SCRIPTS_CONFIG
+         中已登记的脚本。
     默认（client_id 为空 / 找不到对应客户端）返回基准（钱龙）配置。
     """
     client = get_client(client_id) if client_id else None
     menu_map = (client or {}).get("menu_map", {}) or {}
     unsupported = set((client or {}).get("unsupported", []) or [])
+    script_redirects = (client or {}).get("script_redirects", {}) or {}
+
+    # 预索引 \\分类\\菜单名 -> 脚本路径，供脚本重定向解析目标脚本
+    key_to_path = {
+        _script_menu_key(category, get_script_filename(s["name"])): s["path"]
+        for category, scripts in SCRIPTS_CONFIG.items()
+        for s in scripts
+    }
 
     resolved = {}
     for category, scripts in SCRIPTS_CONFIG.items():
@@ -291,6 +307,13 @@ def get_scripts_config(client_id=None) -> dict:
                 m = re.match(r"^(\s*\d+\.\s*)", name)
                 prefix = m.group(1) if m else ""
                 name = prefix + mapped
-            out.append({**s, "name": name})
+            item = {**s, "name": name}
+            # 3) 命中脚本重定向 -> 改跑目标脚本（显示名不变）
+            redirect = script_redirects.get(key)
+            if redirect:
+                target_path = key_to_path.get(redirect)
+                if target_path:
+                    item["path"] = target_path
+            out.append(item)
         resolved[category] = out
     return resolved

@@ -37,6 +37,10 @@ class Task:
         env["GUI_COUNTDOWN"] = str(p.get("countdown_sec", 3))
         env["GUI_XLSX_FILE"] = p.get("xlsx_file", "")
         env["GUI_CATEGORY"] = self.category
+        # 本次运行的面板菜单名（脚本显示名，如 "4.快速下单_自动化下单"）。
+        # 下单脚本据此精确过滤 Excel 行；中泰「快速下单」任务重定向到期权下单
+        # 脚本时，也据此只处理 快速下单 行，不再混读 期权下单 行。
+        env["GUI_TASK_MENU"] = self.script.get("name", "") or ""
         env["GUI_SUPER_ADD_UNDERLYING"] = str(
             bool(p.get("super_add_underlying", False))
         )

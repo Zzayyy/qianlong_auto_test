@@ -75,6 +75,20 @@ QUOTE_TYPE_MAP = {
     "市价FOK": "市价F0K",   # 实际控件是 F0K(数字0),不是 FOK(字母O)
 }
 
+# 报价方式下拉项(以软件实际显示为准;顺序与快速下单页 owner-drawn ComboLBox 实机核对一致)
+QUOTE_TYPES = (
+    "对手价",
+    "挂盘价",
+    "涨停价",
+    "跌停价",
+    "限价",
+    "超价",
+    "市价转限",
+    "市价FAK",
+    "市价F0K",
+)
+QUOTE_INDEX = {name: idx for idx, name in enumerate(QUOTE_TYPES)}
+
 QUOTE_AUTO_ID = "18083"       # 报价方式输入框 auto_id
 QTY_AUTO_ID   = "306"         # 委托数量输入框 auto_id
 
@@ -224,29 +238,6 @@ def _edit_set_text(edit_hwnd, text):
     except Exception:
         pass
     win32gui.SendMessage(edit_hwnd, win32con.WM_SETTEXT, 0, str(text))
-
-
-def _edit_keyboard_confirm(edit_hwnd):
-    """对编辑框发送 Ctrl+A / End / Enter(兜底用,等价于原键盘方案)。"""
-    try:
-        win32gui.SetForegroundWindow(win32gui.GetParent(edit_hwnd) or edit_hwnd)
-    except Exception:
-        pass
-    try:
-        win32gui.SetFocus(edit_hwnd)
-    except Exception:
-        pass
-    time.sleep(0.1)
-    win32api.keybd_event(0x11, 0, 0, 0)            # Ctrl down
-    win32api.keybd_event(0x41, 0, 0, 0)            # A
-    win32api.keybd_event(0x41, 0, win32con.KEYEVENTF_KEYUP, 0)
-    win32api.keybd_event(0x11, 0, win32con.KEYEVENTF_KEYUP, 0)
-    time.sleep(0.05)
-    win32api.keybd_event(0x23, 0, 0, 0)            # End
-    win32api.keybd_event(0x23, 0, win32con.KEYEVENTF_KEYUP, 0)
-    time.sleep(0.05)
-    win32api.keybd_event(0x0D, 0, 0, 0)            # Enter
-    win32api.keybd_event(0x0D, 0, win32con.KEYEVENTF_KEYUP, 0)
 
 
 def _press_enter(edit_hwnd):
@@ -421,30 +412,99 @@ def set_all_checkboxes(main_hwnd, enable_beidui: bool, enable_zidong: bool, enab
     set_checkbox(main_hwnd, "FOK", enable_fok, cache=cache, main_win=main_win)
 
 
+def _press_vk(vk_code: int) -> None:
+    """发送一次虚拟键按下/释放(不依赖窗口焦点在控件上的 UIA 路径)。"""
+    win32api.keybd_event(vk_code, 0, 0, 0)
+    win32api.keybd_event(vk_code, 0, win32con.KEYEVENTF_KEYUP, 0)
+
+
+def _quote_text_matches(edit_hwnd, expected: str) -> bool:
+    """校验报价方式输入框文本是否为目标值。
+
+    钱龙自绘 Edit 跨进程 GetWindowText/UIA 可能拿不到文本,
+    用 WM_GETTEXTLENGTH 比对: 字符数与 GBK 字节数任一匹配即可
+    (兼容 Unicode 窗口返回字符数、ANSI/GBK 窗口返回字节数两种情况)。
+    """
+    try:
+        actual = win32gui.GetWindowText(edit_hwnd) or ""
+        if actual:
+            return actual.strip() == expected
+    except Exception:
+        pass
+    try:
+        n = win32gui.SendMessage(edit_hwnd, win32con.WM_GETTEXTLENGTH, 0, 0)
+        return n == len(expected) or n == len(expected.encode("gbk"))
+    except Exception:
+        return False
+
+
+def _quote_verified(edit_hwnd, expected: str, index=None) -> bool:
+    """报价方式是否已选中。
+
+    实测(2026-07-31 中泰真机): 该自绘控件已选中"挂盘价"时 CB_GETCURSEL 仍返回 0,
+    索引不可用作判定依据; GetWindowText 也恒为空。唯一可靠的是 WM_GETTEXTLENGTH:
+    写入目标文本后长度等于目标(字符数或 GBK 字节数)即视为生效。
+    """
+    return _quote_text_matches(edit_hwnd, expected)
+
+
 def select_quote_type(main_hwnd, option: str, auto_id: str = QUOTE_AUTO_ID):
-    """点击"报价方式"输入框弹出下拉,再点击目标项(按文字定位,直接鼠标点击)。"""
-    # 映射: Excel填写值 -> 实际控件文本
+    """选择报价方式。
+
+    该控件是钱龙自绘的"可输入下拉"(UIA 暴露为 Edit,右缘带隐藏下拉箭头),
+    点击输入框中心只会聚焦编辑区、不会展开下拉(owner-drawn 下拉项也不是
+    带文字的独立窗口,不能按 GetWindowText 定位)。因此:
+
+      1. 优先 WM_SETTEXT 直接写入目标文本再回车(可编辑下拉按文本匹配,不弹下拉;
+         实测 2026-07-31 中泰真机文本写入即生效);
+      2. 仅当文本写入未生效时,才点右缘箭头展开下拉,按 HOME + N×DOWN + ENTER 选择
+         (与快速下单页在钱龙实机验证过的 owner-drawn ComboBox 方案一致);
+      3. 校验只用 WM_GETTEXTLENGTH 文本长度(字符数或 GBK 字节数),
+         不用 CB_GETCURSEL(实测该自绘控件索引不可信,已选中仍返回 0)。
+      注: 不设"当前已是目标"短路——同长度文本(对手价/挂盘价/涨停价都是 3 字)
+      无法靠长度区分,直接重写目标文本最稳妥。
+    """
     actual_option = QUOTE_TYPE_MAP.get(option, option)
+    index = QUOTE_INDEX.get(actual_option)
 
     edit = _first_visible(_find_child_by_ctrl_id(main_hwnd, int(auto_id)))
     if not edit:
         print(f"[WARN] 未找到报价方式输入框(auto_id={auto_id}),跳过")
         return
 
-    # 点击输入框弹出下拉
-    _mouse_click(edit)
-    time.sleep(0.4)
-
-    # 按文字定位下拉项并点击
-    items = _find_windows_by_text(main_hwnd, actual_option)
-    if items:
-        _mouse_click(items[0])
-        print(f"[OK] 报价方式: {option} -> {actual_option} (下拉项点击)")
+    # 1) 直接写文本 + 回车(利用可编辑下拉的文本匹配,不展开下拉)
+    _edit_set_text(edit, actual_option)
+    time.sleep(0.15)
+    _press_enter(edit)
+    time.sleep(0.25)
+    if _quote_verified(edit, actual_option, index):
+        print(f"[OK] 报价方式: {option} -> {actual_option} (文本写入+回车)")
         return
 
-    # 兜底: 键盘确认(沿用原逻辑,仅作保险)
-    _edit_keyboard_confirm(edit)
-    print(f"[OK] 报价方式(键盘兜底): {option} -> {actual_option}")
+    # 2) 点右缘箭头展开下拉 + 键盘选择(仅当前一步失败才执行,正常只会展开一次)
+    if index is not None:
+        try:
+            win32gui.SetForegroundWindow(win32gui.GetParent(edit) or edit)
+        except Exception:
+            pass
+        l, t, r, b = win32gui.GetWindowRect(edit)
+        cy = (t + b) // 2
+        for px in (r - 12, r - 4):
+            win32api.SetCursorPos((px, cy))
+            time.sleep(0.05)
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0)
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0)
+            time.sleep(0.3)
+            _press_vk(win32con.VK_HOME)
+            for _ in range(index):
+                _press_vk(win32con.VK_DOWN)
+            _press_vk(win32con.VK_RETURN)
+            time.sleep(0.25)
+            if _quote_verified(edit, actual_option, index):
+                print(f"[OK] 报价方式: {option} -> {actual_option} (下拉键盘选择)")
+                return
+
+    print(f"[WARN] 报价方式未校验生效: {option} -> {actual_option},可能仍为默认值")
 
 
 def click_action_button(main_hwnd, action: str):

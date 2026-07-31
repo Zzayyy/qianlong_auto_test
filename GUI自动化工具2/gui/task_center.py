@@ -684,8 +684,12 @@ class TaskCenter:
             insert_at = tgt if src > tgt else tgt - 1
         insert_at = max(0, min(insert_at, len(new_tasks)))
         new_tasks.insert(insert_at, item)
-        # 无实际变化则不处理
-        if [t["script_path"] for t in new_tasks] == [t["script_path"] for t in self.tasks]:
+        # 无实际变化则不处理。
+        # 注意：不能用 script_path 列表比较——查询类脚本共用同一个驱动文件
+        # （如 run_query.py），path 相同无法区分任务；只要队列里都是同路径脚本，
+        # 重排前后 script_path 序列不变，会被误判为"无变化"导致拖不动。
+        # 改用对象身份比较：item 是同一个任务对象，位置一变序列必然不同。
+        if all(a is b for a, b in zip(new_tasks, self.tasks)):
             return
         self.tasks = new_tasks
         self._save()
