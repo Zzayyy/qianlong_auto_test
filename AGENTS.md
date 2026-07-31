@@ -8,7 +8,7 @@
 
 - 开发环境安装：`python -m pip install -r requirements.txt`
 - 启动桌面工具：`python GUI自动化工具2/main.py`
-- 执行查询驱动：`python run_query.py`
+- 执行查询驱动：`python 行情交易/查询/run_query.py`
 - 运行测试（优先用系统 `python`，无需虚拟环境）：`python -m unittest discover -s tests -v`
   - 若使用虚拟环境，则把 `python` 换成对应解释器（如 `venv\Scripts\python.exe` 或 `.venv\Scripts\python.exe`）；本机当前为系统 Python 3.12（`python` 在 PATH 中），无 `.venv`。
 - 真实 GUI 自动化依赖 Windows 和已登录的交易客户端；仅在控件访问/UIPI 证据明确时考虑提升整个 GUI 进程，输出目录 ACL 或路径错误不能用管理员权限代替诊断。单元测试不等同于真实客户端验证。

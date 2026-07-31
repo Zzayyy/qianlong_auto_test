@@ -18,9 +18,9 @@ import sys
 import json
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-# 保证能 import core（项目根即本文件所在目录；与子进程 PYTHONPATH=PROJECT_ROOT 等效的安全网）
-if HERE not in sys.path:
-    sys.path.insert(0, HERE)
+PROJECT_ROOT = os.path.dirname(os.path.dirname(HERE))  # 项目根目录（Core 所在）
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 from core.runner import run_export_dialog, run_save_as
 
