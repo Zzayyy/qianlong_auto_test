@@ -49,6 +49,25 @@ PAGE_READWRITE = 0x04
 SMTO_BLOCK = 0x0001
 SMTO_ABORTIFHUNG = 0x0002
 ERROR_ACCESS_DENIED = 5
+ERROR_NOT_ALL_ASSIGNED = 1300
+TOKEN_ADJUST_PRIVILEGES = 0x00000020
+TOKEN_QUERY = 0x00000008
+SE_PRIVILEGE_ENABLED = 0x00000002
+
+
+class _LUID(ctypes.Structure):
+    _fields_ = [("low_part", wintypes.DWORD), ("high_part", wintypes.LONG)]
+
+
+class _LUID_AND_ATTRIBUTES(ctypes.Structure):
+    _fields_ = [("luid", _LUID), ("attributes", wintypes.DWORD)]
+
+
+class _TOKEN_PRIVILEGES(ctypes.Structure):
+    _fields_ = [
+        ("privilege_count", wintypes.DWORD),
+        ("privileges", _LUID_AND_ATTRIBUTES * 1),
+    ]
 
 
 class NativeTreeError(RuntimeError):
@@ -65,9 +84,13 @@ class NativeTreePathError(NativeTreeError):
 
 _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 _user32 = ctypes.WinDLL("user32", use_last_error=True)
+# OpenProcessToken / LookupPrivilegeValueW / AdjustTokenPrivileges 在 advapi32。
+_advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
 
 _kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
 _kernel32.OpenProcess.restype = wintypes.HANDLE
+_kernel32.GetCurrentProcess.argtypes = []
+_kernel32.GetCurrentProcess.restype = wintypes.HANDLE
 _kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
 _kernel32.CloseHandle.restype = wintypes.BOOL
 _kernel32.VirtualAllocEx.argtypes = [
@@ -101,6 +124,27 @@ _kernel32.ReadProcessMemory.argtypes = [
     ctypes.POINTER(ctypes.c_size_t),
 ]
 _kernel32.ReadProcessMemory.restype = wintypes.BOOL
+_advapi32.OpenProcessToken.argtypes = [
+    wintypes.HANDLE,
+    wintypes.DWORD,
+    ctypes.POINTER(wintypes.HANDLE),
+]
+_advapi32.OpenProcessToken.restype = wintypes.BOOL
+_advapi32.LookupPrivilegeValueW.argtypes = [
+    wintypes.LPCWSTR,
+    wintypes.LPCWSTR,
+    ctypes.POINTER(_LUID),
+]
+_advapi32.LookupPrivilegeValueW.restype = wintypes.BOOL
+_advapi32.AdjustTokenPrivileges.argtypes = [
+    wintypes.HANDLE,
+    wintypes.BOOL,
+    ctypes.POINTER(_TOKEN_PRIVILEGES),
+    wintypes.DWORD,
+    ctypes.c_void_p,
+    ctypes.POINTER(wintypes.DWORD),
+]
+_advapi32.AdjustTokenPrivileges.restype = wintypes.BOOL
 
 _user32.SendMessageTimeoutW.argtypes = [
     wintypes.HWND,
@@ -117,6 +161,52 @@ _user32.SendMessageTimeoutW.restype = ctypes.c_size_t
 def _windows_error(prefix: str, error: int | None = None) -> OSError:
     code = ctypes.get_last_error() if error is None else error
     return OSError(code, f"{prefix}: {ctypes.FormatError(code).strip()}")
+
+
+def _enable_debug_privilege() -> tuple[bool, str]:
+    """Enable SeDebugPrivilege on the current process token.
+
+    管理员令牌默认把 SeDebugPrivilege 置于 disabled 状态。OpenProcess 请求
+    PROCESS_VM_* 读取目标进程内存时，若目标完整性级别更高或 DACL 较严格，
+    必须显式启用该权限才能成功。非管理员令牌没有该权限，启用失败属正常，
+    不影响后续 OpenProcess 尝试。
+    """
+    try:
+        h_token = wintypes.HANDLE()
+        ctypes.set_last_error(0)
+        if not _advapi32.OpenProcessToken(
+            _kernel32.GetCurrentProcess(),
+            TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY,
+            ctypes.byref(h_token),
+        ):
+            return False, f"OpenProcessToken 失败(错误码 {ctypes.get_last_error()})"
+        try:
+            luid = _LUID()
+            ctypes.set_last_error(0)
+            if not _advapi32.LookupPrivilegeValueW(
+                None, "SeDebugPrivilege", ctypes.byref(luid)
+            ):
+                return False, (
+                    f"LookupPrivilegeValueW 失败(错误码 {ctypes.get_last_error()})"
+                )
+            privileges = _TOKEN_PRIVILEGES()
+            privileges.privilege_count = 1
+            privileges.privileges[0].luid = luid
+            privileges.privileges[0].attributes = SE_PRIVILEGE_ENABLED
+            ctypes.set_last_error(0)
+            ok = _advapi32.AdjustTokenPrivileges(
+                h_token, False, ctypes.byref(privileges), 0, None, None
+            )
+            error = ctypes.get_last_error()
+            if not ok:
+                return False, f"AdjustTokenPrivileges 失败(错误码 {error})"
+            if error == ERROR_NOT_ALL_ASSIGNED:
+                return False, "SeDebugPrivilege 未分配到令牌（当前不是管理员令牌）"
+            return True, ""
+        finally:
+            _kernel32.CloseHandle(h_token)
+    except Exception as exc:  # pragma: no cover - 权限诊断辅助
+        return False, str(exc)
 
 
 def _send_message(hwnd: int, message: int, wparam: int = 0, lparam: int = 0,
@@ -281,6 +371,9 @@ class RemoteProcessMemory:
 
     def __init__(self, tree_hwnd: int):
         _, self.pid = win32process.GetWindowThreadProcessId(tree_hwnd)
+        # 管理员令牌中 SeDebugPrivilege 默认 disabled；先启用再打开目标，
+        # 才能读取 DACL 严格或完整性级别不高于本进程的客户端。
+        debug_ok, debug_note = _enable_debug_privilege()
         access = (
             PROCESS_QUERY_LIMITED_INFORMATION
             | PROCESS_VM_OPERATION
@@ -295,7 +388,12 @@ class RemoteProcessMemory:
                 f"目标进程 PID={self.pid} 禁止远程内存读取"
             )
             if error == ERROR_ACCESS_DENIED:
-                raise NativeTreeAccessError(f"{message}（Windows 拒绝访问）")
+                raise NativeTreeAccessError(
+                    f"{message}（Windows 拒绝访问）；SeDebugPrivilege "
+                    f"{'已启用' if debug_ok else '启用失败: ' + debug_note}。"
+                    "本工具与目标客户端必须同为管理员（高完整性）运行，"
+                    "打包 exe 需带 UAC 管理员清单（PyInstaller --uac-admin）"
+                )
             raise NativeTreeAccessError(f"{message}；错误码={error}")
         self.target_bits = _get_process_bitness(self.handle)
         self._allocations: set[int] = set()
