@@ -969,12 +969,14 @@ def main_combination_declare() -> None:
         strategies = [s for s in strategies_raw.split(",") if s] or [COMBO_STRATEGIES[0]]
         qty = int(os.environ.get("GUI_ORDER_QTY") or 1)
         execute = os.environ.get("GUI_COMBO_EXECUTE", "1") != "0"
-        run_combination_declare_all(
+        results = run_combination_declare_all(
             markets=markets,
             strategies=strategies,
             qty=qty,
             execute=execute,
         )
+        if not results:
+            raise SuperStrategyError("批量组合申报全部失败，未生成任何成功记录")
     except LoginRequiredError as exc:
         print(f"[LOGIN_REQUIRED] {exc}")
         raise SystemExit(LOGIN_REQUIRED_EXIT_CODE)
@@ -1254,6 +1256,10 @@ def _fill_combo_dialog(dlg, main_hwnd, *, market=None, strategy=None,
         print(f"[OK] 已重新选择合约一: {c1}")
         time.sleep(0.3)
         c2_opts2 = list(_read_combo_items(dlg, COMBO_DLG_CONTRACT2_CID).keys())
+        if c2 not in c2_opts2:
+            raise SuperStrategyError(
+                f"重新推导的合约二不在候选项: {c2}（可用: {c2_opts2}）"
+            )
 
     if not _combo_mod.combo_select(
         _combo_dlg_control(dlg, COMBO_DLG_CONTRACT2_CID), c2
@@ -1357,44 +1363,61 @@ def run_combination_declare_all(*, markets, strategies, qty=1,
     if not pairs:
         raise SuperStrategyError("未选择任何市场/策略组合")
 
-    # 首次：完整环境准备 + 打开组合申报对话框
-    first_market, first_strategy = pairs[0]
-    res0 = run_combination_declare(
-        market=first_market, strategy=first_strategy, qty=qty,
-        execute=execute, cleanup_leftover=cleanup_leftover,
-        close_after=False, do_setup=True,
-    )
-    results = [res0]
-    main_hwnd = res0.get("main_hwnd")
-    combo_dlg = res0.get("dialog_hwnd")  # 保存对话框句柄，后续迭代复用
-
+    results = []
     errors = []
-    for market, strategy in pairs[1:]:
+    main_hwnd = None
+    combo_dlg = None  # 已打开的组合申报对话框句柄，成功打开后由后续迭代复用
+    first = True      # 首个组合做完整环境准备；此后复用对话框，避免关闭重开
+
+    for market, strategy in pairs:
         try:
-            # 复用同一个对话框，仅更改下拉选项和数量
             res = run_combination_declare(
                 market=market, strategy=strategy, qty=qty,
-                execute=execute, cleanup_leftover=False,
-                close_after=False, do_setup=False,
+                execute=execute,
+                cleanup_leftover=cleanup_leftover if first else False,
+                close_after=False, do_setup=first,
                 main_hwnd=main_hwnd, combo_dlg=combo_dlg,
             )
             results.append(res)
+            first = False
+            main_hwnd = res.get("main_hwnd") or main_hwnd
+            combo_dlg = res.get("dialog_hwnd") or combo_dlg
         except SuperStrategyError as exc:
             msg = f"组合失败 市场={market} 策略={strategy}: {exc}"
             print(f"[ERROR] {msg}")
             errors.append(msg)
-            # 对话框如果仍可见，后续继续复用；否则标记为 None，下次自动打开
-            try:
-                if not (
-                    win32gui.IsWindow(combo_dlg)
-                    and win32gui.IsWindowVisible(combo_dlg)
-                ):
+            if first:
+                # 首个组合失败：若对话框仍打开则找回复用，否则下一次自动重新完整准备
+                try:
+                    if main_hwnd is None:
+                        client_id = os.environ.get("GUI_CLIENT_ID") or get_default_client_id()
+                        client = get_client(client_id)
+                        if client:
+                            main_hwnd = find_window(
+                                client.get("window_key") or client.get("name") or ""
+                            )
+                    if main_hwnd:
+                        combo_dlg = _find_combination_dialog(main_hwnd, timeout=0.5)
+                        first = False
+                except Exception:
                     combo_dlg = None
-            except Exception:
-                combo_dlg = None
+            else:
+                # 复用中的对话框如果仍可见，后续继续复用；否则标记为 None，下次自动打开
+                try:
+                    if not (
+                        win32gui.IsWindow(combo_dlg)
+                        and win32gui.IsWindowVisible(combo_dlg)
+                    ):
+                        combo_dlg = None
+                except Exception:
+                    combo_dlg = None
 
     # 全部结束后关闭对话框
-    _close_combo_leftover_dialogs(main_hwnd)
+    if main_hwnd:
+        try:
+            _close_combo_leftover_dialogs(main_hwnd)
+        except Exception as exc:
+            print(f"[WARN] 清理组合申报对话框失败: {exc}")
 
     if errors:
         print(f"[汇总] {len(errors)} 个组合未成功: " + "; ".join(errors))
