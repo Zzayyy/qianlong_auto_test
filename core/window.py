@@ -270,8 +270,14 @@ def switch_panel(win, panel_path: str, use_title: bool = False):
 
 
 
-def click_output_button(win, button_auto_id: str = "1159") -> bool:
-    """用 win32gui 查找并点击"输出"按钮（参考 win32gui找按钮后点击.py）。"""
+def click_output_button(win, button_auto_id: str = "1159",
+                        wait_enabled_sec: float = 10.0) -> bool:
+    """用 win32gui 查找并点击"输出"按钮（参考 win32gui找按钮后点击.py）。
+
+    切换面板后"输出"按钮可能仍处于灰色（disabled）状态，此时点击不会弹出
+    "数据输出"弹窗。因此点击前会等待按钮变为可用（默认最长 wait_enabled_sec
+    秒），超时仍不可用则返回 False。
+    """
     try:
         target_hwnd = win.handle
         buttons = []
@@ -292,7 +298,21 @@ def click_output_button(win, button_auto_id: str = "1159") -> bool:
             print("[WARN] 找到'输出'按钮但均不可见")
             return False
 
-        # 发送 BM_CLICK 消息点击按钮（0x00F5 = BM_CLICK）
+        # 等待按钮变为可用：切换面板后按钮可能短暂保持灰色，灰色时点击无效
+        if not win32gui.IsWindowEnabled(btn):
+            print(f"[INFO] '输出'按钮当前为灰色(disabled)，等待其可用(hwnd={btn})...")
+            deadline = time.time() + wait_enabled_sec
+            while not win32gui.IsWindowEnabled(btn):
+                if time.time() >= deadline:
+                    print(
+                        f"[WARN] '输出'按钮持续灰色(disabled)超过 "
+                        f"{wait_enabled_sec:.0f} 秒，放弃点击"
+                    )
+                    return False
+                time.sleep(0.3)
+            print(f"[INFO] '输出'按钮已恢复可用(hwnd={btn})")
+
+        # 真实鼠标点击：定位按钮中心并发送鼠标左键事件
         print(btn)
         def click_hwnd(hwnd):
             import win32api

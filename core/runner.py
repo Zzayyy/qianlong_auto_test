@@ -105,24 +105,31 @@ def run_export_dialog(config: dict):
     switch_panel(win, cfg["panel_path"], use_title=cfg.get("use_title", False))
     time.sleep(cfg["settle_delay"])
 
-    # 点击输出按钮
-    if not click_output_button(win, button_auto_id="1159"):
-        print("[错误] 无法点击'输出'按钮")
-        sys.exit(2)
-
     # 确保输出目录存在
     output_dir = os.path.dirname(cfg["output_path"])
     if output_dir and not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
         print(f"[OK] 已创建输出目录: {output_dir}")
 
-    # 处理数据输出弹窗
-    ok = handle_export_dialog(
-        timeout=8,
-        export_type=cfg["export_format"],
-        auto_open=cfg["auto_open"],
-        output_path=cfg["output_path"]
-    )
+    # 点击输出按钮并处理"数据输出"弹窗。
+    # 切换面板后"输出"按钮可能短暂灰色（点击无效），click_output_button 会等待
+    # 按钮可用；若点击后弹窗仍未出现，则重试一次，避免偶发失败需人工确认。
+    ok = False
+    for attempt in (1, 2):
+        if not click_output_button(win, button_auto_id="1159"):
+            print("[错误] 无法点击'输出'按钮")
+            sys.exit(2)
+        ok = handle_export_dialog(
+            timeout=8,
+            export_type=cfg["export_format"],
+            auto_open=cfg["auto_open"],
+            output_path=cfg["output_path"]
+        )
+        if ok:
+            break
+        if attempt == 1:
+            print("[WARN] '数据输出'弹窗未出现，1 秒后重试点击'输出'按钮...")
+            time.sleep(1)
     if not ok:
         print("[WARN] '数据输出'弹窗处理异常,请手动确认")
 
@@ -158,19 +165,28 @@ def run_save_as(config: dict):
     switch_panel(win, cfg["panel_path"], use_title=cfg.get("use_title", False))
     time.sleep(cfg["settle_delay"])
 
-    # 点击输出按钮
-    if not click_output_button(win, button_auto_id="1159"):
-        print("[错误] 无法点击'输出'按钮")
-        sys.exit(2)
+    # 点击输出按钮并处理另存为对话框。
+    # 与 run_export_dialog 同理："输出"按钮可能短暂灰色（click_output_button
+    # 会等待可用）；对话框未出现则重试一次。
+    ok = False
+    for attempt in (1, 2):
+        if not click_output_button(win, button_auto_id="1159"):
+            print("[错误] 无法点击'输出'按钮")
+            sys.exit(2)
 
-    # 处理另存为对话框
-    save_dir = os.path.dirname(cfg["output_path"])
-    filename = os.path.basename(cfg["output_path"])
-    ok = handle_save_as_dialog(
-        save_dir=save_dir,
-        filename=filename,
-        timeout=8,
-    )
+        # 处理另存为对话框
+        save_dir = os.path.dirname(cfg["output_path"])
+        filename = os.path.basename(cfg["output_path"])
+        ok = handle_save_as_dialog(
+            save_dir=save_dir,
+            filename=filename,
+            timeout=8,
+        )
+        if ok:
+            break
+        if attempt == 1:
+            print("[WARN] '另存为'对话框未出现，1 秒后重试点击'输出'按钮...")
+            time.sleep(1)
     if not ok:
         print("[WARN] '另存为'对话框处理异常,请手动确认")
     else:
