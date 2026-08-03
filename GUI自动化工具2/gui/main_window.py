@@ -353,6 +353,50 @@ class AutomationGUI:
         log_frame = ttk.Frame(self.right_notebook, padding="5")
         self.right_notebook.add(log_frame, text="运行日志")
 
+        # 搜索工具条（底部）：关键字搜索 + ↑/↓ 定位 + 跟随滚动 + 清除搜索/清除日志
+        search_bar = ttk.Frame(log_frame)
+        search_bar.pack(side=tk.BOTTOM, fill=tk.X, pady=(5, 0))
+
+        # 右侧操作：清空日志（清空全部日志；搜索框文字删空时也会自动清除搜索状态）
+        ttk.Button(
+            search_bar, text="清空日志", width=7, command=self._clear_log
+        ).pack(side=tk.RIGHT)
+
+        # 左侧：搜索框 + ↑/↓ + 计数 + 跟随滚动
+        self.log_search_var = tk.StringVar()
+        log_search_entry = ttk.Entry(
+            search_bar, textvariable=self.log_search_var, width=22
+        )
+        log_search_entry.pack(side=tk.LEFT, padx=(0, 2))
+        log_search_entry.bind(
+            "<Return>", lambda e: self._log_search_find(forward=True)
+        )
+        log_search_entry.bind(
+            "<Shift-Return>", lambda e: self._log_search_find(forward=False)
+        )
+        log_search_entry.bind(
+            "<KeyRelease>", self._on_log_search_key_release
+        )
+        ttk.Button(
+            search_bar, text="↑", width=3,
+            command=lambda: self._log_search_find(forward=False)
+        ).pack(side=tk.LEFT, padx=(0, 2))
+        ttk.Button(
+            search_bar, text="↓", width=3,
+            command=lambda: self._log_search_find(forward=True)
+        ).pack(side=tk.LEFT, padx=(0, 2))
+
+        self.log_search_info = ttk.Label(
+            search_bar, text="0/0", foreground="#444", width=6, anchor=tk.W
+        )
+        self.log_search_info.pack(side=tk.LEFT, padx=(4, 0))
+
+        self.log_autoscroll_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(
+            search_bar, text="跟随滚动", variable=self.log_autoscroll_var,
+            command=self._on_log_autoscroll_toggle
+        ).pack(side=tk.LEFT, padx=(6, 0))
+
         self.log_text = ColoredLogText(
             log_frame,
             font=("Consolas", 9),
@@ -1720,11 +1764,52 @@ class AutomationGUI:
 
             self.runner.stop()
 
+    # ====================== 运行日志搜索 ======================
+    def _log_search_find(self, forward=True):
+        """在运行日志中搜索/定位关键字；搜索时自动暂停跟随滚动"""
+        pattern = self.log_search_var.get()
+        total, idx = self.log_text.search_find(pattern, forward=forward)
+        if total:
+            self.log_search_info.config(text=f"{idx}/{total}")
+        elif pattern:
+            self.log_search_info.config(text="无匹配")
+        else:
+            self.log_search_info.config(text="0/0")
+        if pattern:
+            # 搜索时暂停自动滚动，避免新日志把视口拉走；清除/取消跟随再恢复
+            self.log_autoscroll_var.set(False)
+            self.log_text.set_auto_scroll(False)
+
+    def _log_search_clear(self, restore_scroll=True):
+        """清除搜索：清空输入与高亮，计数归零。
+
+        restore_scroll=True 恢复自动滚动并立即滚到底（主动清除时）；
+        False 仅恢复跟随标志、保持当前视口位置（删空搜索文字时）。
+        """
+        self.log_search_var.set("")
+        self.log_text.clear_search()
+        self.log_search_info.config(text="0/0")
+        self.log_autoscroll_var.set(True)
+        self.log_text.set_auto_scroll(True, jump_to_end=restore_scroll)
+
+    def _on_log_search_key_release(self, event=None):
+        """搜索框文字删空时自动清除搜索状态（高亮/计数/恢复跟随滚动），
+        但保持当前视口位置，不跳到底部。"""
+        if not self.log_search_var.get():
+            self._log_search_clear(restore_scroll=False)
+
+    def _on_log_autoscroll_toggle(self):
+        """跟随滚动开关"""
+        self.log_text.set_auto_scroll(self.log_autoscroll_var.get())
+
     def _clear_log(self):
         """清空日志"""
         self.log_text.config(state=tk.NORMAL)
         self.log_text.delete(1.0, tk.END)
         self.log_text.config(state=tk.DISABLED)
+        self.log_text.clear_search()
+        if hasattr(self, "log_search_info"):
+            self.log_search_info.config(text="0/0")
 
     def _open_log_dir(self):
         """打开日志目录"""
