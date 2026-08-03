@@ -535,12 +535,22 @@ def select_tree_path(parent_hwnd: int, panel_path: str,
                 current = h_item
                 sibling_names: list[str] = []
                 matched = 0
+                matched_leaf = 0
+                need_child = depth < len(parts) - 1
                 while current:
                     text = reader.get_text(current)
                     sibling_names.append(text)
                     if _normalized_text(text) == expected:
                         matched = current
-                        break
+                        if need_child and not _send_message(
+                            tree_hwnd, TVM_GETNEXTITEM, TVGN_CHILD, current
+                        ):
+                            # 同名节点但没有子节点（如中泰根菜单同时存在
+                            # 叶子“组合申报”与容器“组合申报”），继续找
+                            # 下一个同名节点，避免误选叶子导致“没有子节点”。
+                            matched_leaf = current
+                        else:
+                            break
                     current = _send_message(
                         tree_hwnd, TVM_GETNEXTITEM, TVGN_NEXT, current
                     )
@@ -552,14 +562,22 @@ def select_tree_path(parent_hwnd: int, panel_path: str,
                     )
 
                 h_item = matched
-                if depth < len(parts) - 1:
+                if need_child:
                     _send_message(tree_hwnd, TVM_EXPAND, TVE_EXPAND, h_item)
                     time.sleep(0.1)
                     h_item = _send_message(
                         tree_hwnd, TVM_GETNEXTITEM, TVGN_CHILD, h_item
                     )
                     if not h_item:
-                        raise NativeTreePathError(f"菜单 {target!r} 没有子节点")
+                        raise NativeTreePathError(
+                            f"菜单 {target!r} 没有子节点"
+                            + (
+                                ""
+                                if not matched_leaf
+                                else f"（同层存在同名叶子节点 hItem={matched_leaf}，"
+                                "但找不到同名容器）"
+                            )
+                        )
 
             _send_message(tree_hwnd, TVM_ENSUREVISIBLE, 0, h_item)
             _send_message(tree_hwnd, TVM_SELECTITEM, TVGN_CARET, h_item)

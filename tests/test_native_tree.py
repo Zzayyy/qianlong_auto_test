@@ -116,6 +116,79 @@ class SelectTreePathTests(unittest.TestCase):
         self.assertIn("资金持仓", str(caught.exception))
         self.assertIn("策略持仓", str(caught.exception))
 
+    def _zhongtai_messages(self, with_container=True):
+        """中泰式重名菜单树：根下同时存在叶子与容器“组合申报”。
+
+        节点 5=叶子“组合申报”(无子节点)，6=容器“组合申报”(有子节点 7)。
+        with_container=False 时两个同名节点均为叶子，用于验证 fail-closed。
+        """
+        state = {"selected": 0}
+        names = {5: "组合申报", 6: "组合申报", 7: "组合申报"}
+        next_map = {5: 6, 6: 0, 7: 0}
+        child_map = {6: 7} if with_container else {}
+
+        def send(_hwnd, message, wparam=0, lparam=0, timeout_ms=3000):
+            del timeout_ms
+            if message == native_tree.TVM_GETNEXTITEM:
+                if wparam == native_tree.TVGN_ROOT:
+                    return 5
+                if wparam == native_tree.TVGN_NEXT:
+                    return next_map.get(lparam, 0)
+                if wparam == native_tree.TVGN_CHILD:
+                    return child_map.get(lparam, 0)
+                if wparam == native_tree.TVGN_CARET:
+                    return state["selected"]
+            if message == native_tree.TVM_SELECTITEM:
+                state["selected"] = lparam
+                return 1
+            return 1
+
+        return names, state, send
+
+    def test_skips_same_named_leaf_before_container(self):
+        # 中泰根菜单同时存在 叶子“组合申报”与 容器“组合申报”，
+        # 文本定位必须跳过无子节点的同名叶子，选中带子节点的容器。
+        names, state, send = self._zhongtai_messages()
+        original = _FakeReader.names
+        _FakeReader.names = names
+        try:
+            with (
+                patch.object(native_tree, "find_treeview", return_value=99),
+                patch.object(native_tree, "get_tree_count", return_value=7),
+                patch.object(native_tree, "RemoteProcessMemory", _FakeMemory),
+                patch.object(native_tree, "TreeTextReader", _FakeReader),
+                patch.object(native_tree, "_send_message", side_effect=send),
+            ):
+                result = native_tree.select_tree_path(
+                    10, r"\组合申报\组合申报"
+                )
+        finally:
+            _FakeReader.names = original
+
+        self.assertEqual(state["selected"], 7)
+        self.assertEqual(result["path"], ["组合申报", "组合申报"])
+
+    def test_leaf_only_same_named_menu_still_fails(self):
+        # 同层只有同名叶子（找不到容器）时仍必须 fail-closed 报“没有子节点”。
+        names, state, send = self._zhongtai_messages(with_container=False)
+        original = _FakeReader.names
+        _FakeReader.names = names
+        try:
+            with (
+                patch.object(native_tree, "find_treeview", return_value=99),
+                patch.object(native_tree, "get_tree_count", return_value=6),
+                patch.object(native_tree, "RemoteProcessMemory", _FakeMemory),
+                patch.object(native_tree, "TreeTextReader", _FakeReader),
+                patch.object(native_tree, "_send_message", side_effect=send),
+            ):
+                with self.assertRaises(native_tree.NativeTreePathError) as caught:
+                    native_tree.select_tree_path(10, r"\组合申报\组合申报")
+        finally:
+            _FakeReader.names = original
+
+        self.assertIn("没有子节点", str(caught.exception))
+        self.assertIn("同名叶子", str(caught.exception))
+
 
 class NativeControlIntegrationTests(unittest.TestCase):
     """Exercise remote memory and TVM_* calls against a real local control."""
