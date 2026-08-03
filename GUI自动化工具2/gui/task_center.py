@@ -33,7 +33,12 @@ from gui.history import (
     STATUS_ERROR,
     STATUS_STOPPED,
 )
-from config import MODULE_GROUPS, get_script_filename, get_scripts_config
+from config import (
+    MODULE_GROUPS,
+    get_script_filename,
+    get_scripts_config,
+    get_client_name,
+)
 
 # 编队下拉中的占位项：表示当前队列是用户临时编排，未归入任何编队
 GROUP_PLACEHOLDER = "（自定义队列）"
@@ -66,6 +71,45 @@ class GroupPicker(simpledialog.Dialog):
             self.result = self.listbox.get(sel[0])
 
 
+class SaveGroupDialog(simpledialog.Dialog):
+    """保存编队对话框：名称 + 可选「设为通用编队（所有客户端可见）」。
+
+    result_name：去除首尾空格后的编队名（取消时为 None）
+    result_universal：是否设为通用编队（True 时 client_id 存空，所有客户端可见）
+    """
+
+    def __init__(self, parent, title="保存为编队"):
+        self.result_name = None
+        self.result_universal = False
+        super().__init__(parent, title=title)
+
+    def body(self, master):
+        master.grid_columnconfigure(1, weight=1)
+        ttk.Label(master, text="编队名称:").grid(row=0, column=0, sticky=tk.W, padx=10, pady=(12, 4))
+        self.name_var = tk.StringVar()
+        self.name_entry = ttk.Entry(master, textvariable=self.name_var, width=28)
+        self.name_entry.grid(row=0, column=1, sticky=tk.EW, padx=(0, 10), pady=(12, 4))
+        self.universal_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            master,
+            text="设为通用编队（所有客户端可见）",
+            variable=self.universal_var,
+        ).grid(row=1, column=0, columnspan=2, sticky=tk.W, padx=10, pady=(2, 4))
+        self.bind("<Return>", self.ok)
+        return self.name_entry
+
+    def buttonbox(self):
+        """底部按钮：确定/取消（中文文案）"""
+        box = ttk.Frame(self)
+        ttk.Button(box, text="取消", width=8, command=self.cancel).pack(side=tk.RIGHT, padx=(4, 10))
+        ttk.Button(box, text="确定", width=8, command=self.ok).pack(side=tk.RIGHT)
+        box.pack(fill=tk.X, pady=(6, 10))
+
+    def apply(self):
+        self.result_name = self.name_var.get().strip()
+        self.result_universal = self.universal_var.get()
+
+
 class TaskCenter:
     """任务中心面板（挂在主窗口右侧 Notebook 的「任务中心」标签页）"""
 
@@ -89,10 +133,12 @@ class TaskCenter:
         # 任务队列：list[dict]，每项 = {"category","script_name","script_path","params","status"}
         self.tasks = []
 
-        # 编队（分组）：list[dict]，每项 = {"name","tasks":[任务快照...]}
+        # 编队（分组）：list[dict]，每项 = {"name","client_id","tasks":[任务快照...]}
         self.groups = []
         self._current_group = None   # 当前队列对应的编队名（None 表示自定义队列）
         self._dirty = False          # 当前队列相对所选编队是否有未保存修改
+        # 编队下拉是否显示所有客户端的编队：以 show_all_var（UI 勾选框）为唯一状态源，
+        # 默认只显示当前客户端 + 通用编队
 
         # 运行状态
         self.is_running = False
@@ -146,6 +192,11 @@ class TaskCenter:
         self.group_combo.bind("<<ComboboxSelected>>", self._on_group_selected)
         self.group_hint = ttk.Label(row1, text="", foreground="#f44747")
         self.group_hint.pack(side=tk.LEFT)
+        self.show_all_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            row1, text="显示全部", variable=self.show_all_var,
+            command=self._on_toggle_show_all,
+        ).pack(side=tk.LEFT, padx=(6, 0))
 
         row2 = ttk.Frame(group_frame)
         row2.pack(side=tk.TOP, fill=tk.X, pady=(3, 0))
@@ -157,6 +208,10 @@ class TaskCenter:
             row2, text="更新编队", command=self.update_group, width=11
         )
         self.btn_update_group.pack(side=tk.LEFT, padx=2)
+        self.btn_rename_group = ttk.Button(
+            row2, text="重命名", command=self.rename_group, width=11
+        )
+        self.btn_rename_group.pack(side=tk.LEFT, padx=2)
         self.btn_append_group = ttk.Button(
             row2, text="追加编队", command=self.append_group, width=11
         )
@@ -250,9 +305,21 @@ class TaskCenter:
         except Exception as e:
             self.gui.logger.error(f"编队保存失败: {e}")
 
+    def _visible_groups(self):
+        """按当前客户端过滤编队：client_id 为空（通用编队）或等于当前客户端；「显示全部」时返回全部。"""
+        if self.show_all_var.get():
+            return self.groups
+        cid = self.controller.client_id
+        return [g for g in self.groups if not g.get("client_id") or g.get("client_id") == cid]
+
+    def _on_toggle_show_all(self):
+        """切换「显示全部」：刷新编队下拉，保持当前选择（不可见时复位到占位项）"""
+        self._refresh_group_combo(self._current_group or GROUP_PLACEHOLDER)
+
     def _refresh_group_combo(self, select=None):
         """刷新编队下拉框，并复位当前编队标记"""
-        names = [GROUP_PLACEHOLDER] + [g["name"] for g in self.groups]
+        visible = self._visible_groups()
+        names = [GROUP_PLACEHOLDER] + [g["name"] for g in visible]
         self.group_combo["values"] = names
         if select is None or select not in names:
             self.group_combo.set(GROUP_PLACEHOLDER)
@@ -270,6 +337,7 @@ class TaskCenter:
         state = tk.NORMAL if has_group else tk.DISABLED
         self.btn_del_group.config(state=state)
         self.btn_update_group.config(state=state)
+        self.btn_rename_group.config(state=state)
 
     def _update_group_hint(self):
         """显示当前编队是否有未保存修改"""
@@ -298,6 +366,18 @@ class TaskCenter:
         if not group:
             self._refresh_group_combo(GROUP_PLACEHOLDER)
             return
+        # 跨客户端编队：确认后才载入（防止在错误客户端下运行导致脚本被跳过或误点窗口）
+        gid = group.get("client_id") or ""
+        if gid and gid != self.controller.client_id:
+            cur_name = get_client_name(self.controller.client_id) or self.controller.client_id or "未设置"
+            if not messagebox.askyesno(
+                "提示",
+                f"编队「{name}」属于客户端「{get_client_name(gid) or gid}」，\n"
+                f"而当前客户端是「{cur_name}」。\n\n"
+                f"载入后脚本将按当前客户端解析，部分脚本可能不适用或被跳过。\n仍要载入吗？",
+            ):
+                self._refresh_group_combo(self._current_group or GROUP_PLACEHOLDER)
+                return
         self._load_group(group)
         self._current_group = name
         self._dirty = False
@@ -360,10 +440,11 @@ class TaskCenter:
             messagebox.showwarning("提示", "当前队列为空，无法保存编队")
             return
 
-        name = simpledialog.askstring("保存为编队", "请输入编队名称:", parent=self.parent)
-        if not name:
+        dlg = SaveGroupDialog(self.parent, title="保存为编队")
+        if dlg.result_name is None:  # 取消
             return
-        name = name.strip()
+        name = dlg.result_name
+        universal = dlg.result_universal
         if not name:
             return
         if name == GROUP_PLACEHOLDER:
@@ -374,10 +455,15 @@ class TaskCenter:
         if existing:
             if not messagebox.askyesno("确认", f"已存在编队「{name}」，是否覆盖？"):
                 return
+            # 覆盖时：勾选「通用」才改为通用（client_id 置空）；否则保留原 client_id
             existing["tasks"] = [self._task_to_dict(t) for t in self.tasks]
+            if universal:
+                existing["client_id"] = ""
         else:
+            # 新建：勾选「通用」则 client_id 置空（所有客户端可见），否则绑定当前客户端
             self.groups.append({
                 "name": name,
+                "client_id": "" if universal else (self.controller.client_id or ""),
                 "tasks": [self._task_to_dict(t) for t in self.tasks],
             })
 
@@ -414,17 +500,29 @@ class TaskCenter:
         if self.is_running:
             messagebox.showwarning("提示", "任务正在执行中，请先停止")
             return
-        if not self.groups:
-            messagebox.showinfo("提示", "还没有任何编队，请先「保存为编队」")
+        visible = self._visible_groups()
+        if not visible:
+            messagebox.showinfo("提示", "当前客户端下没有可用编队，请先「保存为编队」或勾选「显示全部」")
             return
         # 用独立弹窗选择要追加的编队，避免改动当前下拉选择（否则会被覆盖）
-        picker = GroupPicker(self.parent, self.groups, title="追加编队")
+        picker = GroupPicker(self.parent, visible, title="追加编队")
         name = picker.result
         if not name:
             return
         group = next((g for g in self.groups if g["name"] == name), None)
         if not group:
             return
+        # 跨客户端编队：确认后才追加
+        gid = group.get("client_id") or ""
+        if gid and gid != self.controller.client_id:
+            cur_name = get_client_name(self.controller.client_id) or self.controller.client_id or "未设置"
+            if not messagebox.askyesno(
+                "提示",
+                f"编队「{name}」属于客户端「{get_client_name(gid) or gid}」，\n"
+                f"而当前客户端是「{cur_name}」。\n\n"
+                f"追加后脚本将按当前客户端解析，部分脚本可能不适用或被跳过。\n仍要追加吗？",
+            ):
+                return
         added = 0
         for row in group.get("tasks", []):
             script_path = self._resolve_script_path(row)
@@ -467,6 +565,57 @@ class TaskCenter:
         self._refresh_group_combo(GROUP_PLACEHOLDER)
         self._dirty = False
         self.gui._log(f"[任务中心] 已删除编队: {name}")
+
+    def rename_group(self):
+        """重命名下拉选中的编队（保留 client_id 与任务，并同步更新引用它的定时任务）"""
+        if self.is_running:
+            messagebox.showwarning("提示", "任务正在执行中，请先停止")
+            return
+        name = self.group_combo.get()
+        if not name or name == GROUP_PLACEHOLDER:
+            messagebox.showwarning("提示", "请先在「编队」下拉中选择一个编队")
+            return
+        group = next((g for g in self.groups if g["name"] == name), None)
+        if not group:
+            return
+        new_name = simpledialog.askstring(
+            "重命名编队", f"请输入编队「{name}」的新名称:", parent=self.parent
+        )
+        if not new_name:
+            return
+        new_name = new_name.strip()
+        if not new_name:
+            return
+        if new_name == name:
+            return
+        if new_name == GROUP_PLACEHOLDER:
+            messagebox.showwarning("提示", f"名称「{GROUP_PLACEHOLDER}」为保留字，请换一个")
+            return
+        if any(g["name"] == new_name for g in self.groups):
+            messagebox.showwarning("提示", f"已存在编队「{new_name}」，请换一个名称")
+            return
+        group["name"] = new_name
+        self._save_groups()
+        updated = self._rename_group_in_scheduler(name, new_name)
+        self._current_group = new_name
+        self._dirty = False
+        self._refresh_group_combo(select=new_name)
+        msg = f"[任务中心] 已重命名编队: {name} → {new_name}"
+        if updated:
+            msg += f"（同步更新 {updated} 个定时任务的目标）"
+        self.gui._log(msg)
+
+    def _rename_group_in_scheduler(self, old_name, new_name):
+        """把定时任务中目标为 old_name 的编队引用改为 new_name；返回更新数。"""
+        scheduler = getattr(self.controller, "scheduler", None)
+        if scheduler is None or not hasattr(scheduler, "update_task"):
+            return 0
+        updated = 0
+        for t in scheduler.tasks:
+            if t.get("target_type") == "group" and t.get("group_name") == old_name:
+                scheduler.update_task(t["id"], {"group_name": new_name})
+                updated += 1
+        return updated
 
     # ====================== 队列操作 ======================
     def add_selected(self):
@@ -897,6 +1046,41 @@ class TaskCenter:
         """返回当前正在展示/执行的队列。"""
         return self._transient_tasks if self._transient_tasks is not None else self.tasks
 
+    def _confirm_client_mismatch(self):
+        """队列绑定客户端与当前界面客户端不一致时弹确认；返回 True 表示可继续执行。
+
+        队列任务 params 快照里存有加入时的 client_id（运行时经 GUI_CLIENT_ID 生效），
+        切换客户端不会改写快照，故可能在界面已切换后仍按旧客户端环境执行。
+        """
+        bound = {}
+        unspecified = 0
+        for t in self.tasks:
+            cid = (t.get("params") or {}).get("client_id", "") or ""
+            if cid:
+                bound.setdefault(cid, 0)
+                bound[cid] += 1
+            else:
+                unspecified += 1
+        if not bound:
+            return True
+        cur = self.controller.client_id
+        if len(bound) <= 1 and all(c == cur for c in bound):
+            return True
+        parts = [
+            f"「{get_client_name(c) or c}」×{n}"
+            for c, n in sorted(bound.items())
+        ]
+        detail = "队列中任务绑定客户端: " + "、".join(parts)
+        if unspecified:
+            detail += f"；{unspecified} 项未指定客户端（将按默认客户端运行）"
+        cur_name = get_client_name(cur) or cur or "默认"
+        return messagebox.askyesno(
+            "客户端不一致",
+            f"{detail}\n"
+            f"而当前界面客户端是「{cur_name}」。\n\n"
+            f"执行时将按任务绑定的客户端环境启动脚本。\n仍要继续执行吗？",
+        )
+
     def start(self):
         """开始顺序执行队列"""
         if self.is_running:
@@ -904,6 +1088,12 @@ class TaskCenter:
             return
         if not self.tasks:
             messagebox.showwarning("提示", "任务队列为空，请先加入脚本")
+            return
+
+        # 客户端一致性检查：队列任务绑定的客户端与当前界面客户端不一致时提示。
+        # 运行按任务 params 快照里的 client_id 走（GUI_CLIENT_ID），切换客户端不改变快照，
+        # 因此可能在界面已切换后仍按旧客户端环境执行，需在执行前让用户知情确认。
+        if not self._confirm_client_mismatch():
             return
 
         self.is_running = True

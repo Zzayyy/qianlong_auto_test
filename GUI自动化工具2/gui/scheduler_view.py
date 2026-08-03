@@ -6,7 +6,7 @@ import os as _os
 import json, tkinter as tk
 import datetime
 from tkinter import ttk, messagebox, simpledialog
-from config import get_scripts_config, CATEGORIES
+from config import get_scripts_config, get_client_name, CATEGORIES
 from engine.scheduler import compute_next_run, format_schedule_desc
 
 WEEKDAY_NAMES = ["周一","周二","周三","周四","周五","周六","周日"]
@@ -83,6 +83,16 @@ class AddSchedDialog(simpledialog.Dialog):
         elif self.is_edit and ed.get("target_type") == "group":
             info_line = ttk.Label(info_f, text=f"目标编队: {ed.get('group_name','')}", foreground="gray")
             info_line.pack(anchor=tk.W, pady=(4,0))
+            _g = next((x for x in self.groups if x.get("name") == ed.get("group_name", "")), None)
+            _gid = (_g or {}).get("client_id") or ""
+            if _gid and _gid != self.client_id:
+                warn_line = ttk.Label(
+                    info_f,
+                    text=f"注意：该编队属于客户端「{get_client_name(_gid) or _gid}」，"
+                         f"与当前客户端（{get_client_name(self.client_id) or self.client_id}）不同。",
+                    foreground="#f44747", wraplength=380,
+                )
+                warn_line.pack(anchor=tk.W, pady=(2, 0))
 
         # === 目标设置（仅添加模式） ===
         if not self.is_edit:
@@ -108,21 +118,21 @@ class AddSchedDialog(simpledialog.Dialog):
                 self.cat_var.set(cats[0])
             self.cat_combo.grid(row=0, column=1, sticky=tk.W, padx=(4,0))
             self.cat_combo.bind("<<ComboboxSelected>>", self._on_cat_change)
-            # 编队选择
+            # 编队选择（默认只显示当前客户端 + 通用编队，可勾选「全部」查看其它客户端）
             self.grp_f = ttk.Frame(tg_f)
             self.grp_f.grid(row=1, column=0, columnspan=2, sticky=tk.EW, pady=(6,0))
             self.grp_f.grid_columnconfigure(1, weight=1)
             ttk.Label(self.grp_f, text="编队:").grid(row=0, column=0, sticky=tk.W)
-            gnames = [g["name"] for g in self.groups]
+            gf_right = ttk.Frame(self.grp_f)
+            gf_right.grid(row=0, column=1, sticky=tk.W)
+            self.group_show_all = tk.BooleanVar(value=False)
             self.group_var = tk.StringVar()
-            self.group_combo = ttk.Combobox(self.grp_f, textvariable=self.group_var, values=gnames, state="readonly", width=25)
-            self.group_combo.grid(row=0, column=1, sticky=tk.W, padx=(4,0))
-            if gnames:
-                if init_group_name and init_group_name in gnames:
-                    self.group_combo.set(init_group_name)
-                else:
-                    self.group_combo.set(gnames[0])
+            self.group_combo = ttk.Combobox(gf_right, textvariable=self.group_var, state="readonly", width=25)
+            self.group_combo.pack(side=tk.LEFT, padx=(4,0))
+            ttk.Checkbutton(gf_right, text="全部", variable=self.group_show_all,
+                            command=self._on_group_show_all).pack(side=tk.LEFT, padx=(6,0))
             self.group_combo.bind("<<ComboboxSelected>>", self._on_group_change)
+            self._refresh_group_options()
             self.grp_f.grid_remove()
 
         # === 脚本选择（仅添加模式） ===
@@ -241,8 +251,35 @@ class AddSchedDialog(simpledialog.Dialog):
         if self.target_type.get() == "group":
             self._fill_group_scripts()
 
+    def _visible_groups(self):
+        """按当前客户端过滤编队：client_id 为空（通用编队）或等于当前客户端；「全部」时返回全部。"""
+        if self.group_show_all.get():
+            return self.groups
+        cid = self.client_id
+        return [g for g in self.groups if not g.get("client_id") or g.get("client_id") == cid]
+
+    def _on_group_show_all(self):
+        self._refresh_group_options()
+
+    def _refresh_group_options(self):
+        """刷新编队下拉选项并同步卡片（保持当前选择；不可见时回退到第一项或清空）"""
+        visible = self._visible_groups()
+        gnames = [g["name"] for g in visible]
+        self.group_combo["values"] = gnames
+        cur = self.group_var.get()
+        if cur and cur in gnames:
+            self.group_var.set(cur)
+        elif gnames:
+            self.group_var.set(gnames[0])
+        else:
+            self.group_var.set("")
+        self._fill_group_scripts()
+
     def _fill_group_scripts(self):
         """用选中编队的任务填充卡片网格"""
+        # body() 中编队选择区先于卡片区创建，此时 card_inner 尚未就绪则跳过
+        if not hasattr(self, "card_inner"):
+            return
         for frm, _ in self._card_frames:
             try: frm.destroy()
             except: pass
@@ -384,6 +421,17 @@ class AddSchedDialog(simpledialog.Dialog):
             if not gn:
                 messagebox.showwarning("提示", "请选择一个任务编队")
                 return False
+            _g = next((x for x in self.groups if x.get("name") == gn), None)
+            _gid = (_g or {}).get("client_id") or ""
+            if _gid and _gid != self.client_id:
+                cur_name = get_client_name(self.client_id) or self.client_id or "未设置"
+                if not messagebox.askyesno(
+                    "提示",
+                    f"编队「{gn}」属于客户端「{get_client_name(_gid) or _gid}」，\n"
+                    f"而当前客户端是「{cur_name}」。\n\n"
+                    f"定时执行将按当前客户端的运行环境启动脚本，部分脚本可能不适用或被跳过。\n仍要选择吗？",
+                ):
+                    return False
             self.result_data["target_type"] = "group"
             self.result_data["group_name"] = gn
         return True

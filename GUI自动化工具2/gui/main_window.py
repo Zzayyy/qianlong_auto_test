@@ -1918,6 +1918,9 @@ class AutomationGUI:
             self._select_category(self.current_category)
         if hasattr(self, "report_center"):
             self.report_center.refresh_batches()
+        # 任务中心编队按客户端过滤：切换客户端后刷新编队下拉（复位到「自定义队列」）
+        if self.task_center is not None:
+            self.task_center._refresh_group_combo()
 
     def show_report_center(self, auto_clear=True):
         """切换到交易系统设置报告中心标签页。

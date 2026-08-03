@@ -13,7 +13,8 @@ if str(GUI_ROOT) not in sys.path:
     sys.path.insert(0, str(GUI_ROOT))
 
 from gui.main_window import AutomationGUI
-from gui.task_center import TaskCenter
+from gui.task_center import TaskCenter, GROUP_PLACEHOLDER
+from gui.scheduler_view import AddSchedDialog
 from config import SUPER_STRATEGY_UNDERLYINGS
 
 
@@ -240,6 +241,342 @@ class TaskCenterReorderTests(unittest.TestCase):
         self.assertEqual(
             ["D", "B", "A", "C"], [t["script_name"] for t in center.tasks]
         )
+
+
+class TaskCenterGroupClientFilterTests(unittest.TestCase):
+    """编队按客户端过滤 + 保存时记录 client_id。"""
+
+    def _center(self, client_id="qianlong"):
+        center = TaskCenter.__new__(TaskCenter)
+        center.is_running = False
+        center.parent = None
+        center.show_all_var = _Value(False)
+        center.controller = SimpleNamespace(client_id=client_id)
+        center.gui = SimpleNamespace(
+            _log=lambda *a, **k: None, logger=Mock(),
+        )
+        center.groups = []
+        center.tasks = []
+        center._dirty = False
+        return center
+
+    def _groups(self):
+        return [
+            {"name": "通用编队", "client_id": ""},
+            {"name": "钱龙开盘", "client_id": "qianlong"},
+            {"name": "中泰开盘", "client_id": "zhongtai"},
+            {"name": "旧版编队"},  # 无 client_id 字段的旧数据视为通用
+        ]
+
+    def test_visible_groups_filters_by_current_client(self):
+        center = self._center("qianlong")
+        center.groups = self._groups()
+        names = [g["name"] for g in center._visible_groups()]
+        self.assertEqual(["通用编队", "钱龙开盘", "旧版编队"], names)
+
+    def test_visible_groups_show_all_returns_everything(self):
+        center = self._center("qianlong")
+        center.groups = self._groups()
+        center.show_all_var = _Value(True)
+        self.assertEqual(4, len(center._visible_groups()))
+
+    def test_visible_groups_other_client(self):
+        center = self._center("zhongtai")
+        center.groups = self._groups()
+        names = [g["name"] for g in center._visible_groups()]
+        self.assertEqual(["通用编队", "中泰开盘", "旧版编队"], names)
+
+    def test_save_group_records_current_client_id(self):
+        center = self._center("qianlong")
+        center.tasks = [
+            {
+                "category": "查询",
+                "script_name": "资金持仓",
+                "script_path": r"X:\run_query.py",
+                "query_key": r"\查询\资金持仓",
+                "params": {},
+                "status": center.ST_PENDING,
+            }
+        ]
+        center._save_groups = Mock()
+        center._refresh_group_combo = Mock()
+        center._refresh_group_controls = Mock()
+        with patch("gui.task_center.SaveGroupDialog") as dlg_cls:
+            dlg_cls.return_value.result_name = "新编队"
+            dlg_cls.return_value.result_universal = False
+            center.save_group()
+        self.assertEqual(1, len(center.groups))
+        self.assertEqual("新编队", center.groups[0]["name"])
+        self.assertEqual("qianlong", center.groups[0]["client_id"])
+        self.assertEqual(r"\查询\资金持仓", center.groups[0]["tasks"][0]["query_key"])
+
+    def test_save_group_universal_stores_empty_client_id(self):
+        center = self._center("qianlong")
+        center.tasks = [
+            {
+                "category": "查询",
+                "script_name": "资金持仓",
+                "script_path": r"X:\run_query.py",
+                "params": {},
+                "status": center.ST_PENDING,
+            }
+        ]
+        center._save_groups = Mock()
+        center._refresh_group_combo = Mock()
+        center._refresh_group_controls = Mock()
+        with patch("gui.task_center.SaveGroupDialog") as dlg_cls:
+            dlg_cls.return_value.result_name = "通用晨检"
+            dlg_cls.return_value.result_universal = True
+            center.save_group()
+        self.assertEqual("", center.groups[0]["client_id"])
+        # 通用编队切换到其它客户端仍可见
+        center.controller.client_id = "zhongtai"
+        names = [g["name"] for g in center._visible_groups()]
+        self.assertIn("通用晨检", names)
+
+    def test_save_group_cancel_does_nothing(self):
+        center = self._center("qianlong")
+        center.tasks = [
+            {
+                "category": "查询",
+                "script_name": "资金持仓",
+                "script_path": r"X:\run_query.py",
+                "params": {},
+                "status": center.ST_PENDING,
+            }
+        ]
+        center._save_groups = Mock()
+        center._refresh_group_combo = Mock()
+        center._refresh_group_controls = Mock()
+        with patch("gui.task_center.SaveGroupDialog") as dlg_cls:
+            dlg_cls.return_value.result_name = None  # 取消
+            center.save_group()
+        self.assertEqual([], center.groups)
+        center._save_groups.assert_not_called()
+
+    def test_save_group_overwrite_keeps_original_client_id(self):
+        center = self._center("zhongtai")
+        center.groups = [{"name": "钱龙开盘", "client_id": "qianlong", "tasks": []}]
+        center.tasks = [
+            {
+                "category": "查询",
+                "script_name": "资金持仓",
+                "script_path": r"X:\run_query.py",
+                "params": {},
+                "status": center.ST_PENDING,
+            }
+        ]
+        center._save_groups = Mock()
+        center._refresh_group_combo = Mock()
+        center._refresh_group_controls = Mock()
+        with (
+            patch("gui.task_center.SaveGroupDialog") as dlg_cls,
+            patch("gui.task_center.messagebox.askyesno", return_value=True),
+        ):
+            dlg_cls.return_value.result_name = "钱龙开盘"
+            dlg_cls.return_value.result_universal = False
+            center.save_group()
+        self.assertEqual("qianlong", center.groups[0]["client_id"])
+
+    def test_save_group_overwrite_can_make_universal(self):
+        center = self._center("zhongtai")
+        center.groups = [{"name": "钱龙开盘", "client_id": "qianlong", "tasks": []}]
+        center.tasks = [
+            {
+                "category": "查询",
+                "script_name": "资金持仓",
+                "script_path": r"X:\run_query.py",
+                "params": {},
+                "status": center.ST_PENDING,
+            }
+        ]
+        center._save_groups = Mock()
+        center._refresh_group_combo = Mock()
+        center._refresh_group_controls = Mock()
+        with (
+            patch("gui.task_center.SaveGroupDialog") as dlg_cls,
+            patch("gui.task_center.messagebox.askyesno", return_value=True),
+        ):
+            dlg_cls.return_value.result_name = "钱龙开盘"
+            dlg_cls.return_value.result_universal = True
+            center.save_group()
+        self.assertEqual("", center.groups[0]["client_id"])
+
+    def test_group_picker_placeholder_name_rejected(self):
+        center = self._center("qianlong")
+        center.tasks = [
+            {
+                "category": "查询",
+                "script_name": "资金持仓",
+                "script_path": r"X:\run_query.py",
+                "params": {},
+                "status": center.ST_PENDING,
+            }
+        ]
+        center._save_groups = Mock()
+        center._refresh_group_combo = Mock()
+        center._refresh_group_controls = Mock()
+        with patch("gui.task_center.SaveGroupDialog") as dlg_cls:
+            dlg_cls.return_value.result_name = GROUP_PLACEHOLDER
+            dlg_cls.return_value.result_universal = False
+            center.save_group()
+        self.assertEqual([], center.groups)
+
+
+class TaskCenterClientMismatchPromptTests(unittest.TestCase):
+    """「开始顺序执行」前客户端不一致提示（_confirm_client_mismatch）。"""
+
+    def _center(self, client_id="qianlong"):
+        center = TaskCenter.__new__(TaskCenter)
+        center.controller = SimpleNamespace(client_id=client_id)
+        center.tasks = []
+        return center
+
+    def test_mismatch_returns_false_when_user_cancels(self):
+        center = self._center("zhongtai")
+        center.tasks = [
+            {"params": {"client_id": "qianlong"}, "status": ""},
+        ]
+        with patch("gui.task_center.messagebox.askyesno", return_value=False) as ask:
+            result = center._confirm_client_mismatch()
+        self.assertFalse(result)
+        ask.assert_called_once()
+
+    def test_mismatch_returns_true_when_user_confirms(self):
+        center = self._center("zhongtai")
+        center.tasks = [
+            {"params": {"client_id": "qianlong"}, "status": ""},
+        ]
+        with patch("gui.task_center.messagebox.askyesno", return_value=True) as ask:
+            result = center._confirm_client_mismatch()
+        self.assertTrue(result)
+        ask.assert_called_once()
+
+    def test_mixed_client_queue_prompts_once(self):
+        center = self._center("qianlong")
+        center.tasks = [
+            {"params": {"client_id": "qianlong"}, "status": ""},
+            {"params": {"client_id": "zhongtai"}, "status": ""},
+        ]
+        with patch("gui.task_center.messagebox.askyesno", return_value=True) as ask:
+            center._confirm_client_mismatch()
+        ask.assert_called_once()
+
+    def test_all_tasks_match_current_client_no_prompt(self):
+        center = self._center("qianlong")
+        center.tasks = [
+            {"params": {"client_id": "qianlong"}, "status": ""},
+            {"params": {"client_id": "qianlong"}, "status": ""},
+        ]
+        with patch("gui.task_center.messagebox.askyesno") as ask:
+            result = center._confirm_client_mismatch()
+        self.assertTrue(result)
+        ask.assert_not_called()
+
+    def test_no_client_id_snapshot_no_prompt(self):
+        center = self._center("qianlong")
+        center.tasks = [{"params": {}, "status": ""}]
+        with patch("gui.task_center.messagebox.askyesno") as ask:
+            result = center._confirm_client_mismatch()
+        self.assertTrue(result)
+        ask.assert_not_called()
+
+
+class TaskCenterRenameGroupTests(unittest.TestCase):
+    """编队重命名：保留 client_id/tasks，并同步定时任务引用。"""
+
+    def _center(self, client_id="qianlong"):
+        center = TaskCenter.__new__(TaskCenter)
+        center.is_running = False
+        center.parent = None
+        center.controller = SimpleNamespace(client_id=client_id)
+        center.gui = SimpleNamespace(_log=lambda *a, **k: None)
+        center.groups = [
+            {"name": "钱龙开盘", "client_id": "qianlong", "tasks": [{"a": 1}]},
+        ]
+        center._current_group = "钱龙开盘"
+        center._dirty = True
+        center._refresh_group_combo = Mock()
+        center._refresh_group_controls = Mock()
+        center._save_groups = Mock()
+        center.group_combo = SimpleNamespace(get=lambda: "钱龙开盘")
+        return center
+
+    def test_rename_keeps_client_and_tasks(self):
+        center = self._center()
+        with (
+            patch("gui.task_center.simpledialog.askstring", return_value="钱龙晨检"),
+            patch.object(center, "_rename_group_in_scheduler", return_value=0) as rn,
+        ):
+            center.rename_group()
+        self.assertEqual("钱龙晨检", center.groups[0]["name"])
+        self.assertEqual("qianlong", center.groups[0]["client_id"])
+        self.assertEqual([{"a": 1}], center.groups[0]["tasks"])
+        center._save_groups.assert_called_once_with()
+        center._refresh_group_combo.assert_called_once_with(select="钱龙晨检")
+        self.assertEqual("钱龙晨检", center._current_group)
+        self.assertFalse(center._dirty)
+        rn.assert_called_once_with("钱龙开盘", "钱龙晨检")
+
+    def test_rename_duplicate_name_rejected(self):
+        center = self._center()
+        center.groups.append({"name": "钱龙晨检", "client_id": "qianlong", "tasks": []})
+        with (
+            patch("gui.task_center.simpledialog.askstring", return_value="钱龙晨检"),
+            patch("gui.task_center.messagebox.showwarning") as warn,
+        ):
+            center.rename_group()
+        self.assertEqual("钱龙开盘", center.groups[0]["name"])
+        warn.assert_called_once()
+
+    def test_rename_same_name_noop(self):
+        center = self._center()
+        with patch("gui.task_center.simpledialog.askstring", return_value="钱龙开盘"):
+            center.rename_group()
+        center._save_groups.assert_not_called()
+        self.assertEqual("钱龙开盘", center.groups[0]["name"])
+
+    def test_rename_syncs_scheduler_references(self):
+        center = self._center()
+        scheduler = Mock()
+        scheduler.tasks = [
+            {"id": 1, "target_type": "group", "group_name": "钱龙开盘"},
+            {"id": 2, "target_type": "script", "group_name": "钱龙开盘"},
+            {"id": 3, "target_type": "group", "group_name": "别的"},
+        ]
+        center.controller.scheduler = scheduler
+        updated = center._rename_group_in_scheduler("钱龙开盘", "钱龙晨检")
+        self.assertEqual(1, updated)
+        scheduler.update_task.assert_called_once_with(1, {"group_name": "钱龙晨检"})
+
+    def test_rename_sync_without_scheduler_returns_0(self):
+        center = self._center()
+        center.controller = SimpleNamespace(client_id="qianlong")
+        self.assertEqual(0, center._rename_group_in_scheduler("a", "b"))
+
+
+class AddSchedDialogGroupClientFilterTests(unittest.TestCase):
+    """定时任务对话框的编队按客户端过滤。"""
+
+    def _dialog(self, client_id="qianlong", show_all=False):
+        dlg = AddSchedDialog.__new__(AddSchedDialog)
+        dlg.client_id = client_id
+        dlg.group_show_all = _Value(show_all)
+        dlg.groups = [
+            {"name": "通用编队", "client_id": ""},
+            {"name": "钱龙开盘", "client_id": "qianlong"},
+            {"name": "中泰开盘", "client_id": "zhongtai"},
+        ]
+        return dlg
+
+    def test_visible_groups_filters_by_current_client(self):
+        dlg = self._dialog("qianlong")
+        names = [g["name"] for g in dlg._visible_groups()]
+        self.assertEqual(["通用编队", "钱龙开盘"], names)
+
+    def test_visible_groups_show_all(self):
+        dlg = self._dialog("qianlong", show_all=True)
+        self.assertEqual(3, len(dlg._visible_groups()))
 
 
 class TaskCenterBatchDragTests(unittest.TestCase):
