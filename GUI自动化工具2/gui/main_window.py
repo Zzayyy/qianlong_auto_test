@@ -78,7 +78,7 @@ class AutomationGUI:
 
     def __init__(self, root):
         self.root = root
-        self.root.geometry("1200x900")
+        self.root.geometry("1100x900")
         self.root.minsize(850, 650)
 
         self.is_running = False

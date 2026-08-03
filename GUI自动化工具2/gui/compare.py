@@ -68,10 +68,18 @@ class ComparePanel:
     # ====================== UI 构建 ======================
     def _build_ui(self):
         parent = self.parent
+        # 窗口缩小时布局策略：上传区/选项行/总结框固定高度（weight=0），
+        # 只有「比对结果」表格行可伸缩（weight=1）且带最小高度，
+        # 保证缩小窗口后表格始终可见、不会被压缩到消失。
+        parent.grid_rowconfigure(0, weight=0)
+        parent.grid_rowconfigure(1, weight=0)
+        parent.grid_rowconfigure(2, weight=1, minsize=140)
+        parent.grid_rowconfigure(3, weight=0)
+        parent.grid_columnconfigure(0, weight=1)
 
         # —— 顶部：两个文件夹上传区（并排）——
         top = ttk.Frame(parent)
-        top.pack(side=tk.TOP, fill=tk.X, pady=(0, 6))
+        top.grid(row=0, column=0, sticky="ew", pady=(0, 6))
         top.columnconfigure(0, weight=1)
         top.columnconfigure(1, weight=1)
 
@@ -80,7 +88,7 @@ class ComparePanel:
 
         # —— 选项 + 操作按钮 ——
         ctrl = ttk.Frame(parent)
-        ctrl.pack(side=tk.TOP, fill=tk.X, pady=(0, 6))
+        ctrl.grid(row=1, column=0, sticky="ew", pady=(0, 6))
 
         ttk.Checkbutton(ctrl, text="递归子目录", variable=self.recursive).pack(side=tk.LEFT, padx=(0, 8))
         ttk.Checkbutton(ctrl, text="忽略行顺序（按内容比对）", variable=self.ignore_order).pack(side=tk.LEFT, padx=(0, 8))
@@ -95,7 +103,7 @@ class ComparePanel:
 
         # —— 结果列表 ——
         list_frame = ttk.LabelFrame(parent, text="比对结果", padding="6")
-        list_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        list_frame.grid(row=2, column=0, sticky="nsew", pady=(0, 6))
 
         # 嵌套内框：tree + v_scroll 在内框并排，h_scroll 放在 list_frame 底部横跨整宽
         tree_box = ttk.Frame(list_frame)
@@ -147,7 +155,7 @@ class ComparePanel:
 
         # —— 底部总结 ——
         sum_frame = ttk.LabelFrame(parent, text="总结", padding="6")
-        sum_frame.pack(side=tk.TOP, fill=tk.X, pady=(6, 0))
+        sum_frame.grid(row=3, column=0, sticky="ew")
         self.summary_text = tk.Text(sum_frame, height=5, wrap=tk.WORD, state=tk.DISABLED,
                                    font=("Consolas", 9))
         self.summary_text.pack(fill=tk.X)
@@ -169,7 +177,7 @@ class ComparePanel:
         entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         # 拖入提示区（纯展示，不覆盖任何窗口过程）
-        hint_text = "\U0001F4C1 把文件夹拖到这里，或点击「浏览」选择"
+        hint_text = "\U0001F4C1 把文件夹拖到这里"
         if _HAS_DND and not self._dnd_initialized:
             # tkinterdnd2 只需初始化一次，对 root 调用
             try:
