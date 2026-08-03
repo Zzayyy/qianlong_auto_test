@@ -735,14 +735,14 @@ class TaskCenter:
     def _on_drag_motion(self, event):
         """移动超过阈值即视为拖拽（避免与单击选择冲突）"""
         ctrl = self.controller
-        # 来自脚本列表的拖入：实时显示落点
+        # 来自脚本列表的拖入：默认追加到队列末尾，指示线固定在末尾显示
         external_payload = any(
             getattr(ctrl, name, None) is not None
             for name in ("_drag_script", "_drag_category", "_drag_module")
         )
         if getattr(ctrl, "_drag_active", False) and external_payload:
             if not self.is_running:
-                self._update_drop_indicator(event.y)
+                self._update_drop_indicator(event.y, at_end=True)
             return
         if self._drag_index is None or self.is_running:
             return
@@ -788,14 +788,25 @@ class TaskCenter:
         after = y > bbox[1] + bbox[3] / 2
         return (tgt, after)
 
-    def _update_drop_indicator(self, y):
-        """在落点处显示一条插入指示线（y 相对 tree 坐标）"""
+    def _update_drop_indicator(self, y, at_end=False):
+        """在落点处显示一条插入指示线（y 相对 tree 坐标）
+
+        at_end=True 时固定显示在队列末尾（用于从脚本列表拖入：默认追加到末尾）。
+        """
         children = self.tree.get_children()
         if not children:
             # 空队列也要给出明确的可放置反馈；此时释放会追加为第一项。
             height = max(1, self.tree.winfo_height())
             line_y = max(1, min(int(y), height - 2))
             self.drop_indicator.place(x=0, y=line_y, relwidth=1.0, height=2)
+            return
+        if at_end:
+            try:
+                last = self.tree.bbox(children[-1])
+            except Exception:
+                self._hide_drop_indicator()
+                return
+            self.drop_indicator.place(x=0, y=last[1] + last[3], relwidth=1.0, height=2)
             return
         row = self.tree.identify_row(y)
         if not row:
@@ -852,29 +863,26 @@ class TaskCenter:
                 break
 
     # ====================== 从脚本列表拖入 ======================
-    def add_script_from_drop(self, script, tree_y):
-        """从脚本列表拖入：在 tree_y 对应位置插入脚本"""
+    def add_script_from_drop(self, script, tree_y=None):
+        """从脚本列表拖入：默认追加到队列末尾（tree_y 仅为兼容保留，不再按落点定位）"""
         self._hide_drop_indicator()
         if self.is_running:
             return
-        target = self._drop_target(tree_y)
-        self.add_script(script, self._insert_index_from_target(target))
+        self.add_script(script)
 
-    def add_category_from_drop(self, category, tree_y):
-        """从脚本列表拖入分类根节点：在 tree_y 对应位置批量插入该分类下全部脚本"""
+    def add_category_from_drop(self, category, tree_y=None):
+        """从脚本列表拖入分类根节点：默认追加该分类下全部脚本到队列末尾（tree_y 仅为兼容保留）"""
         self._hide_drop_indicator()
         if self.is_running:
             return
-        target = self._drop_target(tree_y)
-        self.add_category(category, self._insert_index_from_target(target))
+        self.add_category(category)
 
-    def add_module_from_drop(self, module, tree_y):
-        """从脚本列表拖入一级模块：批量插入模块下全部可用分类。"""
+    def add_module_from_drop(self, module, tree_y=None):
+        """从脚本列表拖入一级模块：默认追加模块下全部可用分类到队列末尾（tree_y 仅为兼容保留）"""
         self._hide_drop_indicator()
         if self.is_running:
             return
-        target = self._drop_target(tree_y)
-        self.add_module(module, self._insert_index_from_target(target))
+        self.add_module(module)
 
     def add_category(self, category, index=None):
         """把指定分类下的全部脚本加入队列（index 为插入位置，None 则追加到末尾）"""
@@ -987,13 +995,6 @@ class TaskCenter:
         self._update_group_hint()
         self.tree.selection_set(str(new_pos))
         self.gui._log(f"[任务中心] 已加入队列: {script['name']}（{category}）")
-
-    def _insert_index_from_target(self, target):
-        """(目标行下标, 是否落在下半部) -> 新项插入位置"""
-        if not target:
-            return len(self.tasks)
-        tgt, after = target
-        return tgt + 1 if after else tgt
 
     def _on_right_click(self, event):
         """右键菜单：复制 / 上移 / 下移 / 删除 / 清空"""

@@ -78,7 +78,7 @@ class AutomationGUI:
 
     def __init__(self, root):
         self.root = root
-        self.root.geometry("1000x780")
+        self.root.geometry("1200x900")
         self.root.minsize(850, 650)
 
         self.is_running = False
@@ -1290,7 +1290,7 @@ class AutomationGUI:
         self._drag_start_y = event.y
 
     def _on_list_drag_motion(self, event):
-        """拖动过程中：超过阈值视为拖拽，并在悬停于队列时显示落点"""
+        """拖动过程中：超过阈值视为拖拽；拖入默认追加到队列末尾，指示线固定在末尾显示"""
         if (self._drag_script is None and self._drag_category is None
                 and self._drag_module is None):
             return
@@ -1304,7 +1304,7 @@ class AutomationGUI:
         tree = tc.tree
         rx, ry = tree.winfo_rootx(), tree.winfo_rooty()
         if rx <= event.x_root <= rx + tree.winfo_width() and ry <= event.y_root <= ry + tree.winfo_height():
-            tc._update_drop_indicator(event.y_root - ry)
+            tc._update_drop_indicator(event.y_root - ry, at_end=True)
         else:
             tc._hide_drop_indicator()
 
@@ -1327,7 +1327,7 @@ class AutomationGUI:
         # 在队列上方释放时保留状态，交由 _on_global_drop 处理落点与清理
 
     def _on_global_drop(self, event):
-        """全局捕获释放：处理从脚本列表拖入队列的落点。"""
+        """全局捕获释放：处理从脚本列表拖入队列（默认追加到末尾）。"""
         script = self._drag_script
         category = self._drag_category
         module = self._drag_module

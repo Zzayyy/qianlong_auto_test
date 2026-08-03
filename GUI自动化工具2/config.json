@@ -11,7 +11,7 @@
     "结算单": "C:\\Users\\Administrator\\Desktop\\结算单"
   },
   "log_level": "详细",
-  "client": "zhongtai",
+  "client": "guotai_haitong",
   "super_add_underlying": false,
   "super_strategy_underlying": "上证50ETF华夏"
 }
