@@ -199,6 +199,10 @@ SCRIPTS_CONFIG = {
         {"name": "5.期权持仓_平仓/反手自动化_RapidOCR", "path": rf"{PROJECT_ROOT}\行情交易\下单\表格\10.Excel驱动_OCR_RapidOCR.py"},
         {"name": "6.期权下单_一键导出", "path": rf"{PROJECT_ROOT}\行情交易\下单\自动化导出\期权下单(新)_自动导出.py"},
         {"name": "7.全选撤单", "path": rf"{PROJECT_ROOT}\行情交易\撤单\撤单_全选撤单_自动化.py"},
+        # 以下为中泰证券期权宝专属菜单（钱龙/国泰无此菜单，由 clients.json 的 unsupported 过滤）
+        # 中泰的 普通下单 界面与钱龙/国泰的 快速下单 相同，仅菜单名不同；
+        # 脚本按 GUI_TASK_MENU（显示名含"普通下单"）切换面板路径与 Excel 菜单列名。
+        {"name": "8.普通下单_自动化下单", "path": rf"{PROJECT_ROOT}\行情交易\下单\自动化下单\4.快速下单_自动化下单_Excel驱动版.py"},
     ],
     # 以下为国泰海通专属菜单
     "通知查询": [

@@ -90,6 +90,41 @@ class QianlongClientProfileTests(unittest.TestCase):
         ]
         self.assertTrue(any("快速下单_自动化下单" in name for name in guotai_names))
 
+    def test_gui_registers_normal_order_script_for_zhongtai_only(self):
+        config_path = PROJECT_ROOT / "GUI自动化工具2" / "config.py"
+        spec = importlib.util.spec_from_file_location(
+            "gui_automation_config_normal_order_for_test", config_path
+        )
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+
+        # 中泰：普通下单 = 钱龙/国泰的快速下单界面，复用快速下单脚本
+        zhongtai_scripts = module.get_scripts_config("zhongtai")["下单"]
+        normal_order = next(
+            script
+            for script in zhongtai_scripts
+            if "普通下单_自动化下单" in script["name"]
+        )
+        self.assertTrue(Path(normal_order["path"]).is_file())
+        self.assertTrue(
+            normal_order["path"].endswith(
+                "4.快速下单_自动化下单_Excel驱动版.py"
+            )
+        )
+
+        # 钱龙/国泰没有“普通下单”菜单，应被过滤
+        for client_id in ("qianlong", "guotai_haitong"):
+            with self.subTest(client=client_id):
+                names = [
+                    script["name"]
+                    for script in module.get_scripts_config(client_id)["下单"]
+                ]
+                self.assertFalse(
+                    any("普通下单" in name for name in names),
+                    f"{client_id} 不应显示普通下单条目",
+                )
+
     def test_gui_exposes_three_top_level_modules(self):
         config_path = PROJECT_ROOT / "GUI自动化工具2" / "config.py"
         spec = importlib.util.spec_from_file_location(

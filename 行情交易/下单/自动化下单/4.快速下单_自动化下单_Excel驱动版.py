@@ -4,6 +4,11 @@
 与三键/四键下单不同，快速下单页面通过“买卖方向 + 开平标志”
 动态决定提交按钮，并且报价方式下拉框是 owner-drawn ComboLBox，
 不能沿用其他下单页面的“按文字查找下拉项”逻辑。
+
+同一脚本也服务中泰证券期权宝的「普通下单」菜单（界面与钱龙/国泰的
+「快速下单」相同，只是菜单名不同）：GUI 以"8.普通下单_自动化下单"名义
+运行时（GUI_TASK_MENU 含"普通下单"），面板路径改为 \\普通下单，
+Excel 只读 菜单=普通下单 的行；独立运行/默认仍按「快速下单」处理。
 """
 
 from __future__ import annotations
@@ -32,8 +37,14 @@ if _PROJECT_ROOT not in sys.path:
 from core.window import activate_window, find_window, switch_panel
 
 
-PANEL_PATH = r"\快速下单"
-MENU_NAME = "快速下单"
+# 本次 GUI 运行的面板（脚本显示名，如 "4.普通下单_自动化下单"）。
+# 中泰证券期权宝的「普通下单」界面与钱龙/国泰的「快速下单」界面相同，
+# 只是菜单名不同；据此切换面板路径与 Excel 菜单列名。
+# 窗口关键字无需在此处理：find_window 会按 GUI_CLIENT_ID 覆盖。
+_gui_task_menu = os.environ.get("GUI_TASK_MENU", "").strip()
+_is_normal_order_menu = "普通下单" in _gui_task_menu
+PANEL_PATH = r"\普通下单" if _is_normal_order_menu else r"\快速下单"
+MENU_NAME = "普通下单" if _is_normal_order_menu else "快速下单"
 WINDOW_KEY = "钱龙模拟期权宝"
 COUNTDOWN = int(os.environ.get("GUI_COUNTDOWN", "3"))
 INTERVAL = 1.0
@@ -230,7 +241,7 @@ def load_orders(path: str) -> list[QuickOrder]:
         if errors:
             raise ValueError("Excel 数据校验失败:\n" + "\n".join(errors))
         if not orders:
-            raise ValueError("没有找到‘菜单=快速下单’的有效数据行")
+            raise ValueError(f"没有找到‘菜单={MENU_NAME}’的有效数据行")
         return orders
     finally:
         workbook.close()
@@ -569,7 +580,7 @@ def execute_order(main_hwnd: int, order: QuickOrder) -> None:
 
     submit = _find_control(main_hwnd, CONTROL_IDS["提交"])
     if not win32gui.IsWindowEnabled(submit):
-        raise RuntimeError("快速下单提交按钮不可用")
+        raise RuntimeError(f"{MENU_NAME}提交按钮不可用")
     actual_title = (win32gui.GetWindowText(submit) or "").strip()
     if actual_title != order.action_title:
         raise RuntimeError(
@@ -614,7 +625,7 @@ def main() -> None:
         raise FileNotFoundError("请从 GUI 选择存在的 Excel 配置文件")
 
     orders = load_orders(excel_path)
-    print(f"[OK] Excel 校验通过，快速下单共 {len(orders)} 笔")
+    print(f"[OK] Excel 校验通过，{MENU_NAME}共 {len(orders)} 笔")
     countdown(COUNTDOWN)
 
     hwnd = find_window(WINDOW_KEY)
@@ -636,7 +647,7 @@ def main() -> None:
             ) from exc
         time.sleep(INTERVAL)
 
-    print(f"\n=== 快速下单全部完成: {len(orders)} 笔 ===")
+    print(f"\n=== {MENU_NAME}全部完成: {len(orders)} 笔 ===")
 
 
 if __name__ == "__main__":
