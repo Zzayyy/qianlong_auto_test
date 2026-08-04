@@ -1,0 +1,44 @@
+Control Identifiers:
+
+Dialog - '钱龙期权宝软件风险揭示书(自动追单)'    (L551, T299, R1138, B765)
+['Dialog', '钱龙期权宝软件风险揭示书(自动追单)', '钱龙期权宝软件风险揭示书(自动追单)Dialog']
+child_window(title="钱龙期权宝软件风险揭示书(自动追单)", control_type="Window")
+   | 
+   | Button - '接受协议'    (L1057, T730, R1132, B751)
+   | ['接受协议Button', 'Button', '接受协议', 'Button0', 'Button1']
+   | child_window(title="接受协议", auto_id="1", control_type="Button")
+   | 
+   | Button - '不接受'    (L973, T730, R1048, B751)
+   | ['Button2', '不接受Button', '不接受']
+   | child_window(title="不接受", auto_id="2", control_type="Button")
+   | 
+   | Edit - ''    (L556, T328, R1134, B723)
+   | ['Edit']
+   | child_window(auto_id="971", control_type="Edit")
+   |    | 
+   |    | ScrollBar - '垂直滚动条'    (L1116, T329, R1133, B722)
+   |    | ['ScrollBar', '垂直滚动条', '垂直滚动条ScrollBar']
+   |    | child_window(title="垂直滚动条", auto_id="NonClientVerticalScrollBar", control_type="ScrollBar")
+   |    |    | 
+   |    |    | Button - '上一行'    (L1116, T329, R1133, B346)
+   |    |    | ['上一行Button', 'Button3', '上一行']
+   |    |    | child_window(title="上一行", auto_id="UpButton", control_type="Button")
+   |    |    | 
+   |    |    | Thumb - '位置'    (L1116, T346, R1133, B613)
+   |    |    | ['Thumb', '位置', '位置Thumb']
+   |    |    | child_window(title="位置", auto_id="ScrollbarThumb", control_type="Thumb")
+   |    |    | 
+   |    |    | Button - '向下翻页'    (L1116, T613, R1133, B705)
+   |    |    | ['向下翻页', '向下翻页Button', 'Button4']
+   |    |    | child_window(title="向下翻页", auto_id="DownPageButton", control_type="Button")
+   |    |    | 
+   |    |    | Button - '下一行'    (L1116, T705, R1133, B722)
+   |    |    | ['Button5', '下一行', '下一行Button']
+   |    |    | child_window(title="下一行", auto_id="DownButton", control_type="Button")
+   | 
+   | TitleBar - ''    (L554, T302, R1135, B325)
+   | ['TitleBar']
+   |    | 
+   |    | Button - '关闭'    (L1102, T300, R1136, B325)
+   |    | ['关闭', 'Button6', '关闭Button']
+   |    | child_window(title="关闭", control_type="Button")

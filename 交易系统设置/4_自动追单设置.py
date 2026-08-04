@@ -37,6 +37,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.window import find_window, activate_window, countdown, close_settings_dialog
 from core.settings_window import (
+    accept_risk_disclosure,
     open_settings_dialog as open_settings_dialog_compat,
     switch_settings_panel as switch_settings_panel_compat,
 )
@@ -201,23 +202,40 @@ def get_checkbox_state_by_id(dlg, auto_id: str) -> Optional[bool]:
 
 
 def click_checkbox_by_id(dlg, auto_id: str):
-    """通过 auto_id 点击复选框（切换其勾选状态，Win32 BM_CLICK）。"""
+    """通过 auto_id 点击复选框（切换其勾选状态，Win32 BM_CLICK）。
+
+    部分面板第一次点击复选框时客户端会弹出风险揭示书（如
+    '钱龙期权宝软件风险揭示书(自动追单)'），点击成功后统一检测并接受协议，
+    避免后续控件读取/截图被模态弹窗干扰。
+    """
+    clicked = False
     try:
         hwnd = _get_control_hwnd(dlg, auto_id)
         if hwnd is not None:
-            _win32_user32().SendMessageW(hwnd, BM_CLICK, 0, 0)
+            # 必须用 PostMessage 而非 SendMessage：客户端处理 BM_CLICK 时会
+            # 弹出模态风险揭示书并进入模态消息循环，SendMessage 同步等待会让
+            # 本线程一直卡住，走不到后续 accept_risk_disclosure。
+            win32gui.PostMessage(hwnd, BM_CLICK, 0, 0)
             print(f"[OK] 已点击复选框(auto_id={auto_id})(win32)")
-            return
+            clicked = True
     except Exception as e:
         print(f"  [WARN] win32 点击复选框(auto_id={auto_id})失败，降级到 UIA: {e}")
-    # 降级：UIA
-    try:
-        cb = dlg.child_window(auto_id=auto_id, control_type="CheckBox")
-        cb.wait("ready", timeout=3)
-        cb.click_input()
-        print(f"[OK] 已点击复选框(auto_id={auto_id})")
-    except Exception as e:
-        print(f"  [WARN] 点击复选框(auto_id={auto_id})失败: {e}")
+    if not clicked:
+        # 降级：UIA
+        try:
+            cb = dlg.child_window(auto_id=auto_id, control_type="CheckBox")
+            cb.wait("ready", timeout=3)
+            cb.click_input()
+            print(f"[OK] 已点击复选框(auto_id={auto_id})")
+            clicked = True
+        except Exception as e:
+            print(f"  [WARN] 点击复选框(auto_id={auto_id})失败: {e}")
+            return
+    # 若弹出风险揭示书则点击"接受协议"（未弹出时无副作用）
+    if clicked:
+        time.sleep(0.3)
+        if accept_risk_disclosure(dlg):
+            print("  [INFO] 已接受风险揭示书协议，继续执行")
 
 
 def get_combobox_selection_by_id(dlg, auto_id: str) -> Optional[str]:

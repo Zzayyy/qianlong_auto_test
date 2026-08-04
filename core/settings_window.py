@@ -144,6 +144,137 @@ def _click_native_button(parent_hwnd: int, control_id: int) -> bool:
     return True
 
 
+# ---- 风险揭示书（第一次点击设置复选框时弹出，须点击"接受协议"）----
+RISK_DISCLOSURE_TITLE_KEYWORD = "风险揭示书"
+RISK_ACCEPT_BUTTON_AUTO_ID = "1"
+RISK_ACCEPT_BUTTON_TITLE = "接受协议"
+
+
+def _find_risk_disclosure_hwnd(anchor_hwnd: int,
+                               title_keyword: str) -> int | None:
+    """在同一交易进程内查找标题含 title_keyword 的可见对话框。
+
+    风险揭示书（如'钱龙期权宝软件风险揭示书(自动追单)'）由客户端进程弹出，
+    可能是独立顶级对话框，也可能嵌套在窗口树下；因此顶层窗口和 anchor 的
+    子窗口都枚举，仅按标题关键字匹配（类名不限定 #32770，兼容不同客户端）。
+    """
+    _, target_pid = win32process.GetWindowThreadProcessId(anchor_hwnd)
+    candidates: list[int] = []
+
+    def _collect(hwnd: int) -> None:
+        try:
+            if (
+                _same_process(hwnd, target_pid)
+                and win32gui.IsWindowVisible(hwnd)
+                and title_keyword in (win32gui.GetWindowText(hwnd) or "")
+            ):
+                candidates.append(hwnd)
+        except Exception:
+            pass
+
+    win32gui.EnumWindows(lambda hwnd, _: _collect(hwnd), None)
+    win32gui.EnumChildWindows(
+        anchor_hwnd, lambda hwnd, _: _collect(hwnd), None
+    )
+    for hwnd in dict.fromkeys(candidates):
+        return hwnd
+    return None
+
+
+def accept_risk_disclosure(anchor, title_keyword: str =
+                           RISK_DISCLOSURE_TITLE_KEYWORD,
+                           timeout: float = 3.0) -> bool:
+    """若交易进程弹出了风险揭示书对话框，点击'接受协议'并等待其关闭。
+
+    部分交易设置面板（如自动追单设置）第一次点击复选框时会弹出
+    '钱龙期权宝软件风险揭示书'对话框，必须点击'接受协议'才能继续后续操作。
+
+    阶段一为快速探测（约 1 秒）：揭示书只在首次点击时弹出，多数点击不会触发，
+    因此未弹出现象要尽快返回，避免每次点击都空转等待。
+
+    Args:
+        anchor: 目标进程内任意窗口包装对象（如交易系统设置对话框）。
+        title_keyword: 揭示书对话框标题关键字。
+        timeout: 点击接受协议后等待对话框关闭的最大秒数。
+
+    Returns:
+        True=已点击接受协议并关闭；False=未出现揭示书或处理失败。
+    """
+    try:
+        anchor_hwnd = int(anchor.handle)
+    except Exception:
+        return False
+
+    # 阶段一：探测揭示书是否弹出（点击后由客户端异步创建）
+    hwnd = None
+    probe_deadline = time.monotonic() + 1.0
+    while time.monotonic() < probe_deadline:
+        hwnd = _find_risk_disclosure_hwnd(anchor_hwnd, title_keyword)
+        if hwnd is not None:
+            break
+        time.sleep(0.15)
+    if hwnd is None:
+        return False  # 未弹出揭示书，无需处理
+
+    # 阶段二：点击'接受协议'并等待对话框关闭
+    handled = False
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        hwnd = _find_risk_disclosure_hwnd(anchor_hwnd, title_keyword)
+        if hwnd is None:
+            if handled:
+                return True  # 已点击且对话框已关闭
+            time.sleep(0.1)
+            continue
+
+        title = win32gui.GetWindowText(hwnd) or ""
+        clicked = False
+
+        # 1) win32 快速路径：直接对'接受协议'按钮(auto_id=1)发送 BM_CLICK
+        try:
+            if _click_native_button(hwnd, int(RISK_ACCEPT_BUTTON_AUTO_ID)):
+                clicked = True
+        except Exception:
+            pass
+
+        # 2) UIA 兜底：按按钮标题定位
+        if not clicked:
+            try:
+                dialog = Application(backend="uia").connect(
+                    handle=hwnd, timeout=1
+                ).window(handle=hwnd)
+                accept = dialog.child_window(
+                    title=RISK_ACCEPT_BUTTON_TITLE, control_type="Button"
+                )
+                if not accept.exists(timeout=0.3):
+                    accept = dialog.child_window(
+                        auto_id=RISK_ACCEPT_BUTTON_AUTO_ID,
+                        control_type="Button",
+                    )
+                if accept.exists(timeout=0.3):
+                    try:
+                        accept.invoke()
+                    except Exception:
+                        accept.click_input()
+                    clicked = True
+            except Exception:
+                pass
+
+        if clicked:
+            print(
+                f"[OK] 已点击'接受协议'，关闭风险揭示书"
+                f"({title!r})"
+            )
+            handled = True
+            time.sleep(0.2)
+            continue
+
+        print(f"[WARN] 检测到风险揭示书({title!r})但未能点击'接受协议'")
+        time.sleep(0.2)
+
+    return handled
+
+
 def _click_settings_button(main_window, control_id: str) -> None:
     if _click_native_button(int(main_window.handle), int(control_id)):
         print(f"[OK] 已用原生消息点击设置按钮(auto_id={control_id})")
