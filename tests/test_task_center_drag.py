@@ -416,11 +416,15 @@ class TaskCenterGroupClientFilterTests(unittest.TestCase):
         center._save_groups = Mock()
         center._refresh_group_combo = Mock()
         center._refresh_group_controls = Mock()
-        with patch("gui.task_center.SaveGroupDialog") as dlg_cls:
+        with (
+            patch("gui.task_center.SaveGroupDialog") as dlg_cls,
+            patch("gui.task_center.messagebox.showwarning") as warn,
+        ):
             dlg_cls.return_value.result_name = GROUP_PLACEHOLDER
             dlg_cls.return_value.result_universal = False
             center.save_group()
         self.assertEqual([], center.groups)
+        warn.assert_called_once()
 
 
 class TaskCenterClientMismatchPromptTests(unittest.TestCase):

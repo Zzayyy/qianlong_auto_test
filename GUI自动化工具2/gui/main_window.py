@@ -8,7 +8,7 @@ import shutil
 import logging
 from datetime import datetime
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from tkinter import ttk, messagebox, filedialog, simpledialog
 
 try:
     import openpyxl
@@ -65,6 +65,218 @@ from core.settings import (
     generate_batch_reports,
 )
 
+# ====================== 右侧面板标签页 ======================
+# (key, 显示名, 默认可见)。key 用于 user_config["right_tabs"] 持久化与排序；
+# 面板实例始终创建（保留内部状态），这里只控制挂载/顺序。
+RIGHT_PANEL_DEFS = (
+    ("运行日志", "运行日志", True),
+    ("任务历史", "任务历史", True),
+    ("任务中心", "任务中心", True),
+    ("定时任务", "定时任务", True),
+    ("结果比对", "结果比对", True),
+    ("报告中心", "报告中心", True),
+)
+DEFAULT_RIGHT_TABS = [key for key, _name, _visible in RIGHT_PANEL_DEFS]
+
+
+def normalize_right_tabs(saved, defs=RIGHT_PANEL_DEFS):
+    """把用户配置的右侧标签页顺序规范化为有序可见 key 列表。
+
+    - saved 缺失/非法时回退默认全量顺序；
+    - 过滤未知 key（防止配置损坏）；
+    - 新标签页自动追加（保证新增面板默认可见）。
+    """
+    valid = [key for key, _name, _visible in defs]
+    if isinstance(saved, list):
+        order = []
+        seen = set()
+        for k in saved:
+            if k in valid and k not in seen:
+                seen.add(k)
+                order.append(k)
+    else:
+        order = list(DEFAULT_RIGHT_TABS)
+    for key in valid:
+        if key not in order:
+            order.append(key)
+    return order
+
+
+class RightTabsDialog(simpledialog.Dialog):
+    """右侧面板标签页设置对话框：单列表 + 勾选显示/隐藏 + 上移/下移排序。
+
+    - 列表同时展示全部标签页：☑ 表示显示、☐ 表示隐藏（显示项在前、隐藏项在后）；
+    - 双击列表项或点「勾选/取消」切换显示/隐藏，上移/下移仅对显示项生效；
+    - 确认后结果保存在 self.vis_order（有序可见 key 列表），
+      取消时 self.result 为 None（Dialog 默认行为）。
+    """
+
+    # 列表项状态前缀
+    _MARK_ON = "☑"
+    _MARK_OFF = "☐"
+
+    def __init__(self, parent, vis_order, title="右侧标签页设置"):
+        self.vis_order = list(vis_order)
+        self._hidden = [k for k, _n, _v in RIGHT_PANEL_DEFS if k not in self.vis_order]
+        self._name_map = {key: name for key, name, _v in RIGHT_PANEL_DEFS}
+        super().__init__(parent, title=title)
+
+    def _center_on_parent(self):
+        try:
+            self.update_idletasks()
+            px = self.parent.winfo_rootx()
+            py = self.parent.winfo_rooty()
+            pw = self.parent.winfo_width()
+            ph = self.parent.winfo_height()
+            sw = self.winfo_width()
+            sh = self.winfo_height()
+            self.geometry(f"+{px + (pw - sw) // 2}+{py + (ph - sh) // 2}")
+        except Exception:
+            pass
+
+    def body(self, master):
+        self.geometry("480x430")
+        self._center_on_parent()
+        master.grid_columnconfigure(0, weight=1)
+        master.grid_rowconfigure(0, weight=1)
+
+        frame = ttk.LabelFrame(
+            master,
+            text="勾选要显示的标签页（☑=显示 ☐=隐藏，双击或按空格可快速切换）",
+            padding="6",
+        )
+        frame.grid(row=0, column=0, sticky=tk.NSEW, padx=12, pady=(8, 3))
+        frame.grid_columnconfigure(0, weight=1)
+        frame.grid_rowconfigure(0, weight=1)
+
+        # 单列表：显示项在前，隐藏项在后
+        self.listbox = tk.Listbox(frame, selectmode=tk.EXTENDED, exportselection=False)
+        scroll = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=self.listbox.yview)
+        self.listbox.configure(yscrollcommand=scroll.set)
+        self.listbox.grid(row=0, column=0, sticky=tk.NSEW)
+        scroll.grid(row=0, column=1, sticky=tk.NS)
+        self.listbox.bind("<Double-Button-1>", lambda e: self._toggle_selected())
+        self.listbox.bind("<space>", lambda e: self._toggle_selected())
+
+        btn_row = ttk.Frame(frame)
+        btn_row.grid(row=1, column=0, columnspan=2, sticky=tk.EW, pady=(6, 0))
+        ttk.Button(
+            btn_row, text="勾选/取消", width=10, command=self._toggle_selected
+        ).pack(side=tk.LEFT)
+        ttk.Button(
+            btn_row, text="上移", width=6, command=lambda: self._move(-1)
+        ).pack(side=tk.LEFT, padx=(4, 0))
+        ttk.Button(
+            btn_row, text="下移", width=6, command=lambda: self._move(1)
+        ).pack(side=tk.LEFT, padx=(4, 0))
+        ttk.Button(
+            btn_row, text="全部显示", width=8, command=self._show_all
+        ).pack(side=tk.RIGHT)
+        ttk.Button(
+            btn_row, text="全部隐藏", width=8, command=self._hide_all
+        ).pack(side=tk.RIGHT, padx=(0, 4))
+
+        bottom = ttk.Frame(master)
+        bottom.grid(row=1, column=0, sticky=tk.EW, padx=12, pady=(2, 0))
+        ttk.Button(bottom, text="恢复默认", command=self._reset_default).pack(side=tk.LEFT)
+        ttk.Label(
+            bottom,
+            text="提示：上移/下移只对显示的标签页生效",
+            foreground="#666",
+        ).pack(side=tk.LEFT, padx=(10, 0))
+
+        self._refresh()
+        return self.listbox
+
+    def _refresh(self):
+        """重绘列表：显示项（☑）在前，隐藏项（☐）在后。"""
+        self._entries = self.vis_order + self._hidden
+        self.listbox.delete(0, tk.END)
+        for key in self._entries:
+            mark = self._MARK_ON if key in self.vis_order else self._MARK_OFF
+            self.listbox.insert(tk.END, f"{mark}  {self._name_map[key]}")
+
+    def _toggle_selected(self):
+        """把选中的列表项在「显示/隐藏」间切换。"""
+        sel = list(self.listbox.curselection())
+        if not sel:
+            return
+        for i in sel:
+            key = self._entries[i]
+            if key in self.vis_order:
+                self.vis_order.remove(key)
+                self._hidden.append(key)
+            else:
+                self._hidden.remove(key)
+                self.vis_order.append(key)
+        self._refresh()
+
+    def _move(self, delta):
+        """把选中的显示项作为整体块上移/下移一位（隐藏项不参与排序）。"""
+        sel = list(self.listbox.curselection())
+        if not sel:
+            return
+        shown_count = len(self.vis_order)
+        sel = [i for i in sel if i < shown_count]  # 只移动显示区
+        if not sel:
+            return
+        sel_set = set(sel)
+        order = self.vis_order
+        n = len(order)
+        sel_keys = [order[i] for i in sorted(sel)]
+
+        if delta < 0:
+            j = min(sel) - 1
+            while j >= 0 and j in sel_set:
+                j -= 1
+            if j < 0:
+                return  # 已在顶部
+        else:
+            j = max(sel) + 1
+            while j < n and j in sel_set:
+                j += 1
+            if j >= n:
+                return  # 已在底部
+
+        # 删除选中块后重插：上移插到 j 元素之前，下移插到 j 元素之后
+        remaining = [order[i] for i in range(n) if i not in sel_set]
+        if delta < 0:
+            insert_pos = remaining.index(order[j])
+        else:
+            insert_pos = remaining.index(order[j]) + 1
+        self.vis_order = remaining[:insert_pos] + sel_keys + remaining[insert_pos:]
+        self._refresh()
+        for key in sel_keys:
+            self.listbox.selection_set(self._entries.index(key))
+
+    def _show_all(self):
+        """把全部隐藏项追加到显示区末尾。"""
+        self.vis_order = self.vis_order + list(self._hidden)
+        self._hidden = []
+        self._refresh()
+
+    def _hide_all(self):
+        """把全部显示项移入隐藏区（点确定时 validate 会拦截全隐藏）。"""
+        self._hidden = self._hidden + list(self.vis_order)
+        self.vis_order = []
+        self._refresh()
+
+    def _reset_default(self):
+        self.vis_order = list(DEFAULT_RIGHT_TABS)
+        self._hidden = [k for k, _n, _v in RIGHT_PANEL_DEFS if k not in self.vis_order]
+        self._refresh()
+
+    def validate(self):
+        if not self.vis_order:
+            messagebox.showwarning("右侧标签页设置", "至少需要显示一个标签页", parent=self)
+            return False
+        return True
+
+    def apply(self):
+        # 标准 simpledialog.Dialog 的 ok() 不设置 self.result，
+        # 这里置 True 以区分「确认应用」与「取消」（取消不调用 apply）。
+        self.result = True
+
 
 class AutomationGUI:
     """GUI自动化主界面"""
@@ -105,6 +317,9 @@ class AutomationGUI:
 
         # 加载用户配置
         self.user_config = load_user_config()
+
+        # 右侧面板标签页配置（显示/隐藏 + 顺序），持久化到 user_config["right_tabs"]
+        self._right_tabs = normalize_right_tabs(self.user_config.get("right_tabs"))
 
         # 当前客户端（多客户端支持）：优先读用户配置，否则取档案默认
         self.client_id = self.user_config.get("client") or get_default_client_id()
@@ -239,6 +454,8 @@ class AutomationGUI:
         )
         settings_menu.add_separator()
         settings_menu.add_command(label="日志级别说明", command=self._show_log_level_help)
+        settings_menu.add_separator()
+        settings_menu.add_command(label="右侧标签页…", command=self._open_right_tabs_dialog)
 
         # 主框架：用 grid 布局，row=0 可伸缩收缩，保证底部状态栏始终有空间
         self.root.grid_rowconfigure(0, weight=1)
@@ -345,13 +562,65 @@ class AutomationGUI:
         self.preview_info = ttk.Label(self.preview_frame, text="选择Excel文件后显示数据预览", foreground="gray")
         self.preview_info.pack(anchor=tk.W, pady=(3, 0))
 
-        # 右侧：使用 Notebook 容纳「运行日志」与「任务历史」
+        # 右侧：使用 Notebook 容纳各标签页（运行日志 / 任务历史 / 任务中心 /
+        # 定时任务 / 结果比对 / 报告中心），显示与顺序可由「设置 → 右侧标签页」自定义。
+        self._build_right_notebook()
+
+        # 状态栏：钉在窗口底部（始终可见，矮窗口也不会被裁切），
+        # 但左右加 10px 内边距与主面板对齐，避免「分层」的割裂感
+        status_outer = ttk.Frame(self.root, padding=(10, 0, 10, 0))
+        status_outer.grid(row=1, column=0, sticky="ew")
+
+        # 顶部细线分隔，替代原先加重的 SUNKEN 立体凹陷，与主面板风格保持一致
+        ttk.Separator(status_outer, orient=tk.HORIZONTAL).pack(side=tk.TOP, fill=tk.X)
+
+        status_frame = ttk.Frame(status_outer, padding=(2, 4))
+        status_frame.pack(side=tk.TOP, fill=tk.X)
+
+        self.status_label = ttk.Label(
+            status_frame, text="就绪", anchor=tk.W
+        )
+        self.status_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        self.level_label = ttk.Label(
+            status_frame, text=f"日志: {self.log_level.get()}", anchor=tk.CENTER,
+            width=12
+        )
+        self.level_label.pack(side=tk.LEFT, padx=(8, 0))
+
+        self.time_label = ttk.Label(
+            status_frame, text="", anchor=tk.E, width=18
+        )
+        self.time_label.pack(side=tk.LEFT, padx=(8, 0))
+
+        # 构建左侧「分类 -> 脚本」树，默认选中「下单」
+        self._build_script_tree()
+        self._select_category("下单")
+
+        # 左右分栏比例：sash 位置占整体宽度的比例
+        #   0.5 = 五五分 | 0.6 = 左6右4 | 0.8 = 左8右2（改这里即可调默认比例）
+        self.pane_ratio = 0.5
+        # 必须等窗口真正显示（<Map>）后再设置 sash，否则 winfo_width 为 1 -> 比例失效
+        self.root.bind("<Map>", self._on_first_map)
+        # 全局捕获鼠标释放，用于「从脚本列表拖入任务队列」的落点判定
+        self.root.bind("<ButtonRelease-1>", self._on_global_drop)
+        # 窗口缩放时按比例保持
+        self.paned.bind("<Configure>", lambda e: self._apply_pane_ratio())
+
+    # ====================== 右侧面板标签页（显示/隐藏 + 顺序） ======================
+    def _build_right_notebook(self):
+        """构建右侧标签页 Notebook。
+
+        面板实例始终创建并常驻（保留任务中心/报告中心等内部状态），
+        挂载到 Notebook 与顺序由 self._right_tabs（用户配置）控制。
+        """
         self.right_notebook = ttk.Notebook(self.paned)
         self.paned.add(self.right_notebook, weight=1)
+        self._right_panels = {}
 
         # —— 运行日志标签页 ——
         log_frame = ttk.Frame(self.right_notebook, padding="5")
-        self.right_notebook.add(log_frame, text="运行日志")
+        self._right_panels["运行日志"] = {"frame": log_frame, "name": "运行日志"}
 
         # 搜索工具条（底部）：关键字搜索 + ↑/↓ 定位 + 跟随滚动 + 清除搜索/清除日志
         search_bar = ttk.Frame(log_frame)
@@ -411,16 +680,17 @@ class AutomationGUI:
 
         # —— 任务历史标签页 ——
         history_frame = ttk.Frame(self.right_notebook, padding="5")
-        self.right_notebook.add(history_frame, text="任务历史")
+        self._right_panels["任务历史"] = {"frame": history_frame, "name": "任务历史"}
         self.history_panel = HistoryPanel(history_frame, self)
 
         # —— 任务中心标签页 ——
         task_frame = ttk.Frame(self.right_notebook, padding="5")
-        self.right_notebook.add(task_frame, text="任务中心")
+        self._right_panels["任务中心"] = {"frame": task_frame, "name": "任务中心"}
         self.task_center = TaskCenter(task_frame, self)
+
         # —— 定时任务标签页 ——
         sched_frame = ttk.Frame(self.right_notebook, padding="5")
-        self.right_notebook.add(sched_frame, text="定时任务")
+        self._right_panels["定时任务"] = {"frame": sched_frame, "name": "定时任务"}
         self.scheduler_view = SchedulerPanel(sched_frame, self)
         # 创建定时任务调度器（后台线程）
         self.scheduler = TaskScheduler(self)
@@ -428,55 +698,42 @@ class AutomationGUI:
 
         # —— 结果比对待办标签页 ——
         compare_frame = ttk.Frame(self.right_notebook, padding="5")
-        self.right_notebook.add(compare_frame, text="结果比对")
+        self._right_panels["结果比对"] = {"frame": compare_frame, "name": "结果比对"}
         self.compare_panel = ComparePanel(compare_frame, self)
 
-        # —— 交易系统设置报告中心（位于"结果比对"右侧） ——
+        # —— 交易系统设置报告中心 ——
         report_frame = ttk.Frame(self.right_notebook, padding="5")
-        self.right_notebook.add(report_frame, text="报告中心")
+        self._right_panels["报告中心"] = {"frame": report_frame, "name": "报告中心"}
         self.report_center = SettingsReportPanel(report_frame, self)
         self._report_frame = report_frame
 
-        # 状态栏：钉在窗口底部（始终可见，矮窗口也不会被裁切），
-        # 但左右加 10px 内边距与主面板对齐，避免「分层」的割裂感
-        status_outer = ttk.Frame(self.root, padding=(10, 0, 10, 0))
-        status_outer.grid(row=1, column=0, sticky="ew")
+        # 按用户配置挂载可见标签页
+        self._apply_right_tabs()
 
-        # 顶部细线分隔，替代原先加重的 SUNKEN 立体凹陷，与主面板风格保持一致
-        ttk.Separator(status_outer, orient=tk.HORIZONTAL).pack(side=tk.TOP, fill=tk.X)
+    def _apply_right_tabs(self):
+        """按用户配置（显示 + 顺序）重建右侧 Notebook 的标签页挂载。"""
+        if not hasattr(self, "right_notebook"):
+            return
+        # 先卸载全部已挂载标签页（面板实例保留，状态不丢）
+        for child in list(self.right_notebook.tabs()):
+            self.right_notebook.forget(child)
+        # 按配置顺序挂载可见标签页
+        for key in self._right_tabs:
+            panel = self._right_panels.get(key)
+            if panel is None:
+                continue
+            self.right_notebook.add(panel["frame"], text=panel["name"])
 
-        status_frame = ttk.Frame(status_outer, padding=(2, 4))
-        status_frame.pack(side=tk.TOP, fill=tk.X)
-
-        self.status_label = ttk.Label(
-            status_frame, text="就绪", anchor=tk.W
-        )
-        self.status_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-        self.level_label = ttk.Label(
-            status_frame, text=f"日志: {self.log_level.get()}", anchor=tk.CENTER,
-            width=12
-        )
-        self.level_label.pack(side=tk.LEFT, padx=(8, 0))
-
-        self.time_label = ttk.Label(
-            status_frame, text="", anchor=tk.E, width=18
-        )
-        self.time_label.pack(side=tk.LEFT, padx=(8, 0))
-
-        # 构建左侧「分类 -> 脚本」树，默认选中「下单」
-        self._build_script_tree()
-        self._select_category("下单")
-
-        # 左右分栏比例：sash 位置占整体宽度的比例
-        #   0.5 = 五五分 | 0.6 = 左6右4 | 0.8 = 左8右2（改这里即可调默认比例）
-        self.pane_ratio = 0.5
-        # 必须等窗口真正显示（<Map>）后再设置 sash，否则 winfo_width 为 1 -> 比例失效
-        self.root.bind("<Map>", self._on_first_map)
-        # 全局捕获鼠标释放，用于「从脚本列表拖入任务队列」的落点判定
-        self.root.bind("<ButtonRelease-1>", self._on_global_drop)
-        # 窗口缩放时按比例保持
-        self.paned.bind("<Configure>", lambda e: self._apply_pane_ratio())
+    def _open_right_tabs_dialog(self):
+        """打开「设置 → 右侧标签页」对话框，确定后应用并持久化。"""
+        dlg = RightTabsDialog(self.root, self._right_tabs)
+        if dlg.result is not True:
+            return  # 用户取消
+        self._right_tabs = dlg.vis_order
+        self.user_config["right_tabs"] = self._right_tabs
+        save_user_config(self.user_config)
+        self._apply_right_tabs()
+        self._log(f"[设置] 已更新右侧标签页: {'、'.join(self._right_tabs)}")
 
     def _on_first_map(self, event):
         """窗口首次显示后应用一次分栏比例，随后解绑"""
@@ -1624,7 +1881,10 @@ class AutomationGUI:
         """
         if not hasattr(self, "_report_frame"):
             return
-        self.right_notebook.select(self._report_frame)
+        if "报告中心" in self._right_tabs:
+            self.right_notebook.select(self._report_frame)
+        else:
+            self._log("[提示] 报告中心标签页已在「设置 → 右侧标签页」中隐藏，本次不跳转")
 
     # ====================== 交易系统设置：统一批次报告 ======================
     def begin_settings_batch(self, source, task_items):

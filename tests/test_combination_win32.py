@@ -400,7 +400,8 @@ class DialogStateMachineTests(unittest.TestCase):
             patch.object(
                 combination.time,
                 "time",
-                side_effect=[0, 0, 0, 0, 0.5, 1.3],
+                # deadline / while / quiet_since / while / 差值 / while / 差值
+                side_effect=[0, 0, 0, 0, 0.5, 1.3, 1.3],
             ),
             patch.object(combination.time, "sleep"),
         ):
