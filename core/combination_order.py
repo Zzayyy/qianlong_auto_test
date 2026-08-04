@@ -692,12 +692,18 @@ def confirm_dialog(main_hwnd, dialog, attempts=3):
     return False
 
 
-def handle_dialogs(main_hwnd, timeout=8.0, quiet_period=1.2):
-    """等待并确认后续警告/确认/提示，直到连续 quiet_period 秒无弹窗。"""
+def handle_dialogs(main_hwnd, timeout=8.0, quiet_period=1.2, base_dlg=None):
+    """等待并确认后续警告/确认/提示，直到连续 quiet_period 秒无弹窗。
+
+    base_dlg: 提交后可能保留在屏幕上等待复用的主对话框句柄（如组合申报
+    主对话框）。该对话框常含委托数量编辑框(9057)，若计入判断会被误判为
+    “数量弹窗仍然可见”而假报失败，故必须先从相关弹窗集合中排除。
+    """
+    base = int(base_dlg) if base_dlg else None
     deadline = time.time() + timeout
     quiet_since = None
     while time.time() < deadline:
-        dialogs = _relevant_dialogs(main_hwnd)
+        dialogs = [d for d in _relevant_dialogs(main_hwnd) if d != base]
         followups = [dialog for dialog in dialogs if not has_control(dialog, 9057)]
         if followups:
             quiet_since = None

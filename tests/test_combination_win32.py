@@ -384,6 +384,39 @@ class DialogStateMachineTests(unittest.TestCase):
         ):
             self.assertFalse(combination.handle_dialogs(100))
 
+    def test_base_dialog_retained_after_submit_is_not_reported_as_failure(self):
+        """组合申报主对话框提交后保留待复用，不应被误判为“数量弹窗仍然可见”。
+
+        主对话框(10)含数量编辑框(9057)且一直可见（客户端保留复用），若计入
+        判断会假报失败；传入 base_dlg 排除后应正常等待安静并返回成功。
+        """
+        with (
+            patch.object(
+                combination,
+                "_relevant_dialogs",
+                side_effect=[[10], [10], [10], [10], [10], [10]],
+            ),
+            patch.object(combination, "has_control", return_value=True),
+            patch.object(
+                combination.time,
+                "time",
+                side_effect=[0, 0, 0, 0, 0.5, 1.3],
+            ),
+            patch.object(combination.time, "sleep"),
+        ):
+            self.assertTrue(
+                combination.handle_dialogs(
+                    100, timeout=8, quiet_period=1.2, base_dlg=10
+                )
+            )
+        # 而不传 base_dlg 时，同样的残留主对话框应仍按“数量弹窗”失败
+        with (
+            patch.object(combination, "_relevant_dialogs", return_value=[10]),
+            patch.object(combination, "has_control", return_value=True),
+            patch.object(combination.time, "time", side_effect=[0, 0]),
+        ):
+            self.assertFalse(combination.handle_dialogs(100, base_dlg=999))
+
 
 class FullTraversalTests(unittest.TestCase):
     def _run_main_with_mocks(self, module):

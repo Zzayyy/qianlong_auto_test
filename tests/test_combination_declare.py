@@ -227,10 +227,12 @@ class BatchDeclareTests(unittest.TestCase):
         self.assertEqual(captured[0]["strategy"], COMBO_STRATEGIES[0])
 
     def test_is_combo_dialog_alive_checks_handle_and_key_control(self):
-        """对话框复用前必须校验：句柄有效+可见+含市场下拉框(9059)。
+        """对话框复用前必须校验：句柄有效+可见+含可见的市场下拉框(9059)。
 
         客户端提交成功后可能自动关闭申报对话框（华宝实测），旧句柄失效；
-        Windows 句柄也可能被新窗口重用，故必须校验关键控件存在。
+        Windows 句柄也可能被新窗口重用，故必须校验关键控件存在。校验必须
+        与 _fill_combo_dialog 填表时的 find_visible_child（要求可见控件）一致，
+        否则会出现“判定可复用、填表却找不到控件”的假复用。
         """
         from unittest.mock import patch
 
@@ -238,17 +240,17 @@ class BatchDeclareTests(unittest.TestCase):
 
         with patch.object(ss.win32gui, "IsWindow", return_value=True), \
              patch.object(ss.win32gui, "IsWindowVisible", return_value=True), \
-             patch.object(ss.win32gui, "GetDlgItem", return_value=123):
+             patch.object(ss._combo_mod, "find_visible_child", return_value=123):
             self.assertTrue(ss._is_combo_dialog_alive(999))
         # 不可见 → 失效（提交后客户端自动关闭的场景）
         with patch.object(ss.win32gui, "IsWindow", return_value=True), \
              patch.object(ss.win32gui, "IsWindowVisible", return_value=False), \
-             patch.object(ss.win32gui, "GetDlgItem", return_value=123):
+             patch.object(ss._combo_mod, "find_visible_child", return_value=123):
             self.assertFalse(ss._is_combo_dialog_alive(999))
-        # 缺关键控件（句柄被新窗口重用）→ 失效
+        # 关键控件不可见（对话框被模态提示禁用/已重置）→ 失效，不能复用
         with patch.object(ss.win32gui, "IsWindow", return_value=True), \
              patch.object(ss.win32gui, "IsWindowVisible", return_value=True), \
-             patch.object(ss.win32gui, "GetDlgItem", return_value=0):
+             patch.object(ss._combo_mod, "find_visible_child", return_value=0):
             self.assertFalse(ss._is_combo_dialog_alive(999))
         self.assertFalse(ss._is_combo_dialog_alive(0))
         self.assertFalse(ss._is_combo_dialog_alive(None))

@@ -964,7 +964,8 @@ def _is_combo_dialog_alive(dlg) -> bool:
 
     部分客户端（如华宝实测）在组合提交成功后会自动关闭申报对话框，旧句柄
     随之失效，继续复用会在填表时报“未找到控件(auto_id=9059)”。且 Windows
-    句柄可能被新窗口复用，因此除可见性外还必须校验市场下拉框(9059)存在，
+    句柄可能被新窗口复用，因此除可见性外还必须校验可见的市场下拉框(9059)
+    存在（与 _fill_combo_dialog 填表时的 find_visible_child 要求一致），
     才能判定仍可安全复用。
     """
     if not dlg:
@@ -973,7 +974,7 @@ def _is_combo_dialog_alive(dlg) -> bool:
         hwnd = int(dlg)
         if not win32gui.IsWindow(hwnd) or not win32gui.IsWindowVisible(hwnd):
             return False
-        return bool(win32gui.GetDlgItem(hwnd, COMBO_DLG_MARKET_CID))
+        return bool(_combo_mod.find_visible_child(hwnd, COMBO_DLG_MARKET_CID))
     except Exception:
         return False
 
@@ -1215,7 +1216,8 @@ def _submit_combination(dlg, main_hwnd, cancel_only=False):
     if not _combo_mod.confirm_dialog(main_hwnd, new_dlg, attempts=3):
         print("[ERROR] 申报确认后弹窗未正常结束")
         return False
-    if not _combo_mod.handle_dialogs(main_hwnd):
+    # base_dlg=主对话框：提交后客户端可能保留它等待复用，不能把它误判为残留数量弹窗
+    if not _combo_mod.handle_dialogs(main_hwnd, base_dlg=dlg):
         print("[ERROR] 申报后续弹窗未正常结束")
         return False
     print("[OK] 组合申报已提交")
@@ -1339,7 +1341,8 @@ def run_combination_declare(*, market=None, strategy=None, qty=1,
     elif main_hwnd is None:
         main_hwnd = find_window(client.get("window_key") or client.get("name") or "")
 
-    if combo_dlg is not None and _is_combo_dialog_alive(combo_dlg):
+    reused = combo_dlg is not None and _is_combo_dialog_alive(combo_dlg)
+    if reused:
         # 复用已有对话框：确保前台激活后直接填表，跳过关闭/重开
         dlg = combo_dlg
         _activate_main_window(main_hwnd)
@@ -1361,12 +1364,36 @@ def run_combination_declare(*, market=None, strategy=None, qty=1,
         dlg = _find_combination_dialog(main_hwnd)
         print(f"[OK] 组合申报弹窗已出现: hwnd={dlg}")
 
-    return _fill_combo_dialog(
-        dlg, main_hwnd,
-        market=market, strategy=strategy,
-        contract1=contract1, contract2=contract2,
-        qty=qty, execute=execute, close_after=close_after,
-    )
+    try:
+        return _fill_combo_dialog(
+            dlg, main_hwnd,
+            market=market, strategy=strategy,
+            contract1=contract1, contract2=contract2,
+            qty=qty, execute=execute, close_after=close_after,
+        )
+    except SuperStrategyError as exc:
+        if not reused:
+            raise
+        # 复用句柄虽有效但控件不可见/对话框已被客户端重置（如提交后弹出模态提示
+        # 禁用面板），填表失败时清理残留并重新打开对话框再填一次。
+        print(f"[WARN] 复用对话框填表失败({exc})，清理残留并重新打开")
+        _close_combo_leftover_dialogs(main_hwnd)
+        print(f"[INFO] 准备点击: {COMBINATION_DECLARE_TEXT}")
+        action_panel = get_action_panel(main_hwnd)
+        click_action(
+            main_hwnd,
+            COMBINATION_DECLARE_TEXT,
+            panel=action_panel,
+            delay=0.8,
+        )
+        dlg = _find_combination_dialog(main_hwnd)
+        print(f"[OK] 组合申报弹窗已出现: hwnd={dlg}")
+        return _fill_combo_dialog(
+            dlg, main_hwnd,
+            market=market, strategy=strategy,
+            contract1=contract1, contract2=contract2,
+            qty=qty, execute=execute, close_after=close_after,
+        )
 
 
 def run_combination_declare_all(*, markets, strategies, qty=1,
