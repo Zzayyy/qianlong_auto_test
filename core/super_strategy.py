@@ -959,6 +959,25 @@ def _find_combination_dialog(main_hwnd: int, timeout: float = 3.0) -> int:
     raise SuperStrategyError("点击“组合申报”后未检测到组合申报弹窗")
 
 
+def _is_combo_dialog_alive(dlg) -> bool:
+    """组合申报主对话框是否仍有效可复用。
+
+    部分客户端（如华宝实测）在组合提交成功后会自动关闭申报对话框，旧句柄
+    随之失效，继续复用会在填表时报“未找到控件(auto_id=9059)”。且 Windows
+    句柄可能被新窗口复用，因此除可见性外还必须校验市场下拉框(9059)存在，
+    才能判定仍可安全复用。
+    """
+    if not dlg:
+        return False
+    try:
+        hwnd = int(dlg)
+        if not win32gui.IsWindow(hwnd) or not win32gui.IsWindowVisible(hwnd):
+            return False
+        return bool(win32gui.GetDlgItem(hwnd, COMBO_DLG_MARKET_CID))
+    except Exception:
+        return False
+
+
 def main_combination_declare() -> None:
     try:
         # 参数来自 GUI/任务中心写入的环境变量；市场/策略为逗号分隔的多选列表，
@@ -1320,12 +1339,15 @@ def run_combination_declare(*, market=None, strategy=None, qty=1,
     elif main_hwnd is None:
         main_hwnd = find_window(client.get("window_key") or client.get("name") or "")
 
-    if combo_dlg is not None:
+    if combo_dlg is not None and _is_combo_dialog_alive(combo_dlg):
         # 复用已有对话框：确保前台激活后直接填表，跳过关闭/重开
         dlg = combo_dlg
         _activate_main_window(main_hwnd)
         print(f"[OK] 复用已有组合申报对话框: hwnd={dlg}")
     else:
+        if combo_dlg is not None:
+            # 客户端可能在提交成功后自动关闭申报对话框（华宝实测），需重新打开
+            print(f"[WARN] 已有组合申报对话框已失效(hwnd={combo_dlg})，重新打开")
         if cleanup_leftover:
             _close_combo_leftover_dialogs(main_hwnd)
         print(f"[INFO] 准备点击: {COMBINATION_DECLARE_TEXT}")

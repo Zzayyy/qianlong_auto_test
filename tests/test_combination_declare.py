@@ -226,6 +226,75 @@ class BatchDeclareTests(unittest.TestCase):
         self.assertEqual(captured[0]["market"], COMBO_MARKETS[0])
         self.assertEqual(captured[0]["strategy"], COMBO_STRATEGIES[0])
 
+    def test_is_combo_dialog_alive_checks_handle_and_key_control(self):
+        """对话框复用前必须校验：句柄有效+可见+含市场下拉框(9059)。
+
+        客户端提交成功后可能自动关闭申报对话框（华宝实测），旧句柄失效；
+        Windows 句柄也可能被新窗口重用，故必须校验关键控件存在。
+        """
+        from unittest.mock import patch
+
+        from core import super_strategy as ss
+
+        with patch.object(ss.win32gui, "IsWindow", return_value=True), \
+             patch.object(ss.win32gui, "IsWindowVisible", return_value=True), \
+             patch.object(ss.win32gui, "GetDlgItem", return_value=123):
+            self.assertTrue(ss._is_combo_dialog_alive(999))
+        # 不可见 → 失效（提交后客户端自动关闭的场景）
+        with patch.object(ss.win32gui, "IsWindow", return_value=True), \
+             patch.object(ss.win32gui, "IsWindowVisible", return_value=False), \
+             patch.object(ss.win32gui, "GetDlgItem", return_value=123):
+            self.assertFalse(ss._is_combo_dialog_alive(999))
+        # 缺关键控件（句柄被新窗口重用）→ 失效
+        with patch.object(ss.win32gui, "IsWindow", return_value=True), \
+             patch.object(ss.win32gui, "IsWindowVisible", return_value=True), \
+             patch.object(ss.win32gui, "GetDlgItem", return_value=0):
+            self.assertFalse(ss._is_combo_dialog_alive(999))
+        self.assertFalse(ss._is_combo_dialog_alive(0))
+        self.assertFalse(ss._is_combo_dialog_alive(None))
+
+    def test_declare_reuses_live_dialog(self):
+        """对话框仍有效时走复用路径，不重新点击打开。"""
+        from unittest.mock import patch
+
+        from core import super_strategy as ss
+
+        with patch.object(ss, "_is_combo_dialog_alive", return_value=True), \
+             patch.object(ss, "_activate_main_window"), \
+             patch.object(ss, "click_action") as click, \
+             patch.object(ss, "_fill_combo_dialog",
+                          return_value={"dialog_hwnd": 789}) as fill:
+            res = ss.run_combination_declare(
+                market="深证", strategy="认沽牛市价差策略", qty=1,
+                execute=True, do_setup=False, main_hwnd=111, combo_dlg=789,
+            )
+        click.assert_not_called()
+        self.assertEqual(res["dialog_hwnd"], 789)
+        self.assertEqual(fill.call_args.args[0], 789)
+
+    def test_declare_reopens_dialog_when_reused_handle_dead(self):
+        """提交后客户端自动关闭对话框（华宝实测）时，自动重新打开再填表。"""
+        from unittest.mock import patch
+
+        from core import super_strategy as ss
+
+        with patch.object(ss, "_is_combo_dialog_alive", return_value=False), \
+             patch.object(ss, "_close_combo_leftover_dialogs"), \
+             patch.object(ss, "get_action_panel", return_value=123), \
+             patch.object(ss, "click_action") as click, \
+             patch.object(ss, "_find_combination_dialog", return_value=456) as find_dlg, \
+             patch.object(ss, "_fill_combo_dialog",
+                          return_value={"dialog_hwnd": 456}) as fill:
+            res = ss.run_combination_declare(
+                market="深证", strategy="认沽牛市价差策略", qty=1,
+                execute=True, cleanup_leftover=False, close_after=False,
+                do_setup=False, main_hwnd=111, combo_dlg=789,
+            )
+        click.assert_called_once()
+        find_dlg.assert_called_once()
+        self.assertEqual(res["dialog_hwnd"], 456)
+        self.assertEqual(fill.call_args.args[0], 456)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
