@@ -2,8 +2,9 @@
 """结果比对核心逻辑
 ========================
 职责：
-  - 扫描两个文件夹，按文件名（/相对路径）匹配同名文件
-  - 对同名文件做内容比对：
+  - 扫描两个文件夹，按文件名（/相对路径）匹配同名文件（compare_folders）
+  - 直接比对两个文件，无需放进文件夹（compare_single_files，允许文件名不同）
+  - 对文件做内容比对：
       * .xls / .xlsx / .xlsm 等表格文件 -> 逐工作表、逐行内容比对
       * 其它文件 -> 文件大小 + MD5 哈希比对
   - 先实现 xls/xlsx 的内容比对（行级差异），其余类型做二进制一致性比对
@@ -465,12 +466,45 @@ def compare_folders(folder_a, folder_b, recursive=False, ignore_row_order=True,
                 pass
 
     return {
+        "mode": "folder",
         "folder_a": folder_a,
         "folder_b": folder_b,
         "recursive": recursive,
         "ignore_row_order": ignore_row_order,
         "total": total,
         "files": files,
+        "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
+
+def compare_single_files(path_a, path_b, ignore_row_order=True, progress_cb=None):
+    """直接比对两个文件（不扫描文件夹），返回与 compare_folders 相同的结构。
+
+    - 不要求文件名相同：展示名为「A文件名 ↔ B文件名」（同名时只显示一个）。
+    - 比对方式同样按扩展名分发（Excel -> 行级比对；其它 -> 大小 + MD5）。
+    - mode="file"，供 UI / 报告按「文件比对」呈现。
+    """
+    name_a = os.path.basename(path_a)
+    name_b = os.path.basename(path_b)
+    display = name_a if name_a == name_b else f"{name_a} \u2194 {name_b}"
+    result = compare_files(name_a, path_a, path_b, ignore_row_order)
+    if progress_cb:
+        try:
+            progress_cb(1, 1, display)
+        except Exception:
+            pass
+    return {
+        "mode": "file",
+        "file_a": name_a,
+        "file_b": name_b,
+        "folder_a": path_a,
+        "folder_b": path_b,
+        "recursive": False,
+        "ignore_row_order": ignore_row_order,
+        "total": 1,
+        "files": [
+            {"name": display, "in_a": True, "in_b": True, "result": result},
+        ],
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
 
@@ -520,8 +554,11 @@ def format_report(data):
     L.append("=" * 64)
     L.append("结果比对报告")
     L.append(f"生成时间: {data['generated_at']}")
-    L.append(f"基准文件夹: {data['folder_a']}")
-    L.append(f"对照文件夹: {data['folder_b']}")
+    is_file_mode = data.get("mode") == "file"
+    a_lbl = "基准文件" if is_file_mode else "基准文件夹"
+    b_lbl = "对照文件" if is_file_mode else "对照文件夹"
+    L.append(f"{a_lbl}: {data['folder_a']}")
+    L.append(f"{b_lbl}: {data['folder_b']}")
     L.append(f"选项: 递归子目录={'是' if data['recursive'] else '否'} | "
              f"忽略行顺序={'是' if data['ignore_row_order'] else '否'}")
     L.append("=" * 64)

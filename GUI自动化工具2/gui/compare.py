@@ -2,9 +2,13 @@
 """结果比对标签页
 ====================
 UI 功能：
-  - 上传两个文件夹（基准 / 对照）：通过「浏览」按钮选择，若已安装 tkinterdnd2 也支持直接拖入
-  - 对两文件夹内文件名一致的文件做内容比对（先实现 .xls/.xlsx 行级比对，其余类型做哈希比对）
-  - 比对进度实时反馈，结果以树形列表呈现（一致 / 不一致 / 仅基准 / 仅对照 / 错误）
+  - 支持两种比对模式（右上角单选切换）：
+      * 文件夹比对：上传两个文件夹（基准 / 对照），对其中文件名一致的文件做内容比对
+      * 文件比对：直接上传两个文件（基准 / 对照）做一对一比对，无需放进文件夹
+  - 上传通过「浏览」按钮选择（按模式弹出文件夹/文件对话框），
+    若已安装 tkinterdnd2 也支持直接拖入（文件夹模式拖入文件夹，文件模式拖入文件）
+  - 内容比对（.xls/.xlsx 行级比对，其余类型做哈希比对），比对进度实时反馈，
+    结果以树形列表呈现（一致 / 不一致 / 仅基准 / 仅对照 / 错误）
   - 全部比对完成后，输出一份总结报告（可导出为 txt 文件，也可直接查看）
 
 设计：
@@ -58,10 +62,13 @@ class ComparePanel:
         self.folder_b = tk.StringVar(value="")
         self.recursive = tk.BooleanVar(value=False)
         self.ignore_order = tk.BooleanVar(value=True)
+        # 比对模式：folder=文件夹比对（原有） / file=单文件比对
+        self.mode = tk.StringVar(value="folder")
 
         self.data = None          # 最近一次比对结果结构
         self._running = False
         self._dnd_initialized = False  # tkinterdnd2 只需初始化一次
+        self._zones = {}          # side -> {"frame":..., "label":...}，供模式切换时更新标题/提示
 
         self._build_ui()
 
@@ -83,23 +90,43 @@ class ComparePanel:
         top.columnconfigure(0, weight=1)
         top.columnconfigure(1, weight=1)
 
-        self._build_drop_zone(top, 0, "基准文件夹 (A)", self.folder_a, "a")
-        self._build_drop_zone(top, 1, "对照文件夹 (B)", self.folder_b, "b")
+        self._build_drop_zone(top, 0, "a")
+        self._build_drop_zone(top, 1, "b")
 
-        # —— 选项 + 操作按钮 ——
+        # —— 选项 + 操作按钮（两行布局）——
+        # row 0: 选项（单选/复选框，独占整行宽度，再窄也不会被裁）
+        # row 1: 状态(左, 伸缩) | 按钮(右, 固定)
+        # 解决：单行三列 grid 在窗口较窄时，"忽略行顺序"复选框仍被挤掉看不见。
         ctrl = ttk.Frame(parent)
         ctrl.grid(row=1, column=0, sticky="ew", pady=(0, 6))
+        ctrl.columnconfigure(0, weight=1)
 
-        ttk.Checkbutton(ctrl, text="递归子目录", variable=self.recursive).pack(side=tk.LEFT, padx=(0, 8))
-        ttk.Checkbutton(ctrl, text="忽略行顺序（按内容比对）", variable=self.ignore_order).pack(side=tk.LEFT, padx=(0, 8))
+        # row 0: 比对模式与选项（独占整行，所有选项都能完整显示）
+        opts = ttk.Frame(ctrl)
+        opts.grid(row=0, column=0, sticky="w")
+        ttk.Radiobutton(opts, text="文件夹比对", value="folder", variable=self.mode,
+                        command=self._on_mode_change).pack(side=tk.LEFT)
+        ttk.Radiobutton(opts, text="文件比对", value="file", variable=self.mode,
+                        command=self._on_mode_change).pack(side=tk.LEFT, padx=(0, 8))
+        self.recursive_btn = ttk.Checkbutton(opts, text="递归子目录", variable=self.recursive)
+        self.recursive_btn.pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Checkbutton(opts, text="忽略行顺序（按内容比对）", variable=self.ignore_order).pack(side=tk.LEFT, padx=(0, 8))
 
-        self.status_label = ttk.Label(ctrl, text="就绪", foreground="gray")
-        self.status_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        # row 1: 状态(左) + 按钮(右)，用子框 bot 再分两列
+        bot = ttk.Frame(ctrl)
+        bot.grid(row=1, column=0, sticky="ew", pady=(4, 0))
+        bot.columnconfigure(0, weight=1)  # 状态列: 吃剩余空间
+        bot.columnconfigure(1, weight=0)  # 按钮列: 固定在最右
 
-        self.compare_btn = ttk.Button(ctrl, text="开始比对", command=self._on_compare, width=12)
-        self.compare_btn.pack(side=tk.RIGHT, padx=(4, 0))
-        self.export_btn = ttk.Button(ctrl, text="导出报告", command=self._on_export, width=12, state=tk.DISABLED)
-        self.export_btn.pack(side=tk.RIGHT, padx=(4, 0))
+        self.status_label = ttk.Label(bot, text="就绪", foreground="gray")
+        self.status_label.grid(row=0, column=0, sticky="w")
+
+        btns = ttk.Frame(bot)
+        btns.grid(row=0, column=1, sticky="e")
+        self.export_btn = ttk.Button(btns, text="导出报告", command=self._on_export, width=12, state=tk.DISABLED)
+        self.export_btn.pack(side=tk.LEFT, padx=(0, 4))
+        self.compare_btn = ttk.Button(btns, text="开始比对", command=self._on_compare, width=12)
+        self.compare_btn.pack(side=tk.LEFT)
 
         # —— 结果列表 ——
         list_frame = ttk.LabelFrame(parent, text="比对结果", padding="6")
@@ -160,10 +187,25 @@ class ComparePanel:
                                    font=("Consolas", 9))
         self.summary_text.pack(fill=tk.X)
 
-    # ====================== 文件夹上传区 ======================
-    def _build_drop_zone(self, parent, col, title, var, side):
-        """构建一个文件夹上传区：浏览按钮 + 可选拖入区。"""
-        outer = ttk.LabelFrame(parent, text=title, padding="6")
+    # ====================== 上传区（文件夹 / 文件） ======================
+    def _zone_title(self, side):
+        """上传区标题随比对模式变化。"""
+        is_file = self.mode.get() == "file"
+        if is_file:
+            head = "基准文件" if side == "a" else "对照文件"
+        else:
+            head = "基准文件夹" if side == "a" else "对照文件夹"
+        return f"{head} ({'A' if side == 'a' else 'B'})"
+
+    def _zone_hint(self):
+        """拖入提示文案随比对模式变化。"""
+        if self.mode.get() == "file":
+            return "\U0001F4C4 把文件拖到这里"
+        return "\U0001F4C1 把文件夹拖到这里"
+
+    def _build_drop_zone(self, parent, col, side):
+        """构建一个上传区（文件夹或文件）：浏览按钮 + 可选拖入区。"""
+        outer = ttk.LabelFrame(parent, text=self._zone_title(side), padding="6")
         outer.grid(row=0, column=col, sticky="nsew", padx=4)
 
         # 路径显示 + 浏览按钮（最可靠的上传入口）
@@ -173,11 +215,12 @@ class ComparePanel:
         # 这样无论路径多长，「浏览」按钮始终可见
         ttk.Button(row1, text="浏览", width=8,
                   command=lambda s=side: self._browse(s)).pack(side=tk.RIGHT, padx=(4, 0))
+        var = self.folder_a if side == "a" else self.folder_b
         entry = ttk.Entry(row1, textvariable=var, state="readonly", width=40)
         entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         # 拖入提示区（纯展示，不覆盖任何窗口过程）
-        hint_text = "\U0001F4C1 把文件夹拖到这里"
+        hint_text = self._zone_hint()
         if _HAS_DND and not self._dnd_initialized:
             # tkinterdnd2 只需初始化一次，对 root 调用
             try:
@@ -211,6 +254,24 @@ class ComparePanel:
             )
             drop.pack(side=tk.TOP, fill=tk.X)
 
+        self._zones[side] = {"frame": outer, "label": drop}
+
+    def _on_mode_change(self):
+        """比对模式切换：同步更新上传区标题/拖入提示、递归复选框与已选路径。"""
+        is_file = self.mode.get() == "file"
+        for side in ("a", "b"):
+            zone = self._zones.get(side)
+            if zone:
+                zone["frame"].config(text=self._zone_title(side))
+                zone["label"].config(text=self._zone_hint())
+            var = self.folder_a if side == "a" else self.folder_b
+            p = var.get()
+            if p and ((is_file and not os.path.isfile(p)) or
+                      (not is_file and not os.path.isdir(p))):
+                var.set("")
+        # 递归子目录仅在文件夹比对模式有意义
+        self.recursive_btn.config(state=tk.NORMAL if not is_file else tk.DISABLED)
+
     def _on_tkdnd_drop(self, side, event):
         """tkinterdnd2 拖入回调。event.data 为空格分隔的路径（带花括号转义）。"""
         raw = event.data
@@ -221,16 +282,30 @@ class ComparePanel:
         if not paths:
             return
         p = paths[0]
+        name = "基准" if side == "a" else "对照"
+        if self.mode.get() == "file":
+            if os.path.isfile(p):
+                self._set_folder(side, p)
+                self.gui._log(f"[结果比对] 拖入{name}文件: {p}")
+            else:
+                messagebox.showinfo("提示", "文件比对模式请拖入单个文件")
+            return
         if os.path.isfile(p):
             p = os.path.dirname(p)
         if os.path.isdir(p):
             self._set_folder(side, p)
-            self.gui._log(f"[结果比对] 拖入{('基准' if side=='a' else '对照')}文件夹: {p}")
+            self.gui._log(f"[结果比对] 拖入{name}文件夹: {p}")
 
     def _browse(self, side):
-        """点击「浏览」按钮，选择文件夹。"""
+        """点击「浏览」按钮，按当前比对模式选择文件或文件夹。"""
         initial = (self.folder_a.get() if side == "a" else self.folder_b.get()) or os.path.expanduser("~")
-        path = filedialog.askdirectory(title="选择文件夹", initialdir=initial)
+        initial = initial if os.path.isdir(initial) else os.path.dirname(initial)
+        if not initial:
+            initial = os.path.expanduser("~")
+        if self.mode.get() == "file":
+            path = filedialog.askopenfilename(title="选择文件", initialdir=initial)
+        else:
+            path = filedialog.askdirectory(title="选择文件夹", initialdir=initial)
         if path:
             self._set_folder(side, path)
 
@@ -246,32 +321,39 @@ class ComparePanel:
             messagebox.showwarning("提示", "正在比对，请稍候")
             return
         fa, fb = self.folder_a.get().strip(), self.folder_b.get().strip()
-        if not fa or not os.path.isdir(fa):
-            messagebox.showwarning("提示", "请先选择/拖入基准文件夹 (A)")
+        is_file = self.mode.get() == "file"
+        if not fa or (not os.path.isfile(fa) if is_file else not os.path.isdir(fa)):
+            messagebox.showwarning("提示", f"请先选择/拖入基准{'文件' if is_file else '文件夹'} (A)")
             return
-        if not fb or not os.path.isdir(fb):
-            messagebox.showwarning("提示", "请先选择/拖入对照文件夹 (B)")
+        if not fb or (not os.path.isfile(fb) if is_file else not os.path.isdir(fb)):
+            messagebox.showwarning("提示", f"请先选择/拖入对照{'文件' if is_file else '文件夹'} (B)")
             return
 
         self.compare_btn.config(state=tk.DISABLED)
         self.export_btn.config(state=tk.DISABLED)
         self.tree.delete(*self.tree.get_children())
         self._set_summary("比对中...")
-        self.gui._log(f"[结果比对] 开始比对\n  基准: {fa}\n  对照: {fb}")
+        kind = "文件" if is_file else "文件夹"
+        self.gui._log(f"[结果比对] 开始比对（{kind}模式）\n  基准: {fa}\n  对照: {fb}")
 
         self._running = True
-        args = (fa, fb, self.recursive.get(), self.ignore_order.get())
+        args = (fa, fb, is_file, self.recursive.get(), self.ignore_order.get())
         threading.Thread(target=self._worker, args=args, daemon=True).start()
 
-    def _worker(self, fa, fb, recursive, ignore_order):
+    def _worker(self, pa, pb, is_file, recursive, ignore_order):
         def progress(done, total, name):
             self.gui.root.after(0, lambda: self.status_label.config(
                 text=f"比对中 {done}/{total}：{name}"))
         try:
-            data = cmp.compare_folders(
-                fa, fb, recursive=recursive, ignore_row_order=ignore_order,
-                progress_cb=progress
-            )
+            if is_file:
+                data = cmp.compare_single_files(
+                    pa, pb, ignore_row_order=ignore_order, progress_cb=progress
+                )
+            else:
+                data = cmp.compare_folders(
+                    pa, pb, recursive=recursive, ignore_row_order=ignore_order,
+                    progress_cb=progress
+                )
         except Exception as e:
             self.gui.root.after(0, self._on_error, e)
             return
