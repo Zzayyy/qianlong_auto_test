@@ -218,6 +218,10 @@ SCRIPTS_CONFIG = {
         {"name": "4.历史风险通知", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\通知查询\历史风险通知"},
         # 以下为中泰证券期权宝专属菜单（钱龙/国泰无此菜单，由 clients.json 的 unsupported 过滤）
         {"name": "5.历史风险通知(风控专用)", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\通知查询\历史风险通知(风控专用)"},
+        # 以下为华宝证券期权宝专属菜单（钱龙/国泰/中泰无此菜单，由 clients.json 的 unsupported 过滤）
+        {"name": "6.行权待交收证券缺口", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\通知查询\行权待交收证券缺口"},
+        {"name": "7.备兑证券缺口查询", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\通知查询\备兑证券缺口查询"},
+        {"name": "8.行权待交收资金缺口", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\通知查询\行权待交收资金缺口"},
     ],
     # 以下为国泰海通专属菜单
     "结算单": [

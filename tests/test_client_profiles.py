@@ -256,9 +256,17 @@ class HuabaoClientProfileTests(unittest.TestCase):
         spec.loader.exec_module(module)
         scripts = module.get_scripts_config("huabao")
 
-        # 结算单/通知查询类目在华宝下应全部被过滤为空
+        # 结算单在华宝下应全部被过滤为空；通知查询保留华宝专属 3 项
+        # （客户账单(结算清单) 输出逻辑与查询驱动不通用，已剔除）
         self.assertEqual(scripts["结算单"], [])
-        self.assertEqual(scripts["通知查询"], [])
+        notify_names = [script["name"] for script in scripts["通知查询"]]
+        self.assertEqual(len(notify_names), 3)
+        for item in ("行权待交收证券缺口", "备兑证券缺口查询", "行权待交收资金缺口"):
+            self.assertTrue(any(item in n for n in notify_names))
+        self.assertFalse(any("客户账单" in n for n in notify_names))
+        # 国泰/中泰的通知查询项（合约变更/风险通知）应被过滤
+        for item in ("合约信息变更", "风险通知"):
+            self.assertFalse(any(item in n for n in notify_names))
 
         # 查询类目保留华宝有的 16 项（与华宝树查询子菜单一一对应）
         query_names = [script["name"] for script in scripts["查询"]]
@@ -325,6 +333,22 @@ class HuabaoClientProfileTests(unittest.TestCase):
                 bare = {n.split(". ", 1)[-1].strip() for n in names}
                 for item in ("备兑股份", "历史损益", "待交收查询", "额度查询", "持仓限制查询"):
                     self.assertNotIn(item, bare)
+
+    def test_huabao_notify_orders_filtered_for_other_clients(self):
+        config_path = PROJECT_ROOT / "GUI自动化工具2" / "config.py"
+        spec = importlib.util.spec_from_file_location(
+            "gui_automation_config_notify_filter_for_test", config_path
+        )
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+        for client in self.clients:
+            if client["id"] == "huabao":
+                continue
+            with self.subTest(client=client["id"]):
+                names = [s["name"] for s in module.get_scripts_config(client["id"]).get("通知查询", [])]
+                for item in ("行权待交收证券缺口", "备兑证券缺口查询", "行权待交收资金缺口"):
+                    self.assertFalse(any(item in n for n in names))
 
     def test_huabao_query_export_flows(self):
         """华宝资金持仓→数据输出弹窗、期权合约→系统级另存为（与其他客户端不同）。"""
