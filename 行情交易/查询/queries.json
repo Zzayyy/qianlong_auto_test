@@ -8,6 +8,9 @@
       },
       "zhongtai": {
         "export_type": null
+      },
+      "huabao": {
+        "export_type": null
       }
     }
   },
@@ -40,6 +43,9 @@
         "export_type": "xls_only"
       },
       "zhongtai": {
+        "export_type": "xls_only"
+      },
+      "huabao": {
         "export_type": "xls_only"
       }
     }
@@ -95,6 +101,21 @@
   "\\查询\\对账单资金资产": {
     "settle_delay": 1.0
   },
+  "\\查询\\备兑股份": {
+    "settle_delay": 1.0
+  },
+  "\\查询\\历史损益": {
+    "settle_delay": 1.0
+  },
+  "\\查询\\待交收查询": {
+    "settle_delay": 1.0
+  },
+  "\\查询\\额度查询": {
+    "settle_delay": 1.0
+  },
+  "\\查询\\持仓限制查询": {
+    "settle_delay": 1.0
+  },
   "\\组合申报\\组合策略持仓查询": {
     "settle_delay": 1.0
   },
@@ -108,6 +129,12 @@
     "settle_delay": 1.0
   },
   "\\组合申报\\历史组合策略持仓查询": {
+    "settle_delay": 1.0
+  },
+  "\\组合申报\\组合当日成交": {
+    "settle_delay": 1.0
+  },
+  "\\组合申报\\组合历史成交": {
     "settle_delay": 1.0
   },
   "\\结算单\\历史交收明细": {

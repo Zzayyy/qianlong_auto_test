@@ -1,0 +1,621 @@
+Control Identifiers:
+
+Dialog - '华宝证券期权宝(仿真行情) 　　当前账号 | 期权：姜娜娜(010000040350)'    (L322, T61, R1678, B940)
+['Dialog', '华宝证券期权宝(仿真行情) \u3000\u3000当前账号 | 期权：姜娜娜(010000040350)', '华宝证券期权宝(仿真行情) \u3000\u3000当前账号 | 期权：姜娜娜(010000040350)Dialog']
+child_window(title="华宝证券期权宝(仿真行情) 　　当前账号 | 期权：姜娜娜(010000040350)", control_type="Window")
+   | 
+   | Pane - ''    (L331, T93, R1669, B931)
+   | ['Pane', '平备兑<=0Pane', 'Pane0', 'Pane1', '平备兑<=0Pane0', '平备兑<=0Pane1']
+   | child_window(auto_id="59648", control_type="Pane")
+   |    | 
+   |    | Button - ''    (L337, T98, R418, B119)
+   |    | ['Button', 'Button0', 'Button1']
+   |    | child_window(auto_id="1001", control_type="Button")
+   |    | 
+   |    | Button - ''    (L423, T98, R504, B119)
+   |    | ['Button2']
+   |    | child_window(auto_id="1002", control_type="Button")
+   |    | 
+   |    | Button - ''    (L509, T98, R590, B119)
+   |    | ['Button3']
+   |    | child_window(auto_id="1023", control_type="Button")
+   |    | 
+   |    | Button - ''    (L595, T98, R676, B119)
+   |    | ['Button4']
+   |    | child_window(auto_id="1019", control_type="Button")
+   |    | 
+   |    | Button - ''    (L681, T98, R762, B119)
+   |    | ['Button5']
+   |    | child_window(auto_id="1022", control_type="Button")
+   |    | 
+   |    | Button - ''    (L767, T98, R848, B119)
+   |    | ['Button6']
+   |    | child_window(auto_id="1021", control_type="Button")
+   |    | 
+   |    | Button - ''    (L853, T98, R934, B119)
+   |    | ['Button7']
+   |    | child_window(auto_id="1031", control_type="Button")
+   |    | 
+   |    | Button - ''    (L939, T98, R1020, B119)
+   |    | ['Button8']
+   |    | child_window(auto_id="1032", control_type="Button")
+   |    | 
+   |    | Button - ''    (L1025, T98, R1106, B119)
+   |    | ['Button9']
+   |    | child_window(auto_id="1030", control_type="Button")
+   |    | 
+   |    | Button - ''    (L1111, T98, R1192, B119)
+   |    | ['Button10']
+   |    | child_window(auto_id="1033", control_type="Button")
+   |    | 
+   |    | Button - ''    (L1197, T98, R1278, B119)
+   |    | ['Button11']
+   |    | child_window(auto_id="1036", control_type="Button")
+   |    | 
+   |    | Button - ''    (L1283, T98, R1364, B119)
+   |    | ['Button12']
+   |    | child_window(auto_id="1037", control_type="Button")
+   |    | 
+   |    | Button - ''    (L1369, T99, R1428, B120)
+   |    | ['Button13']
+   |    | child_window(auto_id="1016", control_type="Button")
+   |    | 
+   |    | Edit - ''    (L1433, T100, R1597, B117)
+   |    | ['Edit', 'Edit0', 'Edit1']
+   |    | child_window(auto_id="1000", control_type="Edit")
+   |    | 
+   |    | Button - ''    (L1635, T95, R1663, B123)
+   |    | ['Button14']
+   |    | child_window(auto_id="1008", control_type="Button")
+   |    | 
+   |    | Button - ''    (L1605, T95, R1633, B123)
+   |    | ['Button15']
+   |    | child_window(auto_id="1026", control_type="Button")
+   |    | 
+   |    | Pane - ''    (L332, T283, R1668, B902)
+   |    | ['Pane2', '平备兑<=0Pane2']
+   |    | child_window(auto_id="8976104", control_type="Pane")
+   |    |    | 
+   |    |    | Button - '刷新'    (L727, T285, R776, B305)
+   |    |    | ['Button16', '刷新Button', '刷新', '刷新Button0', '刷新Button1', '刷新0', '刷新1']
+   |    |    | child_window(title="刷新", auto_id="3005", control_type="Button")
+   |    |    | 
+   |    |    | Button - '成交'    (L679, T285, R728, B305)
+   |    |    | ['Button17', '成交', '成交Button']
+   |    |    | child_window(title="成交", auto_id="3004", control_type="Button")
+   |    |    | 
+   |    |    | Button - '持仓'    (L631, T285, R680, B305)
+   |    |    | ['Button18', '持仓', '持仓Button']
+   |    |    | child_window(title="持仓", auto_id="3003", control_type="Button")
+   |    |    | 
+   |    |    | Button - '撤单'    (L583, T285, R632, B305)
+   |    |    | ['Button19', '撤单Button', '撤单', '撤单0', '撤单1']
+   |    |    | child_window(title="撤单", auto_id="3002", control_type="Button")
+   |    |    | 
+   |    |    | Button - '下单'    (L536, T285, R584, B305)
+   |    |    | ['Button20', '下单', '下单Button']
+   |    |    | child_window(title="下单", auto_id="3001", control_type="Button")
+   |    |    | 
+   |    |    | Button - '_'    (L1600, T286, R1620, B306)
+   |    |    | ['Button21', '_', '_Button']
+   |    |    | child_window(title="_", auto_id="1175", control_type="Button")
+   |    |    | 
+   |    |    | Button - '□'    (L1622, T286, R1642, B306)
+   |    |    | ['Button22', '□', '□Button']
+   |    |    | child_window(title="□", auto_id="1177", control_type="Button")
+   |    |    | 
+   |    |    | Button - '×'    (L1644, T286, R1664, B306)
+   |    |    | ['Button23', '×', '×Button']
+   |    |    | child_window(title="×", auto_id="1179", control_type="Button")
+   |    |    | 
+   |    |    | ComboBox - ''    (L334, T283, R532, B307)
+   |    |    | ['ComboBox项目必知.txt - 记事本', 'ComboBox任务栏', 'ComboBox6.GUI模块化 - 获取组件.py - CodeBuddy CN [管理员]', 'ComboBoxNVIDIA GeForce Overlay', 'ComboBox国泰海通证券期权宝(仿真行情) \u3000\u3000当前账号 | 期权：章绍龙1(130375)', 'ComboBoxCode', 'ComboBoxZzayyy - Google Chrome', 'ComboBoxv2rayN - V7.22.5 - X64 - 以管理员身份运行', 'ComboBox微信', 'ComboBox2026-08', 'ComboBox', 'ComboBoxProgram Manager', 'ComboBox华宝证券期权宝(仿真行情) \u3000\u3000当前账号 | 期权：姜娜娜(010000040350)', 'ComboBox项目必知.txt - 记事本0', 'ComboBox项目必知.txt - 记事本1', 'ComboBox任务栏0', 'ComboBox任务栏1', 'ComboBox6.GUI模块化 - 获取组件.py - CodeBuddy CN [管理员]0', 'ComboBox6.GUI模块化 - 获取组件.py - CodeBuddy CN [管理员]1', 'ComboBoxNVIDIA GeForce Overlay0', 'ComboBoxNVIDIA GeForce Overlay1', 'ComboBox国泰海通证券期权宝(仿真行情) \u3000\u3000当前账号 | 期权：章绍龙1(130375)0', 'ComboBox国泰海通证券期权宝(仿真行情) \u3000\u3000当前账号 | 期权：章绍龙1(130375)1', 'ComboBoxCode0', 'ComboBoxCode1', 'ComboBoxZzayyy - Google Chrome0', 'ComboBoxZzayyy - Google Chrome1', 'ComboBoxv2rayN - V7.22.5 - X64 - 以管理员身份运行0', 'ComboBoxv2rayN - V7.22.5 - X64 - 以管理员身份运行1', 'ComboBox微信0', 'ComboBox微信1', 'ComboBox2026-080', 'ComboBox2026-081', 'ComboBox0', 'ComboBox1', 'ComboBoxProgram Manager0', 'ComboBoxProgram Manager1', 'ComboBox华宝证券期权宝(仿真行情) \u3000\u3000当前账号 | 期权：姜娜娜(010000040350)0', 'ComboBox华宝证券期权宝(仿真行情) \u3000\u3000当前账号 | 期权：姜娜娜(010000040350)1']
+   |    |    | child_window(auto_id="1126", control_type="ComboBox")
+   |    |    |    | 
+   |    |    |    | Static - ''    (L3, T3, R178, B21)
+   |    |    |    | ['Static', 'Static0', 'Static1']
+   |    |    |    | 
+   |    |    |    | Button - '打开'    (L513, T285, R530, B305)
+   |    |    |    | ['Button24', '打开Button', '打开', '打开Button0', '打开Button1', '打开0', '打开1']
+   |    |    |    | child_window(title="打开", auto_id="DropDown", control_type="Button")
+   |    |    | 
+   |    |    | Button - '账号管理'    (L1490, T286, R1549, B306)
+   |    |    | ['Button25', '账号管理', '账号管理Button']
+   |    |    | child_window(title="账号管理", auto_id="10001", control_type="Button")
+   |    |    | 
+   |    |    | Button - '锁屏'    (L1551, T286, R1598, B306)
+   |    |    | ['Button26', '锁屏', '锁屏Button']
+   |    |    | child_window(title="锁屏", auto_id="1160", control_type="Button")
+   |    |    | 
+   |    |    | Image - ''    (L332, T307, R1666, B309)
+   |    |    | ['Image', '更多Image']
+   |    |    | child_window(auto_id="10000", control_type="Image")
+   |    |    | 
+   |    |    | Static - ''    (L830, T285, R1328, B306)
+   |    |    | ['Static2']
+   |    |    | child_window(auto_id="13999", control_type="Text")
+   |    |    | 
+   |    |    | Static - '更多'    (L1328, T283, R1358, B306)
+   |    |    | ['Static3', '更多', '更多Static']
+   |    |    | child_window(title="更多", auto_id="14000", control_type="Text")
+   |    |    | 
+   |    |    | Button - '批量平仓'    (L1429, T286, R1488, B306)
+   |    |    | ['Button27', '批量平仓', '批量平仓Button']
+   |    |    | child_window(title="批量平仓", auto_id="14002", control_type="Button")
+   |    |    | 
+   |    |    | Button - '功能菜单'    (L336, T874, R532, B898)
+   |    |    | ['Button28', '功能菜单', '功能菜单Button']
+   |    |    | child_window(title="功能菜单", auto_id="2305", control_type="Button")
+   |    |    | 
+   |    |    | TreeView - ''    (L337, T312, R531, B874)
+   |    |    | ['TreeView']
+   |    |    | child_window(auto_id="1223", control_type="Tree")
+   |    |    |    | 
+   |    |    |    | ScrollBar - '垂直滚动条'    (L514, T312, R531, B874)
+   |    |    |    | ['垂直滚动条ScrollBar', 'ScrollBar', '垂直滚动条']
+   |    |    |    | child_window(title="垂直滚动条", auto_id="NonClientVerticalScrollBar", control_type="ScrollBar")
+   |    |    |    |    | 
+   |    |    |    |    | Button - '上一行'    (L514, T312, R531, B329)
+   |    |    |    |    | ['Button29', '上一行Button', '上一行']
+   |    |    |    |    | child_window(title="上一行", auto_id="UpButton", control_type="Button")
+   |    |    |    |    | 
+   |    |    |    |    | Thumb - '位置'    (L514, T329, R531, B684)
+   |    |    |    |    | ['Thumb', '位置', '位置Thumb']
+   |    |    |    |    | child_window(title="位置", auto_id="ScrollbarThumb", control_type="Thumb")
+   |    |    |    |    | 
+   |    |    |    |    | Button - '向下翻页'    (L514, T684, R531, B857)
+   |    |    |    |    | ['Button30', '向下翻页Button', '向下翻页']
+   |    |    |    |    | child_window(title="向下翻页", auto_id="DownPageButton", control_type="Button")
+   |    |    |    |    | 
+   |    |    |    |    | Button - '下一行'    (L514, T857, R531, B874)
+   |    |    |    |    | ['Button31', '下一行', '下一行Button']
+   |    |    |    |    | child_window(title="下一行", auto_id="DownButton", control_type="Button")
+   |    |    |    | 
+   |    |    |    | TreeItem - '期权下单'    (L375, T312, R427, B328)
+   |    |    |    | ['期权下单TreeItem', '期权下单', 'TreeItem', 'TreeItem0', 'TreeItem1']
+   |    |    |    | child_window(title="期权下单", control_type="TreeItem")
+   |    |    |    | 
+   |    |    |    | TreeItem - '三键下单'    (L375, T328, R427, B344)
+   |    |    |    | ['三键下单', 'TreeItem2', '三键下单TreeItem']
+   |    |    |    | child_window(title="三键下单", control_type="TreeItem")
+   |    |    |    | 
+   |    |    |    | TreeItem - '四键下单'    (L375, T344, R427, B360)
+   |    |    |    | ['四键下单', 'TreeItem3', '四键下单TreeItem']
+   |    |    |    | child_window(title="四键下单", control_type="TreeItem")
+   |    |    |    | 
+   |    |    |    | TreeItem - '键盘下单'    (L375, T360, R427, B376)
+   |    |    |    | ['键盘下单', '键盘下单TreeItem', 'TreeItem4']
+   |    |    |    | child_window(title="键盘下单", control_type="TreeItem")
+   |    |    |    | 
+   |    |    |    | TreeItem - '止盈止损'    (L375, T376, R427, B392)
+   |    |    |    | ['止盈止损', 'TreeItem5', '止盈止损TreeItem']
+   |    |    |    | child_window(title="止盈止损", control_type="TreeItem")
+   |    |    |    | 
+   |    |    |    | TreeItem - '快速下单'    (L375, T392, R427, B408)
+   |    |    |    | ['快速下单', 'TreeItem6', '快速下单TreeItem']
+   |    |    |    | child_window(title="快速下单", control_type="TreeItem")
+   |    |    |    | 
+   |    |    |    | TreeItem - '买入开仓'    (L375, T408, R427, B424)
+   |    |    |    | ['买入开仓', 'TreeItem7', '买入开仓TreeItem']
+   |    |    |    | child_window(title="买入开仓", control_type="TreeItem")
+   |    |    |    | 
+   |    |    |    | TreeItem - '卖出开仓'    (L375, T424, R427, B440)
+   |    |    |    | ['卖出开仓', 'TreeItem8', '卖出开仓TreeItem']
+   |    |    |    | child_window(title="卖出开仓", control_type="TreeItem")
+   |    |    |    | 
+   |    |    |    | TreeItem - '买入平仓'    (L375, T440, R427, B456)
+   |    |    |    | ['买入平仓TreeItem', 'TreeItem9', '买入平仓']
+   |    |    |    | child_window(title="买入平仓", control_type="TreeItem")
+   |    |    |    | 
+   |    |    |    | TreeItem - '卖出平仓'    (L375, T456, R427, B472)
+   |    |    |    | ['卖出平仓', 'TreeItem10', '卖出平仓TreeItem']
+   |    |    |    | child_window(title="卖出平仓", control_type="TreeItem")
+   |    |    |    | 
+   |    |    |    | TreeItem - '备兑开仓'    (L375, T472, R427, B488)
+   |    |    |    | ['备兑开仓', '备兑开仓TreeItem', 'TreeItem11']
+   |    |    |    | child_window(title="备兑开仓", control_type="TreeItem")
+   |    |    |    | 
+   |    |    |    | TreeItem - '备兑平仓'    (L375, T488, R427, B504)
+   |    |    |    | ['备兑平仓TreeItem', '备兑平仓', 'TreeItem12']
+   |    |    |    | child_window(title="备兑平仓", control_type="TreeItem")
+   |    |    |    | 
+   |    |    |    | TreeItem - '证券锁定'    (L375, T504, R427, B520)
+   |    |    |    | ['证券锁定', 'TreeItem13', '证券锁定TreeItem']
+   |    |    |    | child_window(title="证券锁定", control_type="TreeItem")
+   |    |    |    | 
+   |    |    |    | TreeItem - '证券解锁'    (L375, T520, R427, B536)
+   |    |    |    | ['证券解锁TreeItem', '证券解锁', 'TreeItem14']
+   |    |    |    | child_window(title="证券解锁", control_type="TreeItem")
+   |    |    |    | 
+   |    |    |    | TreeItem - '行权'    (L375, T536, R403, B552)
+   |    |    |    | ['行权', 'TreeItem15', '行权TreeItem']
+   |    |    |    | child_window(title="行权", control_type="TreeItem")
+   |    |    |    | 
+   |    |    |    | TreeItem - '合并行权'    (L375, T552, R427, B568)
+   |    |    |    | ['合并行权TreeItem', '合并行权', 'TreeItem16']
+   |    |    |    | child_window(title="合并行权", control_type="TreeItem")
+   |    |    |    | 
+   |    |    |    | TreeItem - '协议行权'    (L375, T568, R427, B584)
+   |    |    |    | ['协议行权', 'TreeItem17', '协议行权TreeItem']
+   |    |    |    | child_window(title="协议行权", control_type="TreeItem")
+   |    |    |    | 
+   |    |    |    | TreeItem - '撤单'    (L375, T584, R403, B600)
+   |    |    |    | ['撤单TreeItem', 'TreeItem18', '撤单2']
+   |    |    |    | child_window(title="撤单", control_type="TreeItem")
+   |    |    |    | 
+   |    |    |    | TreeItem - '组合申报'    (L375, T600, R427, B616)
+   |    |    |    | ['组合申报TreeItem', '组合申报', 'TreeItem19', '组合申报TreeItem0', '组合申报TreeItem1', '组合申报0', '组合申报1']
+   |    |    |    | child_window(title="组合申报", control_type="TreeItem")
+   |    |    |    |    | 
+   |    |    |    |    | TreeItem - '组合申报'    (L394, T616, R446, B632)
+   |    |    |    |    | ['组合申报TreeItem2', '组合申报2', 'TreeItem20']
+   |    |    |    |    | child_window(title="组合申报", control_type="TreeItem")
+   |    |    |    |    | 
+   |    |    |    |    | TreeItem - '拆分申报'    (L394, T632, R446, B648)
+   |    |    |    |    | ['TreeItem21', '拆分申报', '拆分申报TreeItem']
+   |    |    |    |    | child_window(title="拆分申报", control_type="TreeItem")
+   |    |    |    |    | 
+   |    |    |    |    | TreeItem - '组合策略持仓'    (L394, T648, R470, B664)
+   |    |    |    |    | ['组合策略持仓TreeItem', '组合策略持仓', 'TreeItem22']
+   |    |    |    |    | child_window(title="组合策略持仓", control_type="TreeItem")
+   |    |    |    |    | 
+   |    |    |    |    | TreeItem - '组合策略信息'    (L394, T664, R470, B680)
+   |    |    |    |    | ['组合策略信息', 'TreeItem23', '组合策略信息TreeItem']
+   |    |    |    |    | child_window(title="组合策略信息", control_type="TreeItem")
+   |    |    |    |    | 
+   |    |    |    |    | TreeItem - '组合当日委托'    (L394, T680, R470, B696)
+   |    |    |    |    | ['组合当日委托', '组合当日委托TreeItem', 'TreeItem24']
+   |    |    |    |    | child_window(title="组合当日委托", control_type="TreeItem")
+   |    |    |    |    | 
+   |    |    |    |    | TreeItem - '组合当日成交'    (L394, T696, R470, B712)
+   |    |    |    |    | ['组合当日成交', '组合当日成交TreeItem', 'TreeItem25']
+   |    |    |    |    | child_window(title="组合当日成交", control_type="TreeItem")
+   |    |    |    |    | 
+   |    |    |    |    | TreeItem - '组合历史委托'    (L394, T712, R470, B728)
+   |    |    |    |    | ['组合历史委托TreeItem', '组合历史委托', 'TreeItem26']
+   |    |    |    |    | child_window(title="组合历史委托", control_type="TreeItem")
+   |    |    |    |    | 
+   |    |    |    |    | TreeItem - '组合历史成交'    (L394, T728, R470, B744)
+   |    |    |    |    | ['组合历史成交TreeItem', 'TreeItem27', '组合历史成交']
+   |    |    |    |    | child_window(title="组合历史成交", control_type="TreeItem")
+   |    |    |    | 
+   |    |    |    | TreeItem - '查询'    (L375, T744, R403, B760)
+   |    |    |    | ['查询TreeItem', '查询', 'TreeItem28']
+   |    |    |    | child_window(title="查询", control_type="TreeItem")
+   |    |    |    |    | 
+   |    |    |    |    | TreeItem - '资金持仓'    (L394, T760, R446, B776)
+   |    |    |    |    | ['资金持仓', 'TreeItem29', '资金持仓TreeItem']
+   |    |    |    |    | child_window(title="资金持仓", control_type="TreeItem")
+   |    |    |    |    | 
+   |    |    |    |    | TreeItem - '备兑股份'    (L394, T776, R446, B792)
+   |    |    |    |    | ['备兑股份TreeItem', '备兑股份', 'TreeItem30']
+   |    |    |    |    | child_window(title="备兑股份", control_type="TreeItem")
+   |    |    |    |    | 
+   |    |    |    |    | TreeItem - '策略持仓'    (L394, T792, R446, B808)
+   |    |    |    |    | ['TreeItem31', '策略持仓', '策略持仓TreeItem']
+   |    |    |    |    | child_window(title="策略持仓", control_type="TreeItem")
+   |    |    |    |    | 
+   |    |    |    |    | TreeItem - '策略委托'    (L394, T808, R446, B824)
+   |    |    |    |    | ['策略委托TreeItem', 'TreeItem32', '策略委托']
+   |    |    |    |    | child_window(title="策略委托", control_type="TreeItem")
+   |    |    |    |    | 
+   |    |    |    |    | TreeItem - '历史策略持仓'    (L394, T824, R470, B840)
+   |    |    |    |    | ['历史策略持仓', 'TreeItem33', '历史策略持仓TreeItem']
+   |    |    |    |    | child_window(title="历史策略持仓", control_type="TreeItem")
+   |    |    |    |    | 
+   |    |    |    |    | TreeItem - '当日委托'    (L394, T840, R446, B856)
+   |    |    |    |    | ['当日委托TreeItem', 'TreeItem34', '当日委托']
+   |    |    |    |    | child_window(title="当日委托", control_type="TreeItem")
+   |    |    |    |    | 
+   |    |    |    |    | TreeItem - '当日成交'    (L394, T856, R446, B872)
+   |    |    |    |    | ['TreeItem35', '当日成交TreeItem', '当日成交']
+   |    |    |    |    | child_window(title="当日成交", control_type="TreeItem")
+   |    |    |    |    | 
+   |    |    |    |    | TreeItem - '历史委托'    (L394, T872, R446, B874)
+   |    |    |    |    | ['历史委托', '历史委托TreeItem', 'TreeItem36']
+   |    |    |    |    | child_window(title="历史委托", control_type="TreeItem")
+   |    |    |    |    | 
+   |    |    |    |    | TreeItem - '历史成交'    (L0, T0, R0, B0)
+   |    |    |    |    | ['历史成交TreeItem', 'TreeItem37', '历史成交']
+   |    |    |    |    | child_window(title="历史成交", control_type="TreeItem")
+   |    |    |    |    | 
+   |    |    |    |    | TreeItem - '历史损益'    (L0, T0, R0, B0)
+   |    |    |    |    | ['历史损益', '历史损益TreeItem', 'TreeItem38']
+   |    |    |    |    | child_window(title="历史损益", control_type="TreeItem")
+   |    |    |    |    | 
+   |    |    |    |    | TreeItem - '资金查询'    (L0, T0, R0, B0)
+   |    |    |    |    | ['资金查询TreeItem', '资金查询', 'TreeItem39']
+   |    |    |    |    | child_window(title="资金查询", control_type="TreeItem")
+   |    |    |    |    | 
+   |    |    |    |    | TreeItem - '期权合约'    (L0, T0, R0, B0)
+   |    |    |    |    | ['期权合约TreeItem', '期权合约', 'TreeItem40']
+   |    |    |    |    | child_window(title="期权合约", control_type="TreeItem")
+   |    |    |    |    | 
+   |    |    |    |    | TreeItem - '待交收查询'    (L0, T0, R0, B0)
+   |    |    |    |    | ['待交收查询', '待交收查询TreeItem', 'TreeItem41']
+   |    |    |    |    | child_window(title="待交收查询", control_type="TreeItem")
+   |    |    |    |    | 
+   |    |    |    |    | TreeItem - '额度查询'    (L0, T0, R0, B0)
+   |    |    |    |    | ['额度查询', 'TreeItem42', '额度查询TreeItem']
+   |    |    |    |    | child_window(title="额度查询", control_type="TreeItem")
+   |    |    |    |    | 
+   |    |    |    |    | TreeItem - '持仓限制查询'    (L0, T0, R0, B0)
+   |    |    |    |    | ['持仓限制查询', 'TreeItem43', '持仓限制查询TreeItem']
+   |    |    |    |    | child_window(title="持仓限制查询", control_type="TreeItem")
+   |    |    |    |    | 
+   |    |    |    |    | TreeItem - '账号查询'    (L0, T0, R0, B0)
+   |    |    |    |    | ['账号查询TreeItem', '账号查询', 'TreeItem44']
+   |    |    |    |    | child_window(title="账号查询", control_type="TreeItem")
+   |    |    |    | 
+   |    |    |    | TreeItem - '通知查询'    (L0, T0, R0, B0)
+   |    |    |    | ['通知查询', '通知查询TreeItem', 'TreeItem45']
+   |    |    |    | child_window(title="通知查询", control_type="TreeItem")
+   |    |    |    |    | 
+   |    |    |    |    | TreeItem - '行权待交收证券缺口'    (L0, T0, R0, B0)
+   |    |    |    |    | ['行权待交收证券缺口TreeItem', '行权待交收证券缺口', 'TreeItem46']
+   |    |    |    |    | child_window(title="行权待交收证券缺口", control_type="TreeItem")
+   |    |    |    |    | 
+   |    |    |    |    | TreeItem - '备兑证券缺口查询'    (L0, T0, R0, B0)
+   |    |    |    |    | ['备兑证券缺口查询', 'TreeItem47', '备兑证券缺口查询TreeItem']
+   |    |    |    |    | child_window(title="备兑证券缺口查询", control_type="TreeItem")
+   |    |    |    |    | 
+   |    |    |    |    | TreeItem - '行权待交收资金缺口'    (L0, T0, R0, B0)
+   |    |    |    |    | ['行权待交收资金缺口', '行权待交收资金缺口TreeItem', 'TreeItem48']
+   |    |    |    |    | child_window(title="行权待交收资金缺口", control_type="TreeItem")
+   |    |    |    |    | 
+   |    |    |    |    | TreeItem - '客户账单(结算清单)'    (L0, T0, R0, B0)
+   |    |    |    |    | ['客户账单(结算清单)TreeItem', '客户账单(结算清单)', 'TreeItem49']
+   |    |    |    |    | child_window(title="客户账单(结算清单)", control_type="TreeItem")
+   |    |    |    | 
+   |    |    |    | TreeItem - '银衍转账'    (L0, T0, R0, B0)
+   |    |    |    | ['TreeItem50', '银衍转账', '银衍转账TreeItem']
+   |    |    |    | child_window(title="银衍转账", control_type="TreeItem")
+   |    |    |    | 
+   |    |    |    | TreeItem - '修改密码'    (L0, T0, R0, B0)
+   |    |    |    | ['修改密码TreeItem', 'TreeItem51', '修改密码']
+   |    |    |    | child_window(title="修改密码", control_type="TreeItem")
+   |    |    |    | 
+   |    |    |    | TreeItem - '信息回显'    (L0, T0, R0, B0)
+   |    |    |    | ['信息回显TreeItem', 'TreeItem52', '信息回显']
+   |    |    |    | child_window(title="信息回显", control_type="TreeItem")
+   |    |    | 
+   |    |    | Edit - ''    (L610, T312, R729, B330)
+   |    |    | ['Edit2']
+   |    |    | child_window(auto_id="18005", control_type="Edit")
+   |    |    | 
+   |    |    | Static - ''    (L555, T315, R603, B327)
+   |    |    | ['Static4']
+   |    |    | child_window(auto_id="5001", control_type="Text")
+   |    |    | 
+   |    |    | Button - '选'    (L735, T312, R750, B330)
+   |    |    | ['Button32', '选', '选Button']
+   |    |    | child_window(title="选", auto_id="2386", control_type="Button")
+   |    |    | 
+   |    |    | Static - ''    (L610, T333, R798, B351)
+   |    |    | ['Static5']
+   |    |    | child_window(auto_id="18000", control_type="Text")
+   |    |    | 
+   |    |    | Static - ''    (L555, T339, R603, B351)
+   |    |    | ['Static6']
+   |    |    | child_window(auto_id="5002", control_type="Text")
+   |    |    | 
+   |    |    | CheckBox - '备兑'    (L754, T354, R799, B374)
+   |    |    | ['CheckBox', '备兑CheckBox', '备兑', 'CheckBox0', 'CheckBox1']
+   |    |    | child_window(title="备兑", auto_id="5025", control_type="CheckBox")
+   |    |    | 
+   |    |    | Edit - ''    (L609, T381, R728, B401)
+   |    |    | ['Edit3']
+   |    |    | child_window(auto_id="306", control_type="Edit")
+   |    |    | 
+   |    |    | UpDown - 'Spin2'    (L732, T381, R749, B399)
+   |    |    | ['UpDown', 'Spin2', 'Spin2UpDown', 'UpDown0', 'UpDown1', 'Spin20', 'Spin21', 'Spin2UpDown0', 'Spin2UpDown1']
+   |    |    | child_window(title="Spin2", auto_id="308", control_type="Spinner")
+   |    |    |    | 
+   |    |    |    | Button - '多'    (L732, T381, R749, B390)
+   |    |    |    | ['Button33', '多', '多Button', '多0', '多1', '多Button0', '多Button1']
+   |    |    |    | child_window(title="多", auto_id="MoreButton", control_type="Button")
+   |    |    |    | 
+   |    |    |    | Button - '少'    (L732, T390, R749, B399)
+   |    |    |    | ['Button34', '少Button', '少', '少Button0', '少Button1', '少0', '少1']
+   |    |    |    | child_window(title="少", auto_id="LessButton", control_type="Button")
+   |    |    | 
+   |    |    | Static - ''    (L555, T384, R603, B396)
+   |    |    | ['Static7']
+   |    |    | child_window(auto_id="5010", control_type="Text")
+   |    |    | 
+   |    |    | Static - ''    (L555, T360, R603, B372)
+   |    |    | ['Static8']
+   |    |    | child_window(auto_id="6025", control_type="Text")
+   |    |    | 
+   |    |    | Button - '卖空'    (L645, T429, R711, B482)
+   |    |    | ['Button35', '卖空', '卖空Button']
+   |    |    | child_window(title="卖空", auto_id="18065", control_type="Button")
+   |    |    | 
+   |    |    | CheckBox - 'FOK'    (L754, T393, R799, B411)
+   |    |    | ['FOKCheckBox', 'CheckBox2', 'FOK']
+   |    |    | child_window(title="FOK", auto_id="5027", control_type="CheckBox")
+   |    |    | 
+   |    |    | CheckBox - '自动'    (L754, T375, R799, B393)
+   |    |    | ['自动', 'CheckBox3', '自动CheckBox']
+   |    |    | child_window(title="自动", auto_id="5028", control_type="CheckBox")
+   |    |    | 
+   |    |    | Static - ''    (L556, T487, R622, B499)
+   |    |    | ['Static9']
+   |    |    | child_window(auto_id="18068", control_type="Text")
+   |    |    | 
+   |    |    | Static - ''    (L649, T487, R715, B499)
+   |    |    | ['Static10']
+   |    |    | child_window(auto_id="18069", control_type="Text")
+   |    |    | 
+   |    |    | Button - '盈损开仓'    (L556, T505, R622, B529)
+   |    |    | ['Button36', '盈损开仓Button', '盈损开仓']
+   |    |    | child_window(title="盈损开仓", auto_id="18067", control_type="Button")
+   |    |    | 
+   |    |    | Button - '重置'    (L637, T505, R703, B529)
+   |    |    | ['Button37', '重置', '重置Button']
+   |    |    | child_window(title="重置", auto_id="1153", control_type="Button")
+   |    |    | 
+   |    |    | Button - '平仓'    (L730, T429, R796, B482)
+   |    |    | ['Button38', '平仓Button', '平仓']
+   |    |    | child_window(title="平仓", auto_id="18070", control_type="Button")
+   |    |    | 
+   |    |    | Button - '买多'    (L553, T429, R619, B482)
+   |    |    | ['Button39', '买多Button', '买多']
+   |    |    | child_window(title="买多", auto_id="18066", control_type="Button")
+   |    |    | 
+   |    |    | Button - '锁定'    (L754, T312, R798, B330)
+   |    |    | ['Button40', '锁定Button', '锁定']
+   |    |    | child_window(title="锁定", auto_id="1154", control_type="Button")
+   |    |    | 
+   |    |    | Edit - ''    (L609, T357, R728, B377)
+   |    |    | ['Edit4']
+   |    |    | child_window(auto_id="18083", control_type="Edit")
+   |    |    | 
+   |    |    | UpDown - 'Spin2'    (L732, T357, R749, B375)
+   |    |    | ['UpDown2', 'Spin22', 'Spin2UpDown2']
+   |    |    | child_window(title="Spin2", auto_id="307", control_type="Spinner")
+   |    |    |    | 
+   |    |    |    | Button - '多'    (L732, T357, R749, B366)
+   |    |    |    | ['Button41', '多2', '多Button2']
+   |    |    |    | child_window(title="多", auto_id="MoreButton", control_type="Button")
+   |    |    |    | 
+   |    |    |    | Button - '少'    (L732, T366, R749, B375)
+   |    |    |    | ['Button42', '少Button2', '少2']
+   |    |    |    | child_window(title="少", auto_id="LessButton", control_type="Button")
+   |    |    | 
+   |    |    | Static - ''    (L735, T501, R813, B513)
+   |    |    | ['Static11']
+   |    |    | child_window(auto_id="18072", control_type="Text")
+   |    |    | 
+   |    |    | Static - ''    (L735, T487, R813, B499)
+   |    |    | ['Static12']
+   |    |    | child_window(auto_id="18073", control_type="Text")
+   |    |    | 
+   |    |    | Static - '平备兑<=0'    (L736, T514, R814, B526)
+   |    |    | ['Static13', '平备兑<=0Static', '平备兑<=0']
+   |    |    | child_window(title="平备兑<=0", auto_id="18074", control_type="Text")
+   |    |    | 
+   |    |    | Button - ''    (L822, T313, R987, B491)
+   |    |    | ['Button43']
+   |    |    | child_window(auto_id="1199", control_type="Button")
+   |    |    | 
+   |    |    | Button - '全撤'    (L1426, T310, R1486, B330)
+   |    |    | ['Button44', '全撤', '全撤Button']
+   |    |    | child_window(title="全撤", auto_id="1170", control_type="Button")
+   |    |    | 
+   |    |    | Button - ''    (L1016, T617, R1668, B902)
+   |    |    | ['Button45', '平备兑<=0Button', '平备兑<=0Button0', '平备兑<=0Button1']
+   |    |    | child_window(auto_id="3001", control_type="Button")
+   |    |    | 
+   |    |    | Button - ''    (L992, T331, R1014, B616)
+   |    |    | ['Button46', '平备兑<=0Button2']
+   |    |    | child_window(auto_id="10001", control_type="Button")
+   |    |    | 
+   |    |    | Button - ''    (L992, T617, R1014, B902)
+   |    |    | ['Button47', '平备兑<=0Button3']
+   |    |    | child_window(auto_id="10002", control_type="Button")
+   |    |    | 
+   |    |    | Button - '平33%'    (L992, T310, R1052, B330)
+   |    |    | ['Button48', '平33%Button', '平33%']
+   |    |    | child_window(title="平33%", auto_id="9039", control_type="Button")
+   |    |    | 
+   |    |    | Button - '平50%'    (L1054, T310, R1114, B330)
+   |    |    | ['Button49', '平50%', '平50%Button']
+   |    |    | child_window(title="平50%", auto_id="9040", control_type="Button")
+   |    |    | 
+   |    |    | Button - '平100%'    (L1116, T310, R1176, B330)
+   |    |    | ['Button50', '平100%Button', '平100%']
+   |    |    | child_window(title="平100%", auto_id="9041", control_type="Button")
+   |    |    | 
+   |    |    | Button - '反手'    (L1178, T310, R1238, B330)
+   |    |    | ['Button51', '反手Button', '反手']
+   |    |    | child_window(title="反手", auto_id="9042", control_type="Button")
+   |    |    | 
+   |    |    | Button - '止盈单'    (L1240, T310, R1300, B330)
+   |    |    | ['Button52', '止盈单', '止盈单Button']
+   |    |    | child_window(title="止盈单", auto_id="9043", control_type="Button")
+   |    |    | 
+   |    |    | Button - '止损单'    (L1302, T310, R1362, B330)
+   |    |    | ['Button53', '止损单', '止损单Button']
+   |    |    | child_window(title="止损单", auto_id="9044", control_type="Button")
+   |    |    | 
+   |    |    | Button - '组合申报'    (L1364, T310, R1424, B330)
+   |    |    | ['Button54', '组合申报Button', '组合申报3']
+   |    |    | child_window(title="组合申报", auto_id="9060", control_type="Button")
+   |    |    | 
+   |    |    | ComboBox - ''    (L1370, T310, R1498, B330)
+   |    |    | ['ComboBox项目必知.txt - 记事本2', '更多ComboBox', 'ComboBox任务栏2', 'ComboBox6.GUI模块化 - 获取组件.py - CodeBuddy CN [管理员]2', 'ComboBoxNVIDIA GeForce Overlay2', 'ComboBox国泰海通证券期权宝(仿真行情) \u3000\u3000当前账号 | 期权：章绍龙1(130375)2', 'ComboBoxCode2', 'ComboBoxZzayyy - Google Chrome2', 'ComboBoxv2rayN - V7.22.5 - X64 - 以管理员身份运行2', 'ComboBox微信2', 'ComboBox2026-082', 'ComboBox2', 'ComboBoxProgram Manager2', 'ComboBox华宝证券期权宝(仿真行情) \u3000\u3000当前账号 | 期权：姜娜娜(010000040350)2', '更多ComboBox0', '更多ComboBox1']
+   |    |    | child_window(auto_id="940", control_type="ComboBox")
+   |    |    |    | 
+   |    |    |    | Static - ''    (L3, T3, R108, B17)
+   |    |    |    | ['Static14']
+   |    |    |    | 
+   |    |    |    | Button - '打开'    (L1479, T312, R1496, B328)
+   |    |    |    | ['Button55', '打开Button2', '打开2']
+   |    |    |    | child_window(title="打开", auto_id="DropDown", control_type="Button")
+   |    |    | 
+   |    |    | ComboBox - ''    (L1500, T310, R1572, B330)
+   |    |    | ['ComboBox项目必知.txt - 记事本3', '更多ComboBox2', 'ComboBox任务栏3', 'ComboBox6.GUI模块化 - 获取组件.py - CodeBuddy CN [管理员]3', 'ComboBoxNVIDIA GeForce Overlay3', 'ComboBox国泰海通证券期权宝(仿真行情) \u3000\u3000当前账号 | 期权：章绍龙1(130375)3', 'ComboBoxCode3', 'ComboBoxZzayyy - Google Chrome3', 'ComboBoxv2rayN - V7.22.5 - X64 - 以管理员身份运行3', 'ComboBox微信3', 'ComboBox2026-083', 'ComboBox3', 'ComboBoxProgram Manager3', 'ComboBox华宝证券期权宝(仿真行情) \u3000\u3000当前账号 | 期权：姜娜娜(010000040350)3']
+   |    |    | child_window(auto_id="941", control_type="ComboBox")
+   |    |    |    | 
+   |    |    |    | Static - ''    (L3, T3, R52, B17)
+   |    |    |    | ['Static15']
+   |    |    |    | 
+   |    |    |    | Button - '打开'    (L1553, T312, R1570, B328)
+   |    |    |    | ['Button56', '打开Button3', '打开3']
+   |    |    |    | child_window(title="打开", auto_id="DropDown", control_type="Button")
+   |    |    | 
+   |    |    | Button - ''    (L1016, T331, R1668, B616)
+   |    |    | ['Button57', '更多Button']
+   |    |    | child_window(auto_id="3000", control_type="Button")
+   |    |    | 
+   |    |    | Button - '刷新'    (L1574, T310, R1619, B330)
+   |    |    | ['Button58', '刷新Button2', '刷新2']
+   |    |    | child_window(title="刷新", auto_id="1157", control_type="Button")
+   |    |    | 
+   |    |    | Button - '输出'    (L1621, T310, R1666, B330)
+   |    |    | ['Button59', '输出', '输出Button']
+   |    |    | child_window(title="输出", auto_id="1159", control_type="Button")
+   |    | 
+   |    | Pane - ''    (L332, T124, R1668, B283)
+   |    | ['Pane3']
+   |    | child_window(auto_id="197093936", control_type="Pane")
+   |    |    | 
+   |    |    | Pane - ''    (L333, T125, R1336, B146)
+   |    |    | ['Pane4']
+   |    |    | child_window(auto_id="113", control_type="Pane")
+   |    |    | 
+   |    |    | Pane - ''    (L1397, T266, R1667, B283)
+   |    |    | ['Pane5']
+   |    |    | child_window(auto_id="112", control_type="Pane")
+   |    |    | 
+   |    |    | Pane - ''    (L1397, T147, R1667, B266)
+   |    |    | ['Pane6']
+   |    |    | child_window(auto_id="455124928", control_type="Pane")
+   |    |    | 
+   |    |    | Pane - ''    (L333, T265, R1292, B282)
+   |    |    | ['Pane7']
+   |    |    | child_window(auto_id="19000", control_type="Pane")
+   | 
+   | TitleBar - ''    (L348, T64, R1668, B94)
+   | ['TitleBar']
+   |    | 
+   |    | Menu - '系统'    (L330, T69, R352, B91)
+   |    | ['Menu', '系统', '系统Menu', '系统0', '系统1']
+   |    | child_window(title="系统", auto_id="MenuBar", control_type="MenuBar")
+   |    |    | 
+   |    |    | MenuItem - '系统'    (L330, T69, R352, B91)
+   |    |    | ['系统2', '系统MenuItem', 'MenuItem']
+   |    |    | child_window(title="系统", control_type="MenuItem")
+   |    | 
+   |    | Button - '最小化'    (L1529, T62, R1576, B94)
+   |    | ['Button60', '最小化Button', '最小化']
+   |    | child_window(title="最小化", control_type="Button")
+   |    | 
+   |    | Button - '最大化'    (L1576, T62, R1622, B94)
+   |    | ['Button61', '最大化Button', '最大化']
+   |    | child_window(title="最大化", control_type="Button")
+   |    | 
+   |    | Button - '关闭'    (L1622, T62, R1669, B94)
+   |    | ['Button62', '关闭', '关闭Button']
+   |    | child_window(title="关闭", control_type="Button")

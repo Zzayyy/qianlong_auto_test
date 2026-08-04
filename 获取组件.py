@@ -2,7 +2,7 @@ from pywinauto import Application,findwindows
 import time
 
 # 客户端名称（窗口标题关键字 / 输出文件名前缀）
-CLIENT_NAME = "中泰证券"
+CLIENT_NAME = "华宝证券"
 
 
 # 获取窗口

@@ -189,6 +189,12 @@ SCRIPTS_CONFIG = {
         {"name": "24. 对账单资金流水", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\查询\对账单资金流水"},
         {"name": "25. 账号查询", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\查询\账号查询"},
         {"name": "26. 对账单资金资产", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\查询\对账单资金资产"},
+        # 以下为华宝证券期权宝专属菜单（钱龙/国泰/中泰无此菜单，由 clients.json 的 unsupported 过滤）
+        {"name": "27. 备兑股份", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\查询\备兑股份"},
+        {"name": "28. 历史损益", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\查询\历史损益"},
+        {"name": "29. 待交收查询", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\查询\待交收查询"},
+        {"name": "30. 额度查询", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\查询\额度查询"},
+        {"name": "31. 持仓限制查询", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\查询\持仓限制查询"},
     ],
     "下单": [
         {"name": "1.期权下单_自动化下单", "path": rf"{PROJECT_ROOT}\行情交易\下单\自动化下单\4.期权下单(新)_自动化下单_Excel驱动版.py"},
@@ -235,6 +241,9 @@ SCRIPTS_CONFIG = {
         {"name": "6.历史组合委托流水", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\组合申报\历史组合委托流水"},
         # 以下为中泰证券期权宝专属菜单（钱龙/国泰无此菜单，由 clients.json 的 unsupported 过滤）
         {"name": "7.历史组合策略持仓查询", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\组合申报\历史组合策略持仓查询"},
+        # 以下为华宝证券期权宝专属菜单（钱龙/国泰/中泰无此菜单，由 clients.json 的 unsupported 过滤）
+        {"name": "8.组合当日成交", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\组合申报\组合当日成交"},
+        {"name": "9.组合历史成交", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\组合申报\组合历史成交"},
     ],
     "超级策略": [
         {"name": "牛市认沽", "path": rf"{PROJECT_ROOT}\超级策略\牛市认沽_一键开仓.py"},
