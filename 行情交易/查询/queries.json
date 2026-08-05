@@ -11,6 +11,9 @@
       },
       "huabao": {
         "export_type": null
+      },
+      "guangfa": {
+        "export_type": null
       }
     }
   },
@@ -46,6 +49,9 @@
         "export_type": "xls_only"
       },
       "huabao": {
+        "export_type": "xls_only"
+      },
+      "guangfa": {
         "export_type": "xls_only"
       }
     }
@@ -190,6 +196,24 @@
     "settle_delay": 1.0
   },
   "\\通知查询\\行权待交收资金缺口": {
+    "settle_delay": 1.0
+  },
+  "\\通知查询\\备兑证券不足查询": {
+    "settle_delay": 1.0
+  },
+  "\\通知查询\\行权指派欠资欠券": {
+    "settle_delay": 1.0
+  },
+  "\\通知查询\\被指派行权查询": {
+    "settle_delay": 1.0
+  },
+  "\\通知查询\\行权结果查询": {
+    "settle_delay": 1.0
+  },
+  "\\通知查询\\当日行权交割信息": {
+    "settle_delay": 1.0
+  },
+  "\\通知查询\\当日强制平仓委托": {
     "settle_delay": 1.0
   }
 }

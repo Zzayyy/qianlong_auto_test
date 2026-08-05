@@ -222,6 +222,15 @@ SCRIPTS_CONFIG = {
         {"name": "6.行权待交收证券缺口", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\通知查询\行权待交收证券缺口"},
         {"name": "7.备兑证券缺口查询", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\通知查询\备兑证券缺口查询"},
         {"name": "8.行权待交收资金缺口", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\通知查询\行权待交收资金缺口"},
+        # 以下为广发证券期权宝专属菜单（钱龙/国泰/中泰/华宝无此菜单，由 clients.json 的 unsupported 过滤）
+        # 广发通知查询容器共 8 子项：合约信息变更明细（复用第 2 项）、以下 6 项为广发专属；
+        # 客户账单(结算清单) 因输出逻辑与查询驱动不通用已剔除。
+        {"name": "9.备兑证券不足查询", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\通知查询\备兑证券不足查询"},
+        {"name": "10.行权指派欠资欠券", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\通知查询\行权指派欠资欠券"},
+        {"name": "11.被指派行权查询", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\通知查询\被指派行权查询"},
+        {"name": "12.行权结果查询", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\通知查询\行权结果查询"},
+        {"name": "13.当日行权交割信息", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\通知查询\当日行权交割信息"},
+        {"name": "14.当日强制平仓委托", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\通知查询\当日强制平仓委托"},
     ],
     # 以下为国泰海通专属菜单
     "结算单": [

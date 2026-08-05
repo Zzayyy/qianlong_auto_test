@@ -378,5 +378,200 @@ class HuabaoClientProfileTests(unittest.TestCase):
         self.assertNotIn("export_type", entry)
 
 
+class GuangfaClientProfileTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.clients = json.loads(
+            (PROJECT_ROOT / "clients.json").read_text(encoding="utf-8")
+        )["clients"]
+        cls.guangfa = next(
+            client for client in cls.clients if client["id"] == "guangfa"
+        )
+
+    def test_win11_tree_fingerprint_matches_captured_topology(self):
+        profile = self.guangfa["native_tree_profile"]
+        topology = profile["expected_root_child_counts"]
+        # 广发 57 节点：24 根 + 组合申报 6 + 查询 19 + 通知查询 8
+        self.assertEqual(profile["expected_node_count"], 57)
+        self.assertEqual(len(topology), 24)
+        self.assertEqual(24 + sum(topology), 57)
+        self.assertEqual(topology[17:], [6, 19, 8, 0, 0, 0, 0])
+
+    def test_known_guangfa_paths_have_expected_positions(self):
+        positions = self.guangfa["native_tree_profile"]["positions"]
+        self.assertEqual(positions[r"\期权下单"], [0])
+        self.assertEqual(positions[r"\三键下单"], [1])
+        # 广发止盈止损位于第5位（与钱龙/国泰不同，与华宝一致）
+        self.assertEqual(positions[r"\止盈止损"], [4])
+        self.assertEqual(positions[r"\快速下单"], [5])
+        self.assertEqual(positions[r"\撤单"], [16])
+        self.assertEqual(positions[r"\组合申报\组合申报"], [17, 0])
+        self.assertEqual(positions[r"\查询\资金持仓"], [18, 0])
+        self.assertEqual(positions[r"\查询\历史行权负债信息"], [18, 18])
+        self.assertEqual(positions[r"\通知查询\合约信息变更明细"], [19, 0])
+        self.assertEqual(positions[r"\通知查询\客户账单(结算清单)"], [19, 7])
+        # 广发专属根节点：自动行权 / 信息回显
+        self.assertEqual(positions[r"\自动行权"], [21])
+        self.assertEqual(positions[r"\信息回显"], [23])
+
+    def test_guangfa_unsupported_covers_missing_menus(self):
+        unsupported = self.guangfa["unsupported"]
+        # 广发无 历史策略持仓/结算单/账号查询/普通下单/一键炒单 等菜单
+        self.assertIn(r"\查询\历史策略持仓", unsupported)
+        self.assertIn(r"\结算单\结算单", unsupported)
+        self.assertIn(r"\查询\账号查询", unsupported)
+        self.assertIn(r"\查询\可用备兑股份", unsupported)
+        self.assertIn(r"\下单\普通下单_自动化下单", unsupported)
+        self.assertIn(r"\交易系统设置\一键炒单设置", unsupported)
+        self.assertIn(r"\交易系统设置\自动拆单设置", unsupported)
+        self.assertIn(r"\组合申报\组合当日成交", unsupported)
+        self.assertIn(r"\组合申报\历史组合策略持仓查询", unsupported)
+        # 广发有 合约信息变更明细，不得误过滤
+        self.assertNotIn(r"\通知查询\合约信息变更明细", unsupported)
+        # 广发常用菜单不得误过滤
+        self.assertNotIn(r"\查询\资金持仓", unsupported)
+        self.assertNotIn(r"\查询\客户限仓信息查询", unsupported)
+        self.assertNotIn(r"\查询\限购额度查询", unsupported)
+        self.assertNotIn(r"\查询\行权负债信息查询", unsupported)
+
+    def test_guangfa_menu_alias_option_order_new(self):
+        self.assertEqual(self.guangfa["menu_aliases"]["期权下单(新)"], "期权下单")
+
+    def test_gui_shows_supported_menus_for_guangfa(self):
+        config_path = PROJECT_ROOT / "GUI自动化工具2" / "config.py"
+        spec = importlib.util.spec_from_file_location(
+            "gui_automation_config_guangfa_for_test", config_path
+        )
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+        scripts = module.get_scripts_config("guangfa")
+
+        # 结算单在广发下应全部被过滤为空
+        self.assertEqual(scripts["结算单"], [])
+
+        # 查询类目保留广发有的 19 项
+        query_names = [script["name"] for script in scripts["查询"]]
+        self.assertEqual(len(query_names), 19)
+        bare_query = {n.split(". ", 1)[-1].strip() for n in query_names}
+        for item in ("资金持仓", "策略持仓", "当日委托", "期权合约", "资金查询",
+                     "客户限仓信息查询", "限购额度查询", "历史行权负债信息"):
+            self.assertIn(item, bare_query)
+        # 广发树没有的菜单项必须被过滤
+        for item in ("历史策略持仓", "账号查询", "可用备兑股份", "备兑股份不足",
+                     "当日行权成功明细", "对账单资金流水", "对账单资金资产",
+                     "备兑股份", "历史损益", "待交收查询", "额度查询", "持仓限制查询"):
+            self.assertNotIn(item, bare_query)
+
+        # 通知查询保留 7 项：合约信息变更明细（复用已有条目）+ 广发专属 6 项
+        notify_names = [script["name"] for script in scripts["通知查询"]]
+        self.assertEqual(len(notify_names), 7)
+        self.assertTrue(any("合约信息变更明细" in n for n in notify_names))
+        for item in ("备兑证券不足查询", "行权指派欠资欠券", "被指派行权查询",
+                     "行权结果查询", "当日行权交割信息", "当日强制平仓委托"):
+            self.assertTrue(any(item in n for n in notify_names))
+        # 客户账单(结算清单) 未接入（输出逻辑与查询驱动不通用）
+        self.assertFalse(any("客户账单" in n for n in notify_names))
+        for item in ("合约信息变更数量", "风险通知", "行权待交收"):
+            self.assertFalse(any(item in n for n in notify_names))
+
+        # 组合申报保留 6 项（与钱龙同名），过滤专属/其他客户端项
+        combo_names = [script["name"] for script in scripts["组合申报"]]
+        self.assertEqual(len(combo_names), 6)
+        for item in ("组合策略持仓查询", "组合策略信息查询",
+                     "组合委托流水查询", "历史组合委托流水"):
+            self.assertTrue(any(item in n for n in combo_names))
+        self.assertFalse(any("组合当日成交" in n for n in combo_names))
+        self.assertFalse(any("组合历史成交" in n for n in combo_names))
+        self.assertFalse(any("历史组合策略持仓" in n for n in combo_names))
+
+        # 下单类目：保留三键/四键/快速/全选撤单，过滤普通下单
+        order_names = [script["name"] for script in scripts["下单"]]
+        self.assertTrue(any("三键下单" in name for name in order_names))
+        self.assertTrue(any("四键下单" in name for name in order_names))
+        self.assertTrue(any("快速下单" in name for name in order_names))
+        self.assertTrue(any("全选撤单" in name for name in order_names))
+        self.assertFalse(any("普通下单" in name for name in order_names))
+
+        # 交易系统设置不含 一键炒单设置 / 自动拆单设置，保留其余 6 项
+        settings_names = [script["name"] for script in scripts["交易系统设置"]]
+        self.assertEqual(len(settings_names), 6)
+        self.assertFalse(any("一键炒单设置" in name for name in settings_names))
+        self.assertFalse(any("自动拆单设置" in name for name in settings_names))
+        for item in ("委托设置", "期权设置", "自动追单设置", "快捷设置",
+                     "价格提醒设置", "抓取自定义标准"):
+            self.assertTrue(any(item in name for name in settings_names))
+
+    def test_guangfa_notify_orders_filtered_for_other_clients(self):
+        config_path = PROJECT_ROOT / "GUI自动化工具2" / "config.py"
+        spec = importlib.util.spec_from_file_location(
+            "gui_automation_config_guangfa_notify_filter_for_test", config_path
+        )
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+        guangfa_items = ("备兑证券不足查询", "行权指派欠资欠券", "被指派行权查询",
+                         "行权结果查询", "当日行权交割信息", "当日强制平仓委托")
+        for client in self.clients:
+            if client["id"] == "guangfa":
+                continue
+            with self.subTest(client=client["id"]):
+                names = [s["name"] for s in module.get_scripts_config(client["id"]).get("通知查询", [])]
+                for item in guangfa_items:
+                    self.assertFalse(
+                        any(item in n for n in names),
+                        f"{client['id']} 不应显示广发专属菜单 {item}",
+                    )
+
+    def test_guangfa_all_gui_query_paths_have_positions(self):
+        """广发 GUI 中所有查询驱动脚本的面板路径都必须有位置指纹。"""
+        config_path = PROJECT_ROOT / "GUI自动化工具2" / "config.py"
+        spec = importlib.util.spec_from_file_location(
+            "gui_automation_config_guangfa_query_paths_for_test", config_path
+        )
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+        positions = self.guangfa["native_tree_profile"]["positions"]
+        scripts = module.get_scripts_config("guangfa")
+        paths = [
+            s["query_key"]
+            for category in ("查询", "通知查询", "组合申报", "结算单")
+            for s in scripts.get(category, [])
+            if s.get("query_key")
+        ]
+        self.assertTrue(paths)
+        for path in paths:
+            with self.subTest(path=path):
+                self.assertIn(path, positions)
+
+    def test_guangfa_query_export_flows(self):
+        """广发资金持仓→数据输出弹窗、期权合约→系统级另存为（与华宝一致）。"""
+        import json as _json
+
+        table = _json.loads(
+            (PROJECT_ROOT / "行情交易" / "查询" / "queries.json").read_text(encoding="utf-8")
+        )
+        spec = importlib.util.spec_from_file_location(
+            "run_query_guangfa_export_for_test",
+            PROJECT_ROOT / "行情交易" / "查询" / "run_query.py",
+        )
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+
+        # 广发资金持仓：export_type 被删除 → run_export_dialog（数据输出弹窗）
+        entry = module.apply_client_override(table[r"\查询\资金持仓"], "guangfa")
+        self.assertNotIn("export_type", entry)
+
+        # 广发期权合约：export_type=xls_only → run_save_as（系统级另存为）
+        entry = module.apply_client_override(table[r"\查询\期权合约"], "guangfa")
+        self.assertEqual(entry["export_type"], "xls_only")
+
+        # 广发其他查询项默认走数据输出弹窗
+        entry = module.apply_client_override(table[r"\查询\当日成交"], "guangfa")
+        self.assertNotIn("export_type", entry)
+
+
 if __name__ == "__main__":
     unittest.main()
