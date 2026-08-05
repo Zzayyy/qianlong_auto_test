@@ -17,6 +17,7 @@ from core.dialog_control import (
     SAVEAS_FILENAME_ID,
     Win32ControlError,
     click,
+    close_no_data_prompt,
     enum_controls,
     find_by_id,
     find_by_text,
@@ -29,14 +30,26 @@ from core.dialog_control import (
 
 
 def _find_saveas_window(timeout: float):
-    """查找 Windows 系统的"另存为"窗口（win32gui 优先, pywinauto 兜底）。"""
-    hwnd = find_top_dialog(
-        ["另存为", "保存为", "Save As"], timeout=timeout
-    )
-    if hwnd is not None:
-        return hwnd
+    """查找 Windows 系统的"另存为"窗口（win32gui 优先, pywinauto 兜底）。
+
+    Returns:
+        (hwnd or None, prompt_seen: bool)
+        - hwnd 非 None：找到"另存为"窗口
+        - prompt_seen=True：检测到"提示"弹窗并已确认，说明本次无数据可导出，
+          调用方应直接结束、不再重试点击"输出"按钮
+    """
     end = time.time() + timeout
     while time.time() < end:
+        # 第一条路：数据未就绪的"提示"弹窗（广发为常态，其他客户端偶发）
+        # 点击确定即结束本次导出，无需等待数据加载、无需重试点击输出。
+        if close_no_data_prompt(settle_delay=0):
+            return None, True
+        # 第二条路：正常"另存为"窗口
+        hwnd = find_top_dialog(
+            ["另存为", "保存为", "Save As"], timeout=0.3
+        )
+        if hwnd is not None:
+            return hwnd, False
         for elem in findwindows.find_elements(top_level_only=True):
             try:
                 dlg_app = Application(backend="uia").connect(
@@ -45,11 +58,11 @@ def _find_saveas_window(timeout: float):
                 dlg = dlg_app.window(handle=elem.handle)
                 title = dlg.window_text() or ""
                 if "另存为" in title or "保存为" in title or "Save As" in title:
-                    return elem.handle
+                    return elem.handle, False
             except Exception:
                 continue
         time.sleep(0.15)
-    return None
+    return None, False
 
 
 def _find_saveas_filename_edit(dlg_hwnd: int):
@@ -207,13 +220,19 @@ def handle_save_as_dialog(save_dir: str, filename: str, timeout: float = 8) -> b
         filename: 文件名(含扩展名)
         timeout: 等待秒数
     Returns:
-        bool: 是否成功
+        True: 成功完成整个导出流程
+        "no_data": 等待期间出现"提示"弹窗（数据未就绪）并已确认，无数据可导出，
+                   调用方应结束本次导出、**不要**再重试点击"输出"按钮
+        False: 超时未出现"另存为"窗口等其他失败
     """
     os.makedirs(save_dir, exist_ok=True)
     full_path = os.path.join(save_dir, filename)
 
     print(f"[..] 等待'另存为'窗口... (路径={full_path})")
-    hwnd = _find_saveas_window(timeout)
+    hwnd, prompt_seen = _find_saveas_window(timeout)
+    if prompt_seen:
+        print("[INFO] 已处理'提示'弹窗（数据未就绪），本次无数据可导出")
+        return "no_data"
     if hwnd is None:
         print(f"[WARN] 等待'另存为'窗口超时({timeout}s)")
         return False

@@ -198,3 +198,80 @@ def press_enter():
     win32api.keybd_event(win32con.VK_RETURN, 0, 0, 0)
     time.sleep(0.05)
     win32api.keybd_event(win32con.VK_RETURN, 0, win32con.KEYEVENTF_KEYUP, 0)
+
+
+# 偶见 bug：点击"输出"按钮后数据尚未加载完成时，客户端会弹出标题为"提示"的
+# MessageBox（如"没有可以导出的数据!"），而非预期的"数据输出"/"另存为"。
+# 该弹窗内容文本（Static）自绘/不可枚举，只能通过**弹窗标题**识别，命中后
+# 点击其"确定"按钮确认（兜底 WM_CLOSE）。
+NO_DATA_PROMPT_TITLE = "提示"
+# 确认按钮的文字匹配项（标题匹配已足够，按钮文字用于定位点击，找不到就 WM_CLOSE）
+NO_DATA_PROMPT_BUTTON_TEXTS = ("确定", "是", "Yes", "OK")
+
+
+def _find_prompt_confirm_button(hwnd: int):
+    """在"提示"弹窗中定位确认按钮：标准 IDOK(1) 优先，其次按文字部分匹配。"""
+    btn = find_by_id(hwnd, 1, class_name="Button")
+    if btn is not None:
+        return btn
+    for text in NO_DATA_PROMPT_BUTTON_TEXTS:
+        btn = find_by_text(hwnd, text, class_name="Button", partial=True)
+        if btn is not None:
+            return btn
+    return None
+
+
+def close_no_data_prompt(settle_delay: float = 1.0) -> bool:
+    """检测并确认"提示"弹窗（如有）。
+
+    偶见于切换面板后立即点击"输出"按钮、客户端数据尚未加载完的情况：弹出
+    标题为"提示"的 MessageBox 而非预期的"数据输出"/"另存为"窗口。弹窗内容
+    文本可能自绘不可枚举，故仅按标题判断，命中后点击"确定"按钮确认
+    （找不到按钮则 PostMessage(WM_CLOSE) 兜底），再等待数据加载。
+
+    正常流程不会触发该弹窗，本函数仅做一次 EnumWindows，开销毫秒级，
+    不影响执行速度。
+
+    Returns:
+        bool: 是否检测并处理了至少一个"提示"弹窗。True 时调用方应继续等待
+        数据加载/重新找目标弹窗；False 时维持当前等待循环节奏。
+    """
+    found: list[int] = []
+
+    def _enum(hwnd, _):
+        try:
+            if not win32gui.IsWindowVisible(hwnd):
+                return
+            title = win32gui.GetWindowText(hwnd) or ""
+            # 排除本自动化工具自身窗口
+            if "GUI自动化工具" in title:
+                return
+            if title != NO_DATA_PROMPT_TITLE:
+                return
+            found.append(hwnd)
+        except Exception:
+            return
+
+    win32gui.EnumWindows(_enum, None)
+    if not found:
+        return False
+    for hwnd in found:
+        try:
+            btn = _find_prompt_confirm_button(hwnd)
+            if btn is not None:
+                click(btn, hwnd)
+                print(
+                    f"[INFO] 检测到「{NO_DATA_PROMPT_TITLE}」弹窗（数据未就绪），"
+                    f"已点击确定确认 (hwnd={hwnd}, btn={btn})"
+                )
+            else:
+                win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
+                print(
+                    f"[INFO] 检测到「{NO_DATA_PROMPT_TITLE}」弹窗（数据未就绪），"
+                    f"未找到确定按钮，已发送 WM_CLOSE (hwnd={hwnd})"
+                )
+        except Exception as exc:
+            print(f"[WARN] 处理'提示'弹窗失败: {exc}")
+    # 让客户端有时间从服务器拉取数据
+    time.sleep(settle_delay)
+    return True

@@ -119,13 +119,20 @@ def run_export_dialog(config: dict):
         if not click_output_button(win, button_auto_id="1159"):
             print("[错误] 无法点击'输出'按钮")
             sys.exit(2)
-        ok = handle_export_dialog(
+        result = handle_export_dialog(
             timeout=8,
             export_type=cfg["export_format"],
             auto_open=cfg["auto_open"],
             output_path=cfg["output_path"]
         )
-        if ok:
+        if result is True:
+            ok = True
+            break
+        if result == "no_data":
+            # 出现"提示"弹窗（数据未就绪）并已确认：本次无数据可导出，
+            # 点击确认后就完事，不需要再点击输出。
+            print("[INFO] 检测到'提示'弹窗（无数据），本次跳过导出")
+            ok = True
             break
         if attempt == 1:
             print("[WARN] '数据输出'弹窗未出现，1 秒后重试点击'输出'按钮...")
@@ -177,12 +184,19 @@ def run_save_as(config: dict):
         # 处理另存为对话框
         save_dir = os.path.dirname(cfg["output_path"])
         filename = os.path.basename(cfg["output_path"])
-        ok = handle_save_as_dialog(
+        result = handle_save_as_dialog(
             save_dir=save_dir,
             filename=filename,
             timeout=8,
         )
-        if ok:
+        if result is True:
+            ok = True
+            break
+        if result == "no_data":
+            # 出现"提示"弹窗（数据未就绪）并已确认：本次无数据可导出，
+            # 点击确认后就完事，不需要再点击输出。
+            print("[INFO] 检测到'提示'弹窗（无数据），本次跳过导出")
+            ok = True
             break
         if attempt == 1:
             print("[WARN] '另存为'对话框未出现，1 秒后重试点击'输出'按钮...")

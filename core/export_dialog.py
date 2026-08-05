@@ -13,6 +13,7 @@ import pywinauto.keyboard as keyboard
 from core.dialog_control import (
     Win32ControlError,
     click,
+    close_no_data_prompt,
     find_by_id,
     find_by_text,
     find_top_dialog,
@@ -57,17 +58,29 @@ def _read_checkbox_uia(dlg_hwnd: int):
 
 
 def _find_dialog(timeout: float):
-    """查找"数据输出"弹窗句柄（win32gui 优先, pywinauto 兜底）。"""
-    hwnd = find_top_dialog("数据输出", timeout=timeout)
-    if hwnd is not None:
-        return hwnd
+    """查找"数据输出"弹窗句柄（win32gui 优先, pywinauto 兜底）。
+
+    Returns:
+        (hwnd or None, prompt_seen: bool)
+        - hwnd 非 None：找到"数据输出"弹窗
+        - prompt_seen=True：检测到"提示"弹窗并已确认，说明本次无数据可导出，
+          调用方应直接结束、不再重试点击"输出"按钮
+    """
     end = time.time() + timeout
     while time.time() < end:
+        # 第一条路：数据未就绪的"提示"弹窗（广发为常态，其他客户端偶发）
+        # 点击确定即结束本次导出，无需等待数据加载、无需重试点击输出。
+        if close_no_data_prompt(settle_delay=0):
+            return None, True
+        # 第二条路：正常"数据输出"弹窗
+        hwnd = find_top_dialog("数据输出", timeout=0.3)
+        if hwnd is not None:
+            return hwnd, False
         for elem in findwindows.find_elements(top_level_only=True, visible_only=True):
             if "数据输出" in (elem.name or ""):
-                return elem.handle
+                return elem.handle, False
         time.sleep(0.1)
-    return None
+    return None, False
 
 
 def _export_win32(dlg_hwnd: int, export_type: str, auto_open: bool,
@@ -212,9 +225,15 @@ def handle_export_dialog(timeout: float = 8, export_type: str = "txt",
         auto_open: 是否自动打开文件
         output_path: 输出路径
     Returns:
-        bool: 是否成功完成整个导出流程
+        True: 成功完成整个导出流程
+        "no_data": 等待期间出现"提示"弹窗（数据未就绪）并已确认，无数据可导出，
+                   调用方应结束本次导出、**不要**再重试点击"输出"按钮
+        False: 超时未找到"数据输出"弹窗等其他失败
     """
-    dlg_hwnd = _find_dialog(timeout)
+    dlg_hwnd, prompt_seen = _find_dialog(timeout)
+    if prompt_seen:
+        print("[INFO] 已处理'提示'弹窗（数据未就绪），本次无数据可导出")
+        return "no_data"
     if not dlg_hwnd:
         print("[WARN] 未找到'数据输出'弹窗")
         return False
