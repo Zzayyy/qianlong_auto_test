@@ -43,6 +43,7 @@ from core.settings_window import (
 )
 from core.settings import SettingsTestResult
 from core.settings_standard import load_standard
+from core.settings_auto_id import apply_client_auto_id
 
 
 # ====================== 可配置参数 ======================
@@ -80,6 +81,9 @@ AUTO_ID = {
     "秒，最多重复": "2205",
     "未完成则自动撤单": "2064",
 }
+
+# 客户端专属控件 ID 覆盖（广发等与默认 AUTO_ID 不同，见 core/settings_auto_id.py）
+apply_client_auto_id(PANEL_NAME, AUTO_ID, None, CLIENT_ID)
 
 # 输出目录（可被 GUI 传入的 GUI_OUTPUT_DIR 环境变量覆盖）
 _OUTPUT_DIR_DEFAULT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "交易系统设置_测试结果")
@@ -136,7 +140,10 @@ def _get_control_hwnd(dlg, auto_id):
     found = []
     def _cb(hwnd, _):
         try:
-            if win32gui.GetDlgCtrlID(hwnd) == target:
+            # 只匹配可见控件：广发等客户端不同页面共用同一 auto_id（如 16074），
+            # 隐藏的是其它页面控件，不可见则不应命中
+            if (win32gui.GetDlgCtrlID(hwnd) == target
+                    and win32gui.IsWindowVisible(hwnd)):
                 found.append(hwnd)
         except Exception:
             pass
@@ -319,6 +326,21 @@ def get_combobox_items_by_id(dlg, auto_id: str) -> Optional[List[str]]:
         return None
 
 
+def _get_repeat_value(dlg):
+    """读取"秒，最多重复"的值。
+
+    广发为 ComboBox（ID 16082），其它客户端为 Edit；两者返回值类型需一致
+    （int），这里统一处理。
+    """
+    if CLIENT_ID == "guangfa":
+        repeat = get_combobox_selection_by_id(dlg, AUTO_ID["秒，最多重复"])
+        try:
+            return int(repeat) if repeat is not None and str(repeat).isdigit() else repeat
+        except Exception:
+            return repeat
+    return get_edit_value_by_id(dlg, AUTO_ID["秒，最多重复"])
+
+
 def get_edit_value_by_id(dlg, auto_id: str, as_number: bool = True) -> Optional[Any]:
     """通过 auto_id 获取数值输入框(Edit)的值（Win32 WM_GETTEXT，速度快）。
 
@@ -457,8 +479,8 @@ def test_auto_order_followup(dlg, result: SettingsTestResult):
     interval_expect = "、".join(STANDARD_VALUES["自动追单时间间隔_选项列表"])
     result.add_result("自动追单时间间隔_选项列表", interval_actual, interval_expect)
 
-    # 3.4 秒，最多重复（Edit）
-    repeat = get_edit_value_by_id(dlg, AUTO_ID["秒，最多重复"])
+    # 3.4 秒，最多重复（广发为 ComboBox，其它客户端为 Edit）
+    repeat = _get_repeat_value(dlg)
     result.add_result("秒，最多重复", repeat if repeat is not None else "(未知)",
                       STANDARD_VALUES["秒，最多重复"])
 
@@ -562,8 +584,8 @@ def collect_current_settings(dlg) -> dict:
     interval_items = get_combobox_items_by_id(dlg, AUTO_ID["自动追单时间间隔"])
     data["自动追单时间间隔_选项列表"] = interval_items or []
 
-    # 秒，最多重复（Edit）
-    repeat = get_edit_value_by_id(dlg, AUTO_ID["秒，最多重复"])
+    # 秒，最多重复（广发为 ComboBox，其它客户端为 Edit）
+    repeat = _get_repeat_value(dlg)
     data["秒，最多重复"] = repeat if repeat is not None else 0
 
     # 未完成则自动撤单（CheckBox）

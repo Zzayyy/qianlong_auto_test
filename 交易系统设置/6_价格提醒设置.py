@@ -46,6 +46,7 @@ from core.settings_window import (
 )
 from core.settings import SettingsTestResult
 from core.settings_standard import load_standard
+from core.settings_auto_id import apply_client_auto_id
 
 
 # ====================== 可配置参数 ======================
@@ -83,6 +84,9 @@ AUTO_ID = {
     "卖开卖平备开_委托价格低于最新价格_勾选": "2068",
     "卖开卖平备开_委托价格低于最新价格_倍数": "2179",
 }
+
+# 客户端专属控件 ID 覆盖（广发等与默认 AUTO_ID 不同，见 core/settings_auto_id.py）
+apply_client_auto_id(PANEL_NAME, AUTO_ID, None, CLIENT_ID)
 
 # 输出目录（可被 GUI 传入的 GUI_OUTPUT_DIR 环境变量覆盖）
 _OUTPUT_DIR_DEFAULT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "交易系统设置_测试结果")
@@ -135,7 +139,10 @@ def _get_control_hwnd(dlg, auto_id: str):
     found = []
     def _cb(hwnd, _):
         try:
-            if win32gui.GetDlgCtrlID(hwnd) == target:
+            # 只匹配可见控件：广发等客户端不同页面共用同一 auto_id（如 16074），
+            # 隐藏的是其它页面控件，不可见则不应命中
+            if (win32gui.GetDlgCtrlID(hwnd) == target
+                    and win32gui.IsWindowVisible(hwnd)):
                 found.append(hwnd)
         except Exception:
             pass

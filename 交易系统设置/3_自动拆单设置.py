@@ -167,7 +167,10 @@ def _get_control_hwnd(dlg, auto_id: str):
     found = []
     def _cb(hwnd, _):
         try:
-            if win32gui.GetDlgCtrlID(hwnd) == target:
+            # 只匹配可见控件：广发等客户端不同页面共用同一 auto_id（如 16074），
+            # 隐藏的是其它页面控件，不可见则不应命中
+            if (win32gui.GetDlgCtrlID(hwnd) == target
+                    and win32gui.IsWindowVisible(hwnd)):
                 found.append(hwnd)
         except Exception:
             pass
