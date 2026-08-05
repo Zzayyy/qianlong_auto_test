@@ -141,8 +141,38 @@ def _run_script_mode():
     sys.exit(0)
 
 
+def _enable_dpi_awareness():
+    """启用系统级 DPI 感知，避免高分屏下界面（含复选框等控件）模糊、过小。
+
+    必须在创建任何窗口之前调用，否则会因已初始化而失败。
+    """
+    try:
+        # SYSTEM_DPI_AWARE：按系统 DPI 感知，Tk 内容再配合 tk scaling 放大
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
+    except Exception:
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
+
+def _apply_tk_scaling(root):
+    """按系统 DPI 调整 Tk 缩放比例，保证字体与控件在高分屏下清晰可读。"""
+    try:
+        dpi = ctypes.windll.user32.GetDpiForSystem()
+    except Exception:
+        dpi = 96
+    try:
+        if dpi and dpi != 96:
+            root.tk.call("tk", "scaling", dpi / 72.0)
+    except Exception:
+        pass
+
+
 def main():
+    _enable_dpi_awareness()
     root = tk.Tk()
+    _apply_tk_scaling(root)
     app = AutomationGUI(root)
     root.mainloop()
 

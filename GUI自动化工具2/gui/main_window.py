@@ -42,7 +42,7 @@ from config import (
 from engine.runner import ScriptRunner
 from engine.task import Task
 from engine.scheduler import TaskScheduler
-from gui.widgets import ColoredLogText
+from gui.widgets import ColoredLogText, ChineseDialog
 from gui.task_center import TaskCenter
 from gui.scheduler_view import SchedulerPanel
 from gui.history import (
@@ -102,18 +102,15 @@ def normalize_right_tabs(saved, defs=RIGHT_PANEL_DEFS):
     return order
 
 
-class RightTabsDialog(simpledialog.Dialog):
-    """右侧面板标签页设置对话框：单列表 + 勾选显示/隐藏 + 上移/下移排序。
+class RightTabsDialog(ChineseDialog):
+    """右侧面板标签页设置对话框：真实复选框勾选显示/隐藏 + 独立排序列表。
 
-    - 列表同时展示全部标签页：☑ 表示显示、☐ 表示隐藏（显示项在前、隐藏项在后）；
-    - 双击列表项或点「勾选/取消」切换显示/隐藏，上移/下移仅对显示项生效；
+    - 左侧「显示 / 隐藏」：每个标签页一行真实复选框（Checkbutton），
+      勾选 = 显示、取消勾选 = 隐藏，单击复选框或文字即可切换；
+    - 右侧「显示顺序」：仅列示已勾选的标签页，支持多选 + 上移/下移整体调整；
     - 确认后结果保存在 self.vis_order（有序可见 key 列表），
       取消时 self.result 为 None（Dialog 默认行为）。
     """
-
-    # 列表项状态前缀
-    _MARK_ON = "☑"
-    _MARK_OFF = "☐"
 
     def __init__(self, parent, vis_order, title="右侧标签页设置"):
         self.vis_order = list(vis_order)
@@ -135,94 +132,129 @@ class RightTabsDialog(simpledialog.Dialog):
             pass
 
     def body(self, master):
-        self.geometry("480x430")
+        self.geometry("680x470")
         self._center_on_parent()
-        master.grid_columnconfigure(0, weight=1)
+        master.grid_columnconfigure(0, weight=3)
+        master.grid_columnconfigure(1, weight=2)
         master.grid_rowconfigure(0, weight=1)
 
-        frame = ttk.LabelFrame(
-            master,
-            text="勾选要显示的标签页（☑=显示 ☐=隐藏，双击或按空格可快速切换）",
-            padding="6",
-        )
-        frame.grid(row=0, column=0, sticky=tk.NSEW, padx=12, pady=(8, 3))
-        frame.grid_columnconfigure(0, weight=1)
-        frame.grid_rowconfigure(0, weight=1)
+        # ===== 左侧：显示 / 隐藏（真实复选框，原生渲染清晰） =====
+        left = ttk.LabelFrame(master, text="显示 / 隐藏标签页", padding="8")
+        left.grid(row=0, column=0, sticky=tk.NSEW, padx=(12, 6), pady=(8, 3))
+        left.grid_columnconfigure(0, weight=1)
 
-        # 单列表：显示项在前，隐藏项在后
-        self.listbox = tk.Listbox(frame, selectmode=tk.EXTENDED, exportselection=False)
-        scroll = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=self.listbox.yview)
-        self.listbox.configure(yscrollcommand=scroll.set)
-        self.listbox.grid(row=0, column=0, sticky=tk.NSEW)
-        scroll.grid(row=0, column=1, sticky=tk.NS)
-        self.listbox.bind("<Double-Button-1>", lambda e: self._toggle_selected())
-        self.listbox.bind("<space>", lambda e: self._toggle_selected())
+        ttk.Label(
+            left,
+            text="勾选 = 显示，取消勾选 = 隐藏（单击复选框或文字即切换）",
+            foreground="#666",
+        ).grid(row=0, column=0, sticky=tk.W, pady=(0, 6))
 
-        btn_row = ttk.Frame(frame)
-        btn_row.grid(row=1, column=0, columnspan=2, sticky=tk.EW, pady=(6, 0))
+        # 每个标签页一行真实 Checkbutton，勾选状态直接驱动 vis_order/_hidden
+        self.cb_vars = {
+            key: tk.BooleanVar(value=key in self.vis_order)
+            for key, _n, _v in RIGHT_PANEL_DEFS
+        }
+        for i, (key, name, _v) in enumerate(RIGHT_PANEL_DEFS):
+            ttk.Checkbutton(
+                left,
+                text=name,
+                variable=self.cb_vars[key],
+                command=lambda k=key: self._on_check_toggle(k),
+            ).grid(row=1 + i, column=0, sticky=tk.W, padx=(2, 0), pady=2)
+
+        all_row = ttk.Frame(left)
+        all_row.grid(row=1 + len(RIGHT_PANEL_DEFS), column=0, sticky=tk.E, pady=(10, 0))
+        ttk.Button(all_row, text="全部显示", width=8, command=self._show_all).pack(side=tk.LEFT)
         ttk.Button(
-            btn_row, text="勾选/取消", width=10, command=self._toggle_selected
-        ).pack(side=tk.LEFT)
+            all_row, text="全部隐藏", width=8, command=self._hide_all
+        ).pack(side=tk.LEFT, padx=(6, 0))
+
+        # ===== 右侧：显示顺序（只含已勾选标签页，可多选后整体移动） =====
+        right = ttk.LabelFrame(master, text="显示顺序", padding="8")
+        right.grid(row=0, column=1, sticky=tk.NSEW, padx=(6, 12), pady=(8, 3))
+        right.grid_columnconfigure(0, weight=1)
+        right.grid_rowconfigure(1, weight=1)
+
+        ttk.Label(
+            right,
+            text="仅列示已勾选的标签页，可多选后整体上移 / 下移",
+            foreground="#666",
+        ).grid(row=0, column=0, columnspan=2, sticky=tk.W, pady=(0, 6))
+
+        self.order_listbox = tk.Listbox(
+            right, selectmode=tk.EXTENDED, exportselection=False, height=8
+        )
+        scroll = ttk.Scrollbar(right, orient=tk.VERTICAL, command=self.order_listbox.yview)
+        self.order_listbox.configure(yscrollcommand=scroll.set)
+        self.order_listbox.grid(row=1, column=0, sticky=tk.NSEW)
+        scroll.grid(row=1, column=1, sticky=tk.NS)
+
+        btn_row = ttk.Frame(right)
+        btn_row.grid(row=2, column=0, columnspan=2, sticky=tk.EW, pady=(10, 0))
         ttk.Button(
             btn_row, text="上移", width=6, command=lambda: self._move(-1)
-        ).pack(side=tk.LEFT, padx=(4, 0))
+        ).pack(side=tk.LEFT)
         ttk.Button(
             btn_row, text="下移", width=6, command=lambda: self._move(1)
-        ).pack(side=tk.LEFT, padx=(4, 0))
-        ttk.Button(
-            btn_row, text="全部显示", width=8, command=self._show_all
-        ).pack(side=tk.RIGHT)
-        ttk.Button(
-            btn_row, text="全部隐藏", width=8, command=self._hide_all
-        ).pack(side=tk.RIGHT, padx=(0, 4))
+        ).pack(side=tk.LEFT, padx=(6, 0))
 
+        # ===== 底部：恢复默认 + 提示 =====
         bottom = ttk.Frame(master)
-        bottom.grid(row=1, column=0, sticky=tk.EW, padx=12, pady=(2, 0))
+        bottom.grid(row=1, column=0, columnspan=2, sticky=tk.EW, padx=12, pady=(2, 0))
         ttk.Button(bottom, text="恢复默认", command=self._reset_default).pack(side=tk.LEFT)
         ttk.Label(
             bottom,
-            text="提示：上移/下移只对显示的标签页生效",
+            text="提示：右侧顺序列表随左侧勾选状态实时刷新",
             foreground="#666",
         ).pack(side=tk.LEFT, padx=(10, 0))
 
-        self._refresh()
-        return self.listbox
+        self._sync_order_list()
+        # 等按钮区构建完成后按内容实际高度压缩窗口，避免确定/取消下方出现空白
+        self.after_idle(self._fit_height)
+        return self.order_listbox
 
-    def _refresh(self):
-        """重绘列表：显示项（☑）在前，隐藏项（☐）在后。"""
-        self._entries = self.vis_order + self._hidden
-        self.listbox.delete(0, tk.END)
-        for key in self._entries:
-            mark = self._MARK_ON if key in self.vis_order else self._MARK_OFF
-            self.listbox.insert(tk.END, f"{mark}  {self._name_map[key]}")
+    def _fit_height(self):
+        """按内容实际需求高度调整窗口，去除按钮下方多余空白。"""
+        self.update_idletasks()
+        req_h = self.winfo_reqheight()
+        if 0 < req_h < 700:
+            self.geometry(f"{self.winfo_width()}x{max(req_h + 6, 360)}")
+        self._center_on_parent()
 
-    def _toggle_selected(self):
-        """把选中的列表项在「显示/隐藏」间切换。"""
-        sel = list(self.listbox.curselection())
-        if not sel:
-            return
-        for i in sel:
-            key = self._entries[i]
-            if key in self.vis_order:
-                self.vis_order.remove(key)
-                self._hidden.append(key)
-            else:
-                self._hidden.remove(key)
-                self.vis_order.append(key)
-        self._refresh()
+    # ====================== 显示 / 隐藏状态同步 ======================
+    def _on_check_toggle(self, key):
+        """复选框勾选变化：把标签页在「显示/隐藏」间移动并刷新排序列表。"""
+        if key in self.vis_order:
+            self.vis_order.remove(key)
+            self._hidden.append(key)
+        else:
+            self._hidden.remove(key)
+            self.vis_order.append(key)  # 新勾选项追加到显示区末尾
+        self._sync_order_list()
 
+    def _sync_check_states(self):
+        """按当前 vis_order/_hidden 刷新左侧复选框勾选状态。"""
+        for key, var in self.cb_vars.items():
+            var.set(key in self.vis_order)
+
+    def _sync_order_list(self):
+        """重建右侧排序列表（只含当前显示的标签页）。"""
+        self.order_listbox.delete(0, tk.END)
+        for key in self.vis_order:
+            self.order_listbox.insert(tk.END, self._name_map[key])
+
+    # ====================== 排序操作（仅对显示的标签页生效） ======================
     def _move(self, delta):
-        """把选中的显示项作为整体块上移/下移一位（隐藏项不参与排序）。"""
-        sel = list(self.listbox.curselection())
+        """把选中的显示项作为整体块上移/下移一位。"""
+        sel = list(self.order_listbox.curselection())
         if not sel:
             return
-        shown_count = len(self.vis_order)
-        sel = [i for i in sel if i < shown_count]  # 只移动显示区
+        order = self.vis_order
+        n = len(order)
+        sel = [i for i in sel if 0 <= i < n]  # 防御越界索引
         if not sel:
             return
         sel_set = set(sel)
-        order = self.vis_order
-        n = len(order)
         sel_keys = [order[i] for i in sorted(sel)]
 
         if delta < 0:
@@ -245,26 +277,29 @@ class RightTabsDialog(simpledialog.Dialog):
         else:
             insert_pos = remaining.index(order[j]) + 1
         self.vis_order = remaining[:insert_pos] + sel_keys + remaining[insert_pos:]
-        self._refresh()
+        self._sync_order_list()
         for key in sel_keys:
-            self.listbox.selection_set(self._entries.index(key))
+            self.order_listbox.selection_set(self.vis_order.index(key))
 
     def _show_all(self):
         """把全部隐藏项追加到显示区末尾。"""
         self.vis_order = self.vis_order + list(self._hidden)
         self._hidden = []
-        self._refresh()
+        self._sync_check_states()
+        self._sync_order_list()
 
     def _hide_all(self):
         """把全部显示项移入隐藏区（点确定时 validate 会拦截全隐藏）。"""
         self._hidden = self._hidden + list(self.vis_order)
         self.vis_order = []
-        self._refresh()
+        self._sync_check_states()
+        self._sync_order_list()
 
     def _reset_default(self):
         self.vis_order = list(DEFAULT_RIGHT_TABS)
         self._hidden = [k for k, _n, _v in RIGHT_PANEL_DEFS if k not in self.vis_order]
-        self._refresh()
+        self._sync_check_states()
+        self._sync_order_list()
 
     def validate(self):
         if not self.vis_order:
@@ -455,7 +490,7 @@ class AutomationGUI:
         settings_menu.add_separator()
         settings_menu.add_command(label="日志级别说明", command=self._show_log_level_help)
         settings_menu.add_separator()
-        settings_menu.add_command(label="右侧标签页…", command=self._open_right_tabs_dialog)
+        settings_menu.add_command(label="右侧标签页设置", command=self._open_right_tabs_dialog)
 
         # 主框架：用 grid 布局，row=0 可伸缩收缩，保证底部状态栏始终有空间
         self.root.grid_rowconfigure(0, weight=1)

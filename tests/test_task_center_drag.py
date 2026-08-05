@@ -509,7 +509,7 @@ class TaskCenterRenameGroupTests(unittest.TestCase):
     def test_rename_keeps_client_and_tasks(self):
         center = self._center()
         with (
-            patch("gui.task_center.simpledialog.askstring", return_value="钱龙晨检"),
+            patch("gui.task_center.ask_string", return_value="钱龙晨检"),
             patch.object(center, "_rename_group_in_scheduler", return_value=0) as rn,
         ):
             center.rename_group()
@@ -526,7 +526,7 @@ class TaskCenterRenameGroupTests(unittest.TestCase):
         center = self._center()
         center.groups.append({"name": "钱龙晨检", "client_id": "qianlong", "tasks": []})
         with (
-            patch("gui.task_center.simpledialog.askstring", return_value="钱龙晨检"),
+            patch("gui.task_center.ask_string", return_value="钱龙晨检"),
             patch("gui.task_center.messagebox.showwarning") as warn,
         ):
             center.rename_group()
@@ -535,7 +535,7 @@ class TaskCenterRenameGroupTests(unittest.TestCase):
 
     def test_rename_same_name_noop(self):
         center = self._center()
-        with patch("gui.task_center.simpledialog.askstring", return_value="钱龙开盘"):
+        with patch("gui.task_center.ask_string", return_value="钱龙开盘"):
             center.rename_group()
         center._save_groups.assert_not_called()
         self.assertEqual("钱龙开盘", center.groups[0]["name"])

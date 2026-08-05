@@ -88,66 +88,64 @@ class RightTabsDialogLogicTests(unittest.TestCase):
         dlg.vis_order = list(vis_order)
         dlg._hidden = [k for k in ALL_KEYS if k not in dlg.vis_order]
         dlg._name_map = {key: name for key, name, _v in RIGHT_PANEL_DEFS}
-        dlg._entries = dlg.vis_order + dlg._hidden
-        dlg.listbox = Mock()
-        dlg.listbox.curselection.return_value = ()
+        dlg.cb_vars = {k: Mock() for k in ALL_KEYS}
+        dlg.order_listbox = Mock()
+        dlg.order_listbox.curselection.return_value = ()
         return dlg
 
-    def test_toggle_checked_moves_key_to_hidden(self):
+    def test_uncheck_moves_key_to_hidden(self):
         dlg = self._make_dialog(["运行日志", "任务历史", "任务中心"])
-        # entries: 运行日志(0) 任务历史(1) 任务中心(2) 定时任务(3) 结果比对(4) 报告中心(5)
-        dlg.listbox.curselection.return_value = (1,)  # 取消勾选 任务历史
-        dlg._toggle_selected()
+        # 取消勾选「任务历史」：从显示区移到隐藏区末尾
+        dlg._on_check_toggle("任务历史")
         self.assertEqual(dlg.vis_order, ["运行日志", "任务中心"])
         self.assertEqual(
             dlg._hidden,
             ["定时任务", "结果比对", "报告中心", "任务历史"],
         )
 
-    def test_toggle_unchecked_appends_to_vis_order(self):
+    def test_check_appends_to_vis_order(self):
         dlg = self._make_dialog(["运行日志"])
-        # entries: 运行日志(0) 任务历史(1) 任务中心(2) 定时任务(3) 结果比对(4) 报告中心(5)
-        dlg.listbox.curselection.return_value = (3,)  # 勾选 定时任务
-        dlg._toggle_selected()
+        # 勾选「定时任务」：追加到显示区末尾
+        dlg._on_check_toggle("定时任务")
         self.assertEqual(dlg.vis_order, ["运行日志", "定时任务"])
         self.assertNotIn("定时任务", dlg._hidden)
 
-    def test_toggle_empty_selection_is_noop(self):
-        dlg = self._make_dialog(["运行日志", "任务历史"])
-        dlg._toggle_selected()
-        self.assertEqual(dlg.vis_order, ["运行日志", "任务历史"])
-
     def test_move_up_single(self):
         dlg = self._make_dialog(["运行日志", "任务历史", "任务中心", "定时任务"])
-        dlg.listbox.curselection.return_value = (2,)  # 任务中心
+        dlg.order_listbox.curselection.return_value = (2,)  # 任务中心
         dlg._move(-1)
         self.assertEqual(dlg.vis_order, ["运行日志", "任务中心", "任务历史", "定时任务"])
 
     def test_move_down_single(self):
         dlg = self._make_dialog(["运行日志", "任务历史", "任务中心", "定时任务"])
-        dlg.listbox.curselection.return_value = (1,)  # 任务历史
+        dlg.order_listbox.curselection.return_value = (1,)  # 任务历史
         dlg._move(1)
         self.assertEqual(dlg.vis_order, ["运行日志", "任务中心", "任务历史", "定时任务"])
 
-    def test_move_ignores_hidden_items(self):
+    def test_move_without_selection_is_noop(self):
+        dlg = self._make_dialog(["运行日志", "任务历史"])
+        dlg._move(-1)
+        self.assertEqual(dlg.vis_order, ["运行日志", "任务历史"])
+
+    def test_move_out_of_range_is_noop(self):
+        # 排序列表只含显示项，越界索引防御性忽略
         dlg = self._make_dialog(["运行日志", "任务历史", "任务中心"])
-        # entries: 显示区 3 项(0-2)，隐藏区 3 项(3-5)；选中隐藏区「定时任务」
-        dlg.listbox.curselection.return_value = (3,)
+        dlg.order_listbox.curselection.return_value = (9,)
         dlg._move(-1)
         self.assertEqual(dlg.vis_order, ["运行日志", "任务历史", "任务中心"])
 
     def test_move_blocked_at_edges(self):
         dlg = self._make_dialog(["运行日志", "任务历史", "任务中心"])
-        dlg.listbox.curselection.return_value = (0,)
+        dlg.order_listbox.curselection.return_value = (0,)
         dlg._move(-1)
         self.assertEqual(dlg.vis_order, ["运行日志", "任务历史", "任务中心"])
-        dlg.listbox.curselection.return_value = (2,)
+        dlg.order_listbox.curselection.return_value = (2,)
         dlg._move(1)
         self.assertEqual(dlg.vis_order, ["运行日志", "任务历史", "任务中心"])
 
     def test_move_multi_block_down(self):
         dlg = self._make_dialog(["运行日志", "任务历史", "任务中心", "定时任务"])
-        dlg.listbox.curselection.return_value = (0, 1)  # 运行日志+任务历史
+        dlg.order_listbox.curselection.return_value = (0, 1)  # 运行日志+任务历史
         dlg._move(1)
         self.assertEqual(
             dlg.vis_order,
@@ -156,7 +154,7 @@ class RightTabsDialogLogicTests(unittest.TestCase):
 
     def test_move_multi_block_up(self):
         dlg = self._make_dialog(["运行日志", "任务历史", "任务中心", "定时任务"])
-        dlg.listbox.curselection.return_value = (2, 3)  # 任务中心+定时任务
+        dlg.order_listbox.curselection.return_value = (2, 3)  # 任务中心+定时任务
         dlg._move(-1)
         self.assertEqual(
             dlg.vis_order,
@@ -183,6 +181,18 @@ class RightTabsDialogLogicTests(unittest.TestCase):
         dlg._reset_default()
         self.assertEqual(dlg.vis_order, DEFAULT_RIGHT_TABS)
         self.assertEqual(dlg._hidden, [])
+
+    def test_sync_check_states_updates_vars(self):
+        dlg = self._make_dialog(["运行日志"])
+        dlg._sync_check_states()
+        dlg.cb_vars["运行日志"].set.assert_called_once_with(True)
+        dlg.cb_vars["报告中心"].set.assert_called_once_with(False)
+
+    def test_sync_order_list_reflects_visible_only(self):
+        dlg = self._make_dialog(["报告中心", "运行日志"])
+        dlg._sync_order_list()
+        inserted = [c.args[0] for c in dlg.order_listbox.insert.call_args_list]
+        self.assertEqual(inserted, ["报告中心", "运行日志"])
 
     def test_validate_rejects_all_hidden(self):
         dlg = self._make_dialog([])

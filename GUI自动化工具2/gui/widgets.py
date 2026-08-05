@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-"""通用 GUI 控件：带颜色分级的日志文本框等"""
+"""通用 GUI 控件：带颜色分级的日志文本框、中文按钮对话框基类等"""
 
 import tkinter as tk
-from tkinter import scrolledtext
+from tkinter import scrolledtext, ttk, simpledialog
 from datetime import datetime
 
 
@@ -181,3 +181,56 @@ class ColoredLogText(scrolledtext.ScrolledText):
         if self._auto_scroll:
             self.see(tk.END)
         self.config(state=tk.DISABLED)
+
+
+class ChineseDialog(simpledialog.Dialog):
+    """中文按钮对话框基类：底部按钮统一为「确定 / 取消」。
+
+    项目约定：所有新建对话框都应继承本类（或复用它定义的中文按钮），
+    避免界面出现英文 OK / Cancel 混排。
+    """
+
+    def buttonbox(self):
+        """用「确定 / 取消」替代默认英文 OK / Cancel。
+
+        不设 default=ACTIVE，避免 Windows 下「确定」出现蓝色默认按钮高亮。
+        """
+        box = ttk.Frame(self)
+        ttk.Button(box, text="确定", width=10, command=self.ok).pack(
+            side=tk.LEFT, padx=5, pady=5
+        )
+        ttk.Button(box, text="取消", width=10, command=self.cancel).pack(
+            side=tk.LEFT, padx=5, pady=5
+        )
+        self.bind("<Return>", self.ok)
+        self.bind("<Escape>", self.cancel)
+        box.pack()
+
+
+class ChineseInputDialog(ChineseDialog):
+    """中文按钮的文本输入对话框：替代 simpledialog.askstring（其按钮为英文）。"""
+
+    def __init__(self, parent, title, prompt, initialvalue=""):
+        self._prompt = prompt
+        self._initial = initialvalue
+        self.result = None
+        super().__init__(parent, title=title)
+
+    def body(self, master):
+        ttk.Label(master, text=self._prompt).pack(padx=16, pady=(12, 6))
+        self._entry = ttk.Entry(master, width=40)
+        self._entry.pack(padx=16, pady=(0, 8))
+        if self._initial:
+            self._entry.insert(0, self._initial)
+        return self._entry
+
+    def validate(self):
+        return True
+
+    def apply(self):
+        self.result = self._entry.get()
+
+
+def ask_string(parent, title, prompt, initialvalue=""):
+    """中文按钮的文本输入框（等价 simpledialog.askstring，但按钮为中文）。"""
+    return ChineseInputDialog(parent, title, prompt, initialvalue).result

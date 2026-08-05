@@ -27,6 +27,7 @@ import os
 import json
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
+from gui.widgets import ask_string
 from gui.history import (
     STATUS_SUCCESS,
     STATUS_FAILED,
@@ -578,8 +579,8 @@ class TaskCenter:
         group = next((g for g in self.groups if g["name"] == name), None)
         if not group:
             return
-        new_name = simpledialog.askstring(
-            "重命名编队", f"请输入编队「{name}」的新名称:", parent=self.parent
+        new_name = ask_string(
+            self.parent, "重命名编队", f"请输入编队「{name}」的新名称:"
         )
         if not new_name:
             return
