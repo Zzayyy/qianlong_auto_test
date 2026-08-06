@@ -57,7 +57,6 @@ from core.settings_window import (
 )
 from core.settings import SettingsTestResult
 from core.settings_standard import load_standard
-from core.settings_auto_id import apply_client_auto_id
 
 
 # ====================== 可配置参数 ======================
@@ -152,25 +151,6 @@ RADIO_NAMES = {
     "2220": "确定数量", "2221": "全部数量", "2222": "上一次交易数量",  # 股票买入
     "2223": "确定数量", "2224": "全部数量", "2225": "上一次交易数量",  # 股票卖出
 }
-
-# 客户端专属控件 ID 覆盖（广发等与默认 AUTO_ID 不同，见 core/settings_auto_id.py）
-apply_client_auto_id(PANEL_NAME, AUTO_ID, RADIO_NAMES, CLIENT_ID)
-
-# 底部复选框清单（广发无 委托成交时发出提示音/点击持仓联动行情）
-if CLIENT_ID == "guangfa":
-    BOTTOM_CHECK_KEYS = [
-        "静默委托下单模式",
-        "显示期权下单成功提示",
-        "显示期权宝软件风险揭示书",
-    ]
-else:
-    BOTTOM_CHECK_KEYS = [
-        "静默委托下单模式",
-        "显示期权下单成功提示",
-        "显示期权宝软件风险揭示书",
-        "委托成交时发出提示音",
-        "点击持仓联动行情",
-    ]
 
 # 输出目录（可被 GUI 传入的 GUI_OUTPUT_DIR 环境变量覆盖）
 _OUTPUT_DIR_DEFAULT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "交易系统设置_测试结果")
@@ -299,10 +279,7 @@ def _get_control_hwnd(dlg, auto_id: str) -> Optional[int]:
     found = []
     def _cb(hwnd, _):
         try:
-            # 只匹配可见控件：广发等客户端不同页面共用同一 auto_id（如 16074），
-            # 隐藏的是其它页面控件，不可见则不应命中
-            if (win32gui.GetDlgCtrlID(hwnd) == target
-                    and win32gui.IsWindowVisible(hwnd)):
+            if win32gui.GetDlgCtrlID(hwnd) == target:
                 found.append(hwnd)
         except Exception:
             pass
@@ -795,7 +772,15 @@ def test_bottom_checkboxes(dlg, result: SettingsTestResult):
     """测试四、底部复选框"""
     print("\n--- [4/4] 底部复选框设置 ---")
 
-    for key_name in BOTTOM_CHECK_KEYS:
+    bottom_checks = [
+        "静默委托下单模式",
+        "显示期权下单成功提示",
+        "显示期权宝软件风险揭示书",
+        "委托成交时发出提示音",
+        "点击持仓联动行情",
+    ]
+
+    for key_name in bottom_checks:
         state = get_checkbox_state_by_id(dlg, AUTO_ID[key_name])
         result.add_result(key_name, state, STANDARD_VALUES[key_name])
 
@@ -930,7 +915,8 @@ def collect_current_settings(dlg) -> dict:
                  lambda: _trade_sub("期货交易"))
 
     # 四、底部复选框
-    for key in BOTTOM_CHECK_KEYS:
+    for key in ("静默委托下单模式", "显示期权下单成功提示",
+                "显示期权宝软件风险揭示书", "委托成交时发出提示音", "点击持仓联动行情"):
         st = get_checkbox_state_by_id(dlg, AUTO_ID[key])
         data[key] = bool(st) if st is not None else False
 

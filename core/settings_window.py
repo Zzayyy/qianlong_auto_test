@@ -36,44 +36,26 @@ def _dialog_title(dialog) -> str:
     return ""
 
 
-def _find_native_nav_list(hwnd: int, nav_auto_id: int = 2210) -> int | None:
-    """纯 win32 定位设置对话框的导航 ListBox 句柄。
+def _has_settings_nav(hwnd: int) -> bool:
+    """纯 win32 判断：该 #32770 对话框是否含有 auto_id=2210 的导航 ListBox。
 
-    绝大多数客户端（钱龙/国泰/中泰/华宝）导航 ListBox 的 auto_id 为 2210；
-    广发证券为 977。此处优先按指定 auto_id 精确命中，命中不了时若对话框内
-    恰好只有一个可见 ListBox 则直接采用，兼容不同导航 ID 的客户端。
-    找不到返回 None。
+    本软件的设置框标题在 GetWindowText 中为空（仅存在于 TitleBar 的 Value），
+    但其必然包含 auto_id=2210 的 ListBox 导航控件。用 GetDlgCtrlID 直接判定
+    即可，避免每一次轮询都走 UIA，显著降低检测开销。
     """
-    matches: list[int] = []
-
+    found = []
     def _enum(child, _):
         try:
             if (win32gui.GetClassName(child) == "ListBox"
-                    and win32gui.IsWindowVisible(child)):
-                matches.append(child)
+                    and win32gui.GetDlgCtrlID(child) == 2210):
+                found.append(child)
         except Exception:
             pass
-
     try:
         win32gui.EnumChildWindows(hwnd, _enum, None)
     except Exception:
-        return None
-    for child in matches:
-        if win32gui.GetDlgCtrlID(child) == nav_auto_id:
-            return child
-    if len(matches) == 1:
-        return matches[0]
-    return None
-
-
-def _has_settings_nav(hwnd: int) -> bool:
-    """纯 win32 判断：该 #32770 对话框是否含导航 ListBox。
-
-    本软件的设置框标题在部分客户端 GetWindowText 中为空（仅存在于 TitleBar
-    的 Value），其必然包含导航 ListBox（常见 auto_id=2210，广发为 977）。
-    用 GetDlgCtrlID 直接判定即可，避免每一次轮询都走 UIA，显著降低检测开销。
-    """
-    return _find_native_nav_list(hwnd, 2210) is not None
+        pass
+    return len(found) > 0
 
 
 def find_settings_dialog(main_window, title: str = "交易系统设置"):
@@ -418,15 +400,29 @@ def switch_settings_panel(dialog, panel_name: str,
     """Select a settings page with a native ListBox notification first."""
     try:
         dialog_hwnd = int(dialog.handle)
-        list_hwnd = _find_native_nav_list(dialog_hwnd, int(navigation_auto_id))
-        if list_hwnd is None:
+        native_lists: list[int] = []
+
+        def _enum(hwnd, _):
+            try:
+                if (
+                    win32gui.GetDlgCtrlID(hwnd) == int(navigation_auto_id)
+                    and win32gui.GetClassName(hwnd) == "ListBox"
+                    and win32gui.IsWindowVisible(hwnd)
+                ):
+                    native_lists.append(hwnd)
+            except Exception:
+                pass
+
+        win32gui.EnumChildWindows(dialog_hwnd, _enum, None)
+        if len(native_lists) == 1:
+            list_hwnd = native_lists[0]
+            navigation = dialog.app.window(handle=list_hwnd)
+        else:
             navigation = dialog.child_window(
                 auto_id=navigation_auto_id, control_type="List"
             )
             navigation.wait("ready", timeout=5)
             list_hwnd = int(navigation.wrapper_object().handle)
-        else:
-            navigation = dialog.app.window(handle=list_hwnd)
 
         items = navigation.descendants(control_type="ListItem")
         names = [(item.window_text() or "").strip() for item in items]

@@ -75,7 +75,6 @@ from core.settings_window import (
 )
 from core.settings import SettingsTestResult
 from core.settings_standard import load_standard, load_super_price_template
-from core.settings_auto_id import apply_client_auto_id
 
 
 # ====================== 可配置参数 ======================
@@ -212,11 +211,6 @@ RADIO_NAMES = {
     "2237": "按权利/义务", "2235": "按认购/认沽",  # 反手指令设置
 }
 
-# 客户端专属控件 ID 覆盖（广发等与默认 AUTO_ID 不同，见 core/settings_auto_id.py）
-apply_client_auto_id(PANEL_NAME, AUTO_ID, RADIO_NAMES, CLIENT_ID)
-# 广发期权设置无以下项（2026-08-05 采集确认）
-IS_GUANGFA = CLIENT_ID == "guangfa"
-
 # 输出目录（可被 GUI 传入的 GUI_OUTPUT_DIR 环境变量覆盖）
 _OUTPUT_DIR_DEFAULT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "交易系统设置_测试结果")
 OUTPUT_DIR = os.environ.get("GUI_OUTPUT_DIR", "") or _OUTPUT_DIR_DEFAULT
@@ -286,10 +280,7 @@ def _get_control_hwnd(dlg, auto_id: str):
     found = []
     def _cb(hwnd, _):
         try:
-            # 只匹配可见控件：广发等客户端不同页面共用同一 auto_id（如 16074），
-            # 隐藏的是其它页面控件，不可见则不应命中
-            if (win32gui.GetDlgCtrlID(hwnd) == target
-                    and win32gui.IsWindowVisible(hwnd)):
+            if win32gui.GetDlgCtrlID(hwnd) == target:
                 found.append(hwnd)
         except Exception:
             pass
@@ -666,10 +657,6 @@ def test_close_and_filter(dlg, result: SettingsTestResult):
     filter_expect = "、".join(STANDARD_VALUES["持仓过滤设置_选项列表"])
     result.add_result("持仓过滤设置_选项列表", filter_actual, filter_expect)
 
-    # 广发无"记录上一次标的/月份过滤状态"
-    if IS_GUANGFA:
-        print("  [INFO] 广发客户端无'记录上一次标的/月份过滤状态'，跳过")
-        return
     record = get_checkbox_state_by_id(dlg, AUTO_ID["记录上一次标的_月份过滤状态"])
     result.add_result("记录上一次标的/月份过滤状态", record, STANDARD_VALUES["记录上一次标的_月份过滤状态"])
 
@@ -710,10 +697,6 @@ def test_self_trade_and_query(dlg, result: SettingsTestResult):
     ])
     result.add_result("自成交检查", self_trade or "(无选中)", STANDARD_VALUES["自成交检查"])
 
-    # 广发无"委托定时查询"
-    if IS_GUANGFA:
-        print("  [INFO] 广发客户端无'委托定时查询'，跳过")
-        return
     timed_query = get_selected_radiobutton(dlg, [
         AUTO_ID["委托定时查询_关闭"],
         AUTO_ID["委托定时查询_开启"],
@@ -724,11 +707,6 @@ def test_self_trade_and_query(dlg, result: SettingsTestResult):
 def test_expiration_reminder(dlg, result: SettingsTestResult):
     """测试六、到期提醒"""
     print("\n--- [6/8] 到期提醒 ---")
-
-    # 广发期权设置无"到期提醒"相关控件，整体跳过
-    if IS_GUANGFA:
-        print("  [INFO] 广发客户端无'到期提醒'设置，跳过")
-        return
 
     contract_checked = get_checkbox_state_by_id(dlg, AUTO_ID["合约_日内到期提醒"])
     result.add_result("合约_日内到期提醒_勾选", contract_checked,
@@ -1565,9 +1543,8 @@ def collect_current_settings(dlg) -> dict:
     data["持仓过滤设置"] = filter_setting or ""
     filter_items = get_combobox_items_by_id(dlg, AUTO_ID["持仓过滤设置"])
     data["持仓过滤设置_选项列表"] = filter_items or []
-    if not IS_GUANGFA:
-        record = get_checkbox_state_by_id(dlg, AUTO_ID["记录上一次标的_月份过滤状态"])
-        data["记录上一次标的_月份过滤状态"] = bool(record) if record is not None else False
+    record = get_checkbox_state_by_id(dlg, AUTO_ID["记录上一次标的_月份过滤状态"])
+    data["记录上一次标的_月份过滤状态"] = bool(record) if record is not None else False
 
     # 四、止盈止损设置
     valid = get_combobox_selection_by_id(dlg, AUTO_ID["止盈止损单默认有效期"])
@@ -1584,21 +1561,19 @@ def collect_current_settings(dlg) -> dict:
     # 五、自成交检查 / 委托定时查询
     data["自成交检查"] = get_selected_radiobutton(
         dlg, [AUTO_ID["自成交检查_关闭"], AUTO_ID["自成交检查_开启"]]) or ""
-    if not IS_GUANGFA:
-        data["委托定时查询"] = get_selected_radiobutton(
-            dlg, [AUTO_ID["委托定时查询_关闭"], AUTO_ID["委托定时查询_开启"]]) or ""
+    data["委托定时查询"] = get_selected_radiobutton(
+        dlg, [AUTO_ID["委托定时查询_关闭"], AUTO_ID["委托定时查询_开启"]]) or ""
 
-    # 六、到期提醒（广发无此设置）
-    if not IS_GUANGFA:
-        contract_checked = get_checkbox_state_by_id(dlg, AUTO_ID["合约_日内到期提醒"])
-        data["合约_日内到期提醒_勾选"] = bool(contract_checked) if contract_checked is not None else False
-        if contract_checked:
-            contract_days = get_edit_value_by_id(dlg, AUTO_ID["合约_日内到期提醒_数值"])
-            data["合约_日内到期提醒_数值"] = contract_days if contract_days is not None else 0
-        else:
-            data["合约_日内到期提醒_数值"] = 0
-        cover = get_checkbox_state_by_id(dlg, AUTO_ID["卖出平仓所得无法覆盖成本时提醒"])
-        data["卖出平仓所得无法覆盖成本时提醒"] = bool(cover) if cover is not None else False
+    # 六、到期提醒
+    contract_checked = get_checkbox_state_by_id(dlg, AUTO_ID["合约_日内到期提醒"])
+    data["合约_日内到期提醒_勾选"] = bool(contract_checked) if contract_checked is not None else False
+    if contract_checked:
+        contract_days = get_edit_value_by_id(dlg, AUTO_ID["合约_日内到期提醒_数值"])
+        data["合约_日内到期提醒_数值"] = contract_days if contract_days is not None else 0
+    else:
+        data["合约_日内到期提醒_数值"] = 0
+    cover = get_checkbox_state_by_id(dlg, AUTO_ID["卖出平仓所得无法覆盖成本时提醒"])
+    data["卖出平仓所得无法覆盖成本时提醒"] = bool(cover) if cover is not None else False
 
     # 七、费用扣减（临时启用再恢复，以读取下方数值）
     initial_enabled = get_checkbox_state_by_id(dlg, AUTO_ID["启用费用扣减"])
