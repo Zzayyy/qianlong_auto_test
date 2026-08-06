@@ -97,6 +97,11 @@ DIALOG_KEYWORDS = (DIALOG_TITLE, "警告", "确认", "提示")
 AFFIRMATIVE_IDS = (1, 6, 5051)  # IDOK / IDYES / 客户端自定义“确定”
 CANCEL_IDS = (2, 7, 5052)       # IDCANCEL / IDNO / 客户端自定义“取消”
 
+# 无数据提示弹窗：列表首行为"没有查询到相应的数据"时，点击拆分/组合后
+# 客户端弹的是提示框而非申报数量框；确认该弹窗后按无数据跳过本次。
+NO_DATA_SENTINEL = "no_data"
+NOTICE_DIALOG_TITLES = ("提示", "警告", "信息")
+
 
 class DialogCleanupError(RuntimeError):
     """交易弹窗无法关闭；继续遍历可能导致客户端消息循环卡死。"""
@@ -579,13 +584,33 @@ def get_edit_text(edit_hwnd):
     return buf.value
 
 
-def fill_qty_in_dialog(main_hwnd, timeout=8):
-    """定位当前申报数量弹窗，填写委托数量，返回弹窗句柄（失败返回 None）。
+def _find_notice_dialog(main_hwnd):
+    """查找"无数据"提示弹窗（目标进程 #32770 且不含数量编辑框 9057）。
 
-    注意：部分标题含申报名称的窗口（如提示/结果框）并不含委托数量编辑框 9057，
-    win32gui.GetDlgItem 对不存在的控件 ID 会抛 1421 异常（而非返回 0），
-    因此必须放在 try 中并跳过；只认真正的 #32770 对话框，避免误匹配主窗口等。
-    写完后回读校验，确保数量确实写入（避免点到"确定"时数量仍为空）。
+    点击拆分/组合按钮后，若列表首行是"没有查询到相应的数据"等提示行，
+    客户端不会弹申报数量框，而会弹提示框（标题含 提示/警告/信息），
+    需要点击确定关闭。数量弹窗含编辑框 9057，据此区分。
+    """
+    target_pid = _dlg_pid(main_hwnd)
+    for dlg in find_all_dialogs(target_pid):
+        if has_control(dlg, 9057):
+            continue
+        title = win32gui.GetWindowText(dlg) or ""
+        if any(keyword in title for keyword in NOTICE_DIALOG_TITLES):
+            return dlg
+    return None
+
+
+def fill_qty_in_dialog(main_hwnd, timeout=8):
+    """定位当前申报数量弹窗，填写委托数量，返回弹窗句柄。
+
+    返回 NO_DATA_SENTINEL 表示等待期间弹出了"无数据"提示框（已点击确定
+    关闭），本次申报应视为无数据跳过而非失败；超时仍返回 None。
+    其余说明见原 docstring：部分标题含申报名称的窗口（如提示/结果框）并不含
+    委托数量编辑框 9057，win32gui.GetDlgItem 对不存在的控件 ID 会抛 1421
+    异常（而非返回 0），因此必须放在 try 中并跳过；只认真正的 #32770 对话框，
+    避免误匹配主窗口等。写完后回读校验，确保数量确实写入（避免点到"确定"
+    时数量仍为空）。
     """
     target_pid = _dlg_pid(main_hwnd)
     end = time.time() + timeout
@@ -624,6 +649,14 @@ def fill_qty_in_dialog(main_hwnd, timeout=8):
             if get_edit_text(edit) == value:
                 print(f"[OK] {DIALOG_TITLE}弹窗: 委托数量已设为 {ORDER_QTY}")
                 return dlg
+
+        # 无数据场景：先弹提示框而非数量框，确认后按无数据跳过。
+        notice = _find_notice_dialog(main_hwnd)
+        if notice is not None:
+            title = win32gui.GetWindowText(notice) or ""
+            print(f"[INFO] 检测到无数据提示弹窗，点击确定: {title!r}")
+            if confirm_dialog(main_hwnd, notice, attempts=3):
+                return NO_DATA_SENTINEL
         time.sleep(0.15)
     print(f"[WARN] 等待'{DIALOG_TITLE}'弹窗超时({timeout}s)")
     return None
@@ -852,8 +885,12 @@ def click_first_list_row_and_submit(main_hwnd):
     print(f"[OK] 已点击'{ACTION_NAME}'按钮（异步）")
     time.sleep(0.3)
 
-    # 1) 等待数量弹窗并填写委托数量
+    # 1) 等待数量弹窗并填写委托数量；若列表无实际数据，先出现提示弹窗，
+    #    确认后按无数据跳过本次。
     dlg = fill_qty_in_dialog(main_hwnd, timeout=8)
+    if dlg == NO_DATA_SENTINEL:
+        print(f"[--] 列表无实际数据（提示弹窗已确认），跳过本次{DIALOG_TITLE}")
+        return NO_DATA_SENTINEL
     if not dlg:
         print(f"[ERROR] 未找到并验证数量弹窗，停止本次{DIALOG_TITLE}")
         if not abort_transaction_dialogs(main_hwnd):
@@ -883,9 +920,13 @@ def process_item(main_hwnd, exchange, strategy=None):
         time.sleep(0.3)
     if not check_list_has_data(main_hwnd):
         return False
-    if click_first_list_row_and_submit(main_hwnd):
+    result = click_first_list_row_and_submit(main_hwnd)
+    if result is True:
         print(f"[OK] {item_name} {DIALOG_TITLE}流程完成")
         return True
+    if result == NO_DATA_SENTINEL:
+        print(f"[--] {item_name} 无实际数据，跳过")
+        return False
     print(f"[--] {DIALOG_TITLE}执行失败")
     return False
 
