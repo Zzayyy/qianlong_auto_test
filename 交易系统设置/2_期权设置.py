@@ -216,7 +216,7 @@ _OUTPUT_DIR_DEFAULT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspa
 OUTPUT_DIR = os.environ.get("GUI_OUTPUT_DIR", "") or _OUTPUT_DIR_DEFAULT
 # 每个脚本的结果（报告+截图）单独存放在同名子文件夹中
 RESULT_SUBDIR = "期权设置"
-COUNTDOWN_SEC = 3  # 倒计时秒数
+COUNTDOWN_SEC = int(os.environ.get("GUI_COUNTDOWN", "3"))  # 倒计时秒数(GUI可配)
 
 # 超价参数弹窗比对模板（品种/买超价步长/卖超价步长）。
 # 由 load_super_price_template(CLIENT_ID) 按客户端解析，不再依赖 xlsx。

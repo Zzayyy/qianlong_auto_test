@@ -68,7 +68,7 @@ else:
     # 扩展名,看另存为下拉框默认填什么(常见 .xlsx / .csv / .txt)
     FILE_EXT        = ".xls"
 
-    COUNTDOWN       = 3      # 操作前倒计时秒数
+    COUNTDOWN       = int(os.environ.get("GUI_COUNTDOWN", "3"))  # 操作前倒计时秒数
 
 WAIT_MENU_SEC   = 3      # 等"导出菜单"弹出的秒数
 WAIT_SAVEAS_SEC = 3     # 等"另存为"窗口弹出的秒数

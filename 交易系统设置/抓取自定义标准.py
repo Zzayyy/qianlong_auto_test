@@ -49,7 +49,7 @@ PANEL_MODULES = {
 SETTINGS_BUTTON_AUTO_ID = "1008"
 SETTINGS_MENU_ITEM_AUTO_ID = "20025"
 SETTINGS_DIALOG_TITLE = "交易系统设置"
-COUNTDOWN_SEC = 3
+COUNTDOWN_SEC = int(os.environ.get("GUI_COUNTDOWN", "3"))
 
 
 def _import_panel(module_rel_path: str):

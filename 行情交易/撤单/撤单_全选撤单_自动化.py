@@ -32,6 +32,7 @@ from core.window import find_window, activate_window, switch_panel as switch_mai
 """
 
 from pywinauto import Application, findwindows
+import os
 import time
 import sys
 import ctypes
@@ -46,7 +47,7 @@ SELECT_ALL_AID = "1165"        # "全选" 按钮 auto_id
 CANCEL_BTN_AID = "1161"        # "撤单" 按钮 auto_id
 AUTO_CONFIRM   = True         # 是否自动确认置顶弹窗
 EXPECTED_DIALOGS = 1          # 一般 1 个确认弹窗(撤单确认或结果)
-COUNTDOWN      = 3            # 操作前倒计时秒数
+COUNTDOWN      = int(os.environ.get("GUI_COUNTDOWN", "3"))  # 操作前倒计时秒数(GUI可配)
 INTERVAL       = 0.5          # "全选"与"撤单"之间的间隔(秒)
 # ========================================================
 

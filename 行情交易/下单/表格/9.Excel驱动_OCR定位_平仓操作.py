@@ -51,7 +51,7 @@ TREE_ITEM = "期权下单(新)"
 TABLE_AUTO_ID = "3000"      # 定位表格的 auto_id
 TABLE_OP_AUTO_ID = "1170"    # 操作表格的 auto_id(持仓表格)
 CLICK_COORDS = (0, 100)      # 定位表格内部相对点击坐标
-COUNTDOWN = 3
+COUNTDOWN = int(os.environ.get("GUI_COUNTDOWN", "3"))
 
 
 

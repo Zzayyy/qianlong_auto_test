@@ -65,7 +65,7 @@ else:
     EXCEL_PATH = r"C:\Users\Administrator\Desktop\新建 XLSX 工作表.xlsx"
 WINDOW_KEY = "钱龙模拟期权宝"        # 窗口标题关键字
 USE_ENTER_CONFIRM = True  # True=按回车(推荐), False=鼠标点"确定"
-COUNTDOWN = 3              # 操作前倒计时秒数
+COUNTDOWN = int(os.environ.get("GUI_COUNTDOWN", "3"))  # 操作前倒计时秒数(GUI可配)
 INTERVAL = 1.0             # 每两次下单之间的间隔(秒)
 # ========================================================
 

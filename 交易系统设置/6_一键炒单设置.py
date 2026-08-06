@@ -160,7 +160,7 @@ _OUTPUT_DIR_DEFAULT = os.path.join(
 )
 OUTPUT_DIR = os.environ.get("GUI_OUTPUT_DIR", "") or _OUTPUT_DIR_DEFAULT
 RESULT_SUBDIR = PANEL_NAME
-COUNTDOWN_SEC = 3
+COUNTDOWN_SEC = int(os.environ.get("GUI_COUNTDOWN", "3"))
 
 
 

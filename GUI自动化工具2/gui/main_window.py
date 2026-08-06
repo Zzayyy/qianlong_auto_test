@@ -42,7 +42,7 @@ from config import (
 from engine.runner import ScriptRunner
 from engine.task import Task
 from engine.scheduler import TaskScheduler
-from gui.widgets import ColoredLogText, ChineseDialog
+from gui.widgets import ColoredLogText, ChineseDialog, ask_string
 from gui.task_center import TaskCenter
 from gui.scheduler_view import SchedulerPanel
 from gui.history import (
@@ -369,7 +369,11 @@ class AutomationGUI:
         self.txt_path = tk.StringVar(value="")
         self.xls_path = tk.StringVar(value="")
         self.order_qty = tk.IntVar(value=1)
-        self.countdown_sec = tk.IntVar(value=3)
+        try:
+            _countdown_default = int(self.user_config.get("countdown_sec", 3))
+        except (TypeError, ValueError):
+            _countdown_default = 3
+        self.countdown_sec = tk.IntVar(value=_countdown_default)
         self.xlsx_file = tk.StringVar(value="")
         self.super_add_underlying = tk.BooleanVar(
             value=self.user_config.get("super_add_underlying", False)
@@ -491,6 +495,8 @@ class AutomationGUI:
         settings_menu.add_command(label="日志级别说明", command=self._show_log_level_help)
         settings_menu.add_separator()
         settings_menu.add_command(label="右侧标签页设置", command=self._open_right_tabs_dialog)
+        settings_menu.add_separator()
+        settings_menu.add_command(label="操作倒计时（秒）…", command=self._set_countdown_sec)
 
         # 主框架：用 grid 布局，row=0 可伸缩收缩，保证底部状态栏始终有空间
         self.root.grid_rowconfigure(0, weight=1)
@@ -2035,6 +2041,8 @@ class AutomationGUI:
                   "query_key": item.get("query_key", "")}
         params = dict(item["params"])
         params.update(item.get("_settings_runtime", {}))
+        # 倒计时属运行期全局设置：始终用 GUI 当前值，避免沿用加入队列时的旧快照
+        params["countdown_sec"] = int(self.countdown_sec.get())
         task = Task(script, item["category"], params, next_category=next_category)
         self.runner.run(task)
 
@@ -2262,6 +2270,32 @@ class AutomationGUI:
             "不显示子脚本内部的 print 输出，界面更清爽，适合普通用户。\n\n"
             "当前级别可通过「设置」菜单随时切换，默认「详细日志」。"
         )
+
+    def _set_countdown_sec(self):
+        """设置脚本开头的操作倒计时秒数（0=不等待），持久化到用户配置。
+
+        该值经 collect_params 快照进任务，再通过 GUI_COUNTDOWN 传给所有脚本。
+        独立运行时设置 0 即完全跳过倒计时；保留 3 秒适合手动切窗的场景。
+        """
+        current = int(self.countdown_sec.get())
+        s = ask_string(
+            self.root,
+            "操作倒计时",
+            "每个脚本开始前的等待秒数（0 表示不等待，默认 3）:",
+            initialvalue=str(current),
+        )
+        if s is None:  # 取消
+            return
+        s = s.strip()
+        if not s.isdigit():
+            messagebox.showwarning("操作倒计时", "请输入非负整数秒数（如 0、1、3）")
+            return
+        val = int(s)
+        self.countdown_sec.set(val)
+        self.user_config["countdown_sec"] = val
+        save_user_config(self.user_config)
+        self._log(f"[配置] 操作倒计时已设为 {val} 秒（0=不等待）")
+        self.logger.info(f"设置操作倒计时: {val}")
 
     def _log(self, message):
         """输出日志（带颜色区分，线程安全）"""
