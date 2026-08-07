@@ -182,8 +182,9 @@ class HistoryPanel:
         """计算并显示统计卡片：成功率 / 平均耗时 / 今日执行 / 历史总计"""
         records = self.gui.history.records
         total = len(records)
+        # 统计口径：排除「已停止」（用户手动停止，非执行结果），避免拉低成功率与平均耗时
         finished = [r for r in records if r.get("status") in (
-            STATUS_SUCCESS, STATUS_FAILED, STATUS_ERROR, STATUS_STOPPED)]
+            STATUS_SUCCESS, STATUS_FAILED, STATUS_ERROR)]
         success = [r for r in finished if r.get("status") == STATUS_SUCCESS]
         today = sum(1 for r in records if self._is_today(r.get("time", "")))
         elapsed_vals = [float(r.get("elapsed", 0) or 0) for r in finished]
