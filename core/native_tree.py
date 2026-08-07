@@ -240,6 +240,18 @@ def _normalized_text(value: str) -> str:
     return unicodedata.normalize("NFKC", value).replace("\u3000", " ").strip()
 
 
+def _is_suffix_alias(node_text: str, expected: str) -> bool:
+    """节点文本是否为“目标文本 + (新)”后缀变体（如 期权下单(新)）。
+
+    钱龙等客户端把部分菜单命名为 期权下单(新)，而配置/表格按其它客户端
+    写 期权下单；精确匹配失败时据此兼容命中，半角/全角括号均可识别，
+    避免文本定位直接失败而误落到位置指纹兜底。
+    """
+    if not expected or not node_text:
+        return False
+    return any(node_text == expected + suffix for suffix in ("(新)", "（新）"))
+
+
 def _log_duplicate_trees(matches: list[int], visible: list[int]) -> None:
     """打印多命中诊断，帮助确认第二个菜单树是僵尸/幽灵窗口还是真实次级面板。"""
     print(
@@ -536,11 +548,17 @@ def select_tree_path(parent_hwnd: int, panel_path: str,
                 sibling_names: list[str] = []
                 matched = 0
                 matched_leaf = 0
+                # 后缀兼容候选：精确匹配失败时尝试“目标 + (新)”（如钱龙
+                # 树上叫 期权下单(新)，配置/表格按其它客户端写 期权下单）。
+                # 只作候选，同层若存在精确节点则始终以精确优先。
+                suffix_match = 0
+                suffix_match_leaf = 0
                 need_child = depth < len(parts) - 1
                 while current:
                     text = reader.get_text(current)
                     sibling_names.append(text)
-                    if _normalized_text(text) == expected:
+                    normalized = _normalized_text(text)
+                    if normalized == expected:
                         matched = current
                         if need_child and not _send_message(
                             tree_hwnd, TVM_GETNEXTITEM, TVGN_CHILD, current
@@ -551,9 +569,23 @@ def select_tree_path(parent_hwnd: int, panel_path: str,
                             matched_leaf = current
                         else:
                             break
+                    elif not suffix_match and _is_suffix_alias(
+                        normalized, expected
+                    ):
+                        if need_child and not _send_message(
+                            tree_hwnd, TVM_GETNEXTITEM, TVGN_CHILD, current
+                        ):
+                            suffix_match_leaf = current
+                        else:
+                            suffix_match = current
                     current = _send_message(
                         tree_hwnd, TVM_GETNEXTITEM, TVGN_NEXT, current
                     )
+                if not matched:
+                    if suffix_match:
+                        matched = suffix_match
+                    elif suffix_match_leaf:
+                        matched_leaf = suffix_match_leaf
                 if not matched:
                     visible = "、".join(name for name in sibling_names if name)
                     raise NativeTreePathError(
