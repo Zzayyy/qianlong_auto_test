@@ -327,6 +327,15 @@ class AutomationGUI:
         self.root = root
         self.root.geometry("1100x900")
         self.root.minsize(850, 650)
+        # 窗口图标：项目根 app.ico（Pillow 多尺寸 16/32/48/64/128/256）。
+        # dev 模式 BASE_DIR=项目根；frozen 时 `_internal/app.ico`，需在打包 spec 里
+        # 加 `--add-data "app.ico;."`。缺失/异常时静默回退，避免开发期缺图就崩。
+        try:
+            ico_path = os.path.join(PROJECT_ROOT, "app.ico")
+            if os.path.isfile(ico_path):
+                self.root.iconbitmap(default=ico_path)
+        except Exception:
+            pass
 
         self.is_running = False
         self.current_category = "查询"
