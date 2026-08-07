@@ -778,6 +778,9 @@ class TaskCenter:
                 last_bbox = self.tree.bbox(children[-1])
             except Exception:
                 return None
+            # bbox 对不可见行返回空字符串，判空避免 IndexError
+            if not first_bbox or not last_bbox:
+                return None
             if y < first_bbox[1]:
                 return (0, False)
             return (len(children) - 1, True)
@@ -807,6 +810,10 @@ class TaskCenter:
             except Exception:
                 self._hide_drop_indicator()
                 return
+            # bbox 对不可见行（被滚动出可视区）返回空字符串，判空避免 IndexError
+            if not last:
+                # 最后一行不可见：把指示线固定在可视区底部
+                last = (0, max(1, self.tree.winfo_height() - 2), 0, 0)
             self.drop_indicator.place(x=0, y=last[1] + last[3], relwidth=1.0, height=2)
             return
         row = self.tree.identify_row(y)
@@ -817,11 +824,19 @@ class TaskCenter:
             except Exception:
                 self._hide_drop_indicator()
                 return
+            # bbox 对不可见行返回空字符串，判空避免 IndexError
+            if not first or not last:
+                self._hide_drop_indicator()
+                return
             line_y = first[1] if y < first[1] else (last[1] + last[3])
         else:
             try:
                 bbox = self.tree.bbox(row)
             except Exception:
+                self._hide_drop_indicator()
+                return
+            # identify_row 命中的行必然可见，bbox 一般不会为空；仍做防御
+            if not bbox:
                 self._hide_drop_indicator()
                 return
             after = y > bbox[1] + bbox[3] / 2
