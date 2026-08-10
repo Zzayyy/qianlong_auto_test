@@ -309,7 +309,8 @@ class HuabaoClientProfileTests(unittest.TestCase):
         assert spec.loader is not None
         spec.loader.exec_module(module)
         for client in self.clients:
-            if client["id"] == "huabao":
+            # 东吴树中也有 组合当日成交（组合申报[10,5]），不在此过滤断言范围
+            if client["id"] in ("huabao", "dongwu"):
                 continue
             with self.subTest(client=client["id"]):
                 scripts = module.get_scripts_config(client["id"])
@@ -326,7 +327,8 @@ class HuabaoClientProfileTests(unittest.TestCase):
         assert spec.loader is not None
         spec.loader.exec_module(module)
         for client in self.clients:
-            if client["id"] == "huabao":
+            # 东吴查询容器也含 备兑股份/待交收查询/额度查询，不在此过滤断言范围
+            if client["id"] in ("huabao", "dongwu"):
                 continue
             with self.subTest(client=client["id"]):
                 names = [s["name"] for s in module.get_scripts_config(client["id"]).get("查询", [])]
@@ -343,7 +345,8 @@ class HuabaoClientProfileTests(unittest.TestCase):
         assert spec.loader is not None
         spec.loader.exec_module(module)
         for client in self.clients:
-            if client["id"] == "huabao":
+            # 东吴通知查询也含 备兑证券缺口查询/行权待交收资金缺口，不在此过滤断言范围
+            if client["id"] in ("huabao", "dongwu"):
                 continue
             with self.subTest(client=client["id"]):
                 names = [s["name"] for s in module.get_scripts_config(client["id"]).get("通知查询", [])]

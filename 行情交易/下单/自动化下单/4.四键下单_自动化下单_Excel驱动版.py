@@ -70,6 +70,14 @@ INTERVAL = 1.0             # 每两次下单之间的间隔(秒)
 # ========================================================
 
 
+# 东吴证券期权宝：四键下单嵌在「其他下单方式」容器下，需用完整路径导航；
+# 其它客户端仍是根级单层路径（由 Excel"菜单"列提供，默认"四键下单"）。
+# Excel"菜单"列仍按"四键下单"填写（read_excel 据此过滤行），此处仅覆盖
+# 面板切换用的树路径。
+_CLIENT_ID = os.environ.get("GUI_CLIENT_ID", "")
+PANEL_PATH = r"\其他下单方式\四键下单" if _CLIENT_ID == "dongwu" else ""
+
+
 # 报价方式映射: Excel中填写值 -> 实际下拉框显示值
 QUOTE_TYPE_MAP = {
     "市价FOK": "市价F0K",   # 实际控件是 F0K(数字0),不是 FOK(字母O)
@@ -699,6 +707,9 @@ def main():
         tree_item = first_config.get("菜单", "四键下单")
         if not tree_item:
             tree_item = "四键下单"
+        # 东吴：四键下单嵌在「其他下单方式」容器下，覆盖为完整路径
+        if PANEL_PATH:
+            tree_item = PANEL_PATH
 
         print(f"计划执行: {len(configs)} 次下单")
         print(f"面板: {tree_item}")
