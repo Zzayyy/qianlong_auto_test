@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "client": "default",
+  "panel": "价格提醒设置",
+  "description": "价格提醒设置共享默认基线（恢复默认后应呈现的值）。可被 标准/<客户端>/价格提醒设置.json 覆盖；代码中 DEFAULT_STANDARD_VALUES 仅作离线最后兜底。",
+  "standards": {
+    "买开买平备平_委托价格高于最新价格_勾选": false,
+    "买开买平备平_委托价格高于最新价格_倍数": null,
+    "卖开卖平备开_委托价格低于最新价格_勾选": false,
+    "卖开卖平备开_委托价格低于最新价格_倍数": null
+  }
+}

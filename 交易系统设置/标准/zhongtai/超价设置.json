@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "client": "zhongtai",
+  "panel": "超价设置",
+  "description": "中泰模拟客户端超价参数弹窗默认比对模板（品种/买超价步长/卖超价步长）。与 guotai_haitong/超价设置.json 各自作为对应客户端的内部预设默认标准；default/超价设置.json 仅作未知客户端的通用兜底。；中泰接入时以钱龙基线复制，待真机抓取校准。。",
+  "rows": []
+}
