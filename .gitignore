@@ -13,6 +13,7 @@ env/
 venv/
 .venv/
 *.__pycache__
+
 # IDE
 .vscode/
 .idea/
@@ -21,15 +22,21 @@ venv/
 .DS_Store
 Thumbs.db
 
-# Logs
+# Logs —— GUI 日志目录、按名匹配 *.log
 logs/
 *.log
 
+# 项目工作记忆与历史记忆（产品改名 workbuddy → codebuddy 后保留两侧）
+# .codebuddy/ 是 AI 工作记忆的权威来源，禁止删除或移动
+# .workbuddy/ 是产品改名前的残留记忆目录，仅作历史备份，请勿手动修改
 .codebuddy/
 .workbuddy/
 
+# 交易系统设置——测试快照目录；JSON 标准入库，仅 .bak 历史备份被忽略
 交易系统设置_测试结果/
-交易系统设置/标准
+交易系统设置/标准/**/*.bak
+交易系统设置/标准/**/.bak
+交易系统设置/标准/**/*.tmp
 
 # 用户本地配置（机器相关路径/个性化偏好，不提交）
 GUI自动化工具2/config.json
