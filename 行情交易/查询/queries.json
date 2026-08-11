@@ -17,6 +17,9 @@
       },
       "dongwu": {
         "export_type": null
+      },
+      "dongzheng": {
+        "export_type": null
       }
     }
   },
@@ -58,6 +61,9 @@
         "export_type": "xls_only"
       },
       "dongwu": {
+        "export_type": "xls_only"
+      },
+      "dongzheng": {
         "export_type": "xls_only"
       }
     }

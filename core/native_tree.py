@@ -297,6 +297,28 @@ def find_treeview(parent_hwnd: int, control_id: int = 1223) -> int:
 
     win32gui.EnumChildWindows(parent_hwnd, _enum, None)
     if not matches:
+        # 东证期货期权宝特殊处理：该客户端有多个菜单 tab（股票/期货期权/股票期权），
+        # 每个 tab 对应不同的 TreeView（control_id=1223/1224/1225），只有当前激活
+        # 的 tab 对应的树是可见的。当指定 control_id 找不到时，回退查找可见的 TreeView。
+        all_trees: list[int] = []
+
+        def _enum_all(hwnd, _):
+            try:
+                if win32gui.GetClassName(hwnd) == "SysTreeView32":
+                    all_trees.append(hwnd)
+            except win32gui.error:
+                pass
+
+        win32gui.EnumChildWindows(parent_hwnd, _enum_all, None)
+        visible_trees = [h for h in all_trees if win32gui.IsWindowVisible(h)]
+        if len(visible_trees) == 1:
+            tree_hwnd = visible_trees[0]
+            actual_id = win32gui.GetDlgCtrlID(tree_hwnd)
+            print(
+                f"[INFO] 未找到 control_id={control_id} 的菜单树，"
+                f"已回退到唯一可见的 TreeView hwnd={tree_hwnd} control_id={actual_id}"
+            )
+            return tree_hwnd
         raise NativeTreeError(
             f"未找到菜单树(control_id={control_id}, class=SysTreeView32)"
         )

@@ -210,9 +210,14 @@ def switch_panel(win, panel_path: str, use_title: bool = False):
         panel_path, (client or {}).get("id")
     )
     panel_name = panel_path.replace("/", "\\").rsplit("\\", 1)[-1]
+
+    # 从客户端配置中读取 market_tree_id，支持多菜单 tab 的客户端（如东证期货期权宝）
+    workspace_config = (client or {}).get("workspace", {}) or {}
+    tree_control_id = int(workspace_config.get("market_tree_id", 1223))
+
     native_error = None
     try:
-        info = select_tree_path(win.handle, panel_path, control_id=1223)
+        info = select_tree_path(win.handle, panel_path, control_id=tree_control_id)
         print(
             f"[OK] 已切换到'{panel_name}'面板（原生 Win32 TreeView，"
             f"节点={info['node_count']}，目标={info['target_bits']}位）"
@@ -232,7 +237,7 @@ def switch_panel(win, panel_path: str, use_title: bool = False):
         for attempt in range(3):
             try:
                 info = select_tree_path_by_position(
-                    win.handle, panel_path, position_profile, control_id=1223
+                    win.handle, panel_path, position_profile, control_id=tree_control_id
                 )
                 print(
                     f"[OK] 已切换到'{panel_name}'面板（原生位置指纹，"

@@ -2,7 +2,7 @@ from pywinauto import Application,findwindows
 import time
 
 # 客户端名称（窗口标题关键字 / 输出文件名前缀）
-CLIENT_NAME = "东吴证券期权宝"
+CLIENT_NAME = "东证期货期权宝"
 
 
 # 获取窗口
@@ -24,9 +24,9 @@ window.set_focus()  # 激活窗口
 
 # lock.click()
 
-window.print_control_identifiers(depth=None,filename=f'{CLIENT_NAME}.txt')  # 获取所有组件
+window.print_control_identifiers(depth=None,filename=f'{CLIENT_NAME}2.txt')  # 获取所有组件
 # 尝试用gbk读取，用utf-8保存
-with open(f'{CLIENT_NAME}.txt', 'r', encoding='gbk', errors='ignore') as f:
+with open(f'{CLIENT_NAME}2.txt', 'r', encoding='gbk', errors='ignore') as f:
     content = f.read()
-with open(f'{CLIENT_NAME}.txt', 'w', encoding='utf-8') as f:
+with open(f'{CLIENT_NAME}2.txt', 'w', encoding='utf-8') as f:
     f.write(content)
