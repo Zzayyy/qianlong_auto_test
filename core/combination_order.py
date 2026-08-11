@@ -36,6 +36,7 @@ from core.window import (
     switch_panel,
 )
 from core.native_tree import RemoteProcessMemory
+from core.clients import get_client, get_default_client_id
 from pywinauto import Application
 
 # ====================== 可配置参数 ======================
@@ -55,8 +56,9 @@ SKIP_NAV = os.environ.get("GUI_SKIP_NAV") == "1"        # 已在该页面时跳�
 # 所有交易所
 EXCHANGES = ["上证", "深证"]
 
-# 所有策略类型
-STRATEGIES = [
+# 所有策略类型（从 clients.json 读取客户端特定名称，默认不带"策略"后缀）
+# 支持两种格式：list（所有交易所共用）或 dict（按交易所区分）
+_DEFAULT_STRATEGIES = [
     "认购牛市价差",
     "认购熊市价差",
     "宽跨式空头",
@@ -64,6 +66,16 @@ STRATEGIES = [
     "认沽牛市价差",
     "认沽熊市价差",
 ]
+
+_client_id = os.environ.get("GUI_CLIENT_ID") or get_default_client_id()
+_client = get_client(_client_id) if _client_id else None
+_STRATEGY_CONFIG = _client.get("combo_strategy_names", _DEFAULT_STRATEGIES) if _client else _DEFAULT_STRATEGIES
+
+def get_strategies_for_exchange(exchange: str) -> list:
+    """根据交易所获取对应的策略列表"""
+    if isinstance(_STRATEGY_CONFIG, dict):
+        return _STRATEGY_CONFIG.get(exchange, _DEFAULT_STRATEGIES)
+    return _STRATEGY_CONFIG
 
 # 组合至少需要两条腿；拆分列表一条记录即可执行。
 MIN_DATA_ROWS = 2 if IS_COMBINE else 1
@@ -961,16 +973,11 @@ def main():
         if not ex_combo or (IS_COMBINE and not st_combo):
             raise RuntimeError(f"{DIALOG_TITLE}页面缺少必要下拉框")
         exchange_map = build_combo_map(ex_combo)
-        strategy_map = build_combo_map(st_combo) if st_combo else None
-        if not exchange_map or (IS_COMBINE and not strategy_map):
+        if not exchange_map:
             raise RuntimeError(f"无法建立{DIALOG_TITLE}下拉框映射")
-        map_summary = f"交易所={_combo_sources[ex_combo]}"
-        if st_combo:
-            map_summary += f"，策略={_combo_sources[st_combo]}"
-        print(f"[OK] 下拉框映射已建立: {map_summary}")
+        print(f"[OK] 交易所下拉框映射已建立: {_combo_sources[ex_combo]}")
 
         exchanges = EXCHANGES
-        strategies = STRATEGIES if IS_COMBINE else [None]
 
         total_executed = 0
         total_skipped = 0
@@ -983,6 +990,16 @@ def main():
                 print(f"[错误] 交易所选择失败: {exchange}")
                 continue
             time.sleep(0.4)
+
+            # 切换交易所后，策略下拉框内容会变，需要重建映射
+            if IS_COMBINE:
+                _combo_maps.pop(st_combo, None)  # 清除缓存
+                strategy_map = build_combo_map(st_combo)
+                if not strategy_map:
+                    raise RuntimeError(f"无法建立{DIALOG_TITLE}策略下拉框映射")
+                print(f"[OK] {exchange}策略下拉框映射已建立: {_combo_sources[st_combo]}")
+
+            strategies = get_strategies_for_exchange(exchange) if IS_COMBINE else [None]
 
             for strategy in strategies:
                 try:

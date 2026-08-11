@@ -620,6 +620,24 @@
       "name": "东吴证券期权宝",
       "window_key": "东吴证券期权宝",
       "requires_elevation": false,
+      "combo_strategy_names": {
+        "上证": [
+          "认购牛市价差策略",
+          "认购熊市价差策略",
+          "宽跨式空头",
+          "跨式空头",
+          "认沽牛市价差策略",
+          "认沽熊市价差策略"
+        ],
+        "深证": [
+          "认购牛市价差策略",
+          "认购熊市价差策略",
+          "宽跨式空头策略",
+          "跨式空头策略",
+          "认沽牛市价差策略",
+          "认沽熊市价差策略"
+        ]
+      },
       "workspace": {
         "main_class": "QL_OPTION_MAINWND_CLASS",
         "market_button_id": 1019,
@@ -746,6 +764,14 @@
       "name": "东证期货期权宝",
       "window_key": "东证期货期权宝",
       "requires_elevation": false,
+      "combo_strategy_names": [
+        "认购牛市价差策略",
+        "认购熊市价差策略",
+        "宽跨式空头策略",
+        "跨式空头策略",
+        "认沽牛市价差策略",
+        "认沽熊市价差策略"
+      ],
       "workspace": {
         "main_class": "QL_OPTION_MAINWND_CLASS",
         "market_button_id": 1019,
