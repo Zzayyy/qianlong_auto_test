@@ -40,3 +40,4 @@ logs/
 
 # 用户本地配置（机器相关路径/个性化偏好，不提交）
 GUI自动化工具2/config.json
+GUI自动化工具2/gui/data/

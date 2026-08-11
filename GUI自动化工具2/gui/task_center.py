@@ -7,14 +7,14 @@
   - 一键「开始顺序执行」，引擎逐个脚本串行执行
   - 执行中可「停止」（停止当前并中止后续任务）
   - 停止后可「继续执行」：从第一个未完成任务（已停止/等待）恢复执行
-  - 队列持久化到 logs/task_center.json，重启后保留
+  - 队列持久化到 data/task_center.json，重启后保留
   - 编队（分组）功能：
       * 把当前队列保存为命名编队（保存为编队）
       * 选中编队即载入其脚本到下方队列，直接编辑（增/删/改/排序）
       * 「更新编队」把对队列的改动存回该编队
       * 「追加编队」把另一编队接在当前队列后（串联多个编队）
       * 「删除编队」删除选中的编队
-  - 编队列表持久化到 logs/task_groups.json
+  - 编队列表持久化到 data/task_groups.json
 
 说明：
   TaskCenter 通过调用方注入的 controller 引用 AutomationGUI 的能力：
@@ -155,8 +155,8 @@ class TaskCenter:
         self._settings_batch = None
 
         # 持久化路径
-        self.file_path = os.path.join(self.gui.log_dir, "task_center.json")
-        self.groups_path = os.path.join(self.gui.log_dir, "task_groups.json")
+        self.file_path = os.path.join(self.gui.data_dir, "task_center.json")
+        self.groups_path = os.path.join(self.gui.data_dir, "task_groups.json")
 
         self._build_ui()
         self._load_groups()

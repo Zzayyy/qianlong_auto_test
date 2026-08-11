@@ -90,7 +90,7 @@ class TaskScheduler:
         self._running = False
         self._executing = False
         self._lock = threading.Lock()
-        self.file_path = _os.path.join(gui.log_dir, "scheduled_tasks.json")
+        self.file_path = _os.path.join(gui.data_dir, "scheduled_tasks.json")
         self._view = None
         self._load()
         self._start()
@@ -266,7 +266,7 @@ class TaskScheduler:
 
     def _execute_group(self, sched):
         gn = sched.get("group_name","")
-        gp = _os.path.normpath(_os.path.join(self.gui.log_dir,"task_groups.json"))
+        gp = _os.path.normpath(_os.path.join(self.gui.data_dir,"task_groups.json"))
         if not _os.path.exists(gp):
             self._on_error(sched,f"任务编队文件不存在: {gp}"); return
         try:

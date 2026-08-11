@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 定时任务面板 - 添加/编辑定时任务对话框
 """
@@ -528,7 +528,7 @@ class SchedulerPanel:
     def _load_groups(self):
         """加载任务编队列表"""
         groups = []
-        gp = _os.path.normpath(_os.path.join(self.gui.log_dir, "task_groups.json"))
+        gp = _os.path.normpath(_os.path.join(self.gui.data_dir, "task_groups.json"))
         if _os.path.exists(gp):
             try:
                 with open(gp, "r", encoding="utf-8") as f:

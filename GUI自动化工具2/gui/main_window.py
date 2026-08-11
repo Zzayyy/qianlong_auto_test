@@ -421,15 +421,18 @@ class AutomationGUI:
         # 日志目录：打包后放在exe同级目录
         if IS_FROZEN:
             self.log_dir = os.path.join(os.path.dirname(sys.executable), "logs")
+            self.data_dir = os.path.join(os.path.dirname(sys.executable), "data")
         else:
             self.log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+            self.data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
         os.makedirs(self.log_dir, exist_ok=True)
+        os.makedirs(self.data_dir, exist_ok=True)
 
         self._setup_logging()
         self._setup_runner()
 
-        # 任务历史管理器（持久化到日志目录）
-        self.history = HistoryManager(self.log_dir)
+        # 任务历史管理器（持久化到数据目录）
+        self.history = HistoryManager(self.data_dir)
         self._current_record_id = None  # 当前正在运行的记录 id
         self._single_settings_batch = None
         self._single_stop_requested = False
@@ -480,6 +483,7 @@ class AutomationGUI:
         menubar.add_cascade(label="工具", menu=tool_menu)
         tool_menu.add_command(label="清空日志", command=self._clear_log)
         tool_menu.add_command(label="打开日志目录", command=self._open_log_dir)
+        tool_menu.add_command(label="打开数据目录", command=self._open_data_dir)
         tool_menu.add_separator()
         tool_menu.add_command(label="清空任务历史", command=self._clear_history)
         tool_menu.add_separator()
@@ -2127,6 +2131,13 @@ class AutomationGUI:
         """打开日志目录"""
         try:
             open_path(self.log_dir)
+        except OSError as exc:
+            messagebox.showerror("打开失败", str(exc))
+
+    def _open_data_dir(self):
+        """打开数据目录"""
+        try:
+            open_path(self.data_dir)
         except OSError as exc:
             messagebox.showerror("打开失败", str(exc))
 

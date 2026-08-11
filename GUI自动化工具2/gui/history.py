@@ -27,9 +27,9 @@ MAX_RECORDS = 100000  # 最多保留最近 10 万条
 class HistoryManager:
     """任务历史管理器：内存存储 + JSON 持久化"""
 
-    def __init__(self, log_dir):
-        self.log_dir = log_dir
-        self.file_path = os.path.join(log_dir, "task_history.json")
+    def __init__(self, data_dir):
+        self.data_dir = data_dir
+        self.file_path = os.path.join(data_dir, "task_history.json")
         self.records = []  # 最新记录在前
         self._seq = 0
         self._load()
