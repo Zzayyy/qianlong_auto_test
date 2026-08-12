@@ -599,18 +599,20 @@ class AutomationGUI:
         self.preview_frame = ttk.LabelFrame(middle_frame, text="数据预览", padding="3")
         # 初始隐藏
 
-        # 预览Treeview + 滚动条
+        # 预览Treeview + 滚动条（grid 避免滚动条被挤掉）
         tree_wrap = ttk.Frame(self.preview_frame)
-        tree_wrap.pack(fill=tk.X, anchor=tk.W)
+        tree_wrap.pack(fill=tk.BOTH, expand=True)
 
         self.preview_tree = ttk.Treeview(tree_wrap, show="headings", height=5)
         v_scroll = ttk.Scrollbar(tree_wrap, orient=tk.VERTICAL, command=self.preview_tree.yview)
-        h_scroll = ttk.Scrollbar(self.preview_frame, orient=tk.HORIZONTAL, command=self.preview_tree.xview)
+        h_scroll = ttk.Scrollbar(tree_wrap, orient=tk.HORIZONTAL, command=self.preview_tree.xview)
         self.preview_tree.configure(xscrollcommand=h_scroll.set, yscrollcommand=v_scroll.set)
 
-        self.preview_tree.pack(side=tk.LEFT, fill=tk.BOTH)
-        v_scroll.pack(side=tk.RIGHT, fill=tk.Y)
-        h_scroll.pack(side=tk.BOTTOM, fill=tk.X)
+        self.preview_tree.grid(row=0, column=0, sticky="nsew")
+        v_scroll.grid(row=0, column=1, sticky="ns")
+        h_scroll.grid(row=1, column=0, sticky="ew")
+        tree_wrap.grid_rowconfigure(0, weight=1)
+        tree_wrap.grid_columnconfigure(0, weight=1)
 
         # 预览信息标签
         self.preview_info = ttk.Label(self.preview_frame, text="选择Excel文件后显示数据预览", foreground="gray")
