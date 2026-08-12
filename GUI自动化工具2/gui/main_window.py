@@ -834,22 +834,6 @@ class AutomationGUI:
                     self.script_tree.insert(parent_iid, tk.END, iid=sid_iid, text=s["name"])
                     self.tree_script_map[sid_iid] = {"script": s, "category": category}
 
-    def _rebuild_func_menu(self):
-        """重建「功能」菜单，按三个一级模块组织可用分类。"""
-        self.func_menu.delete(0, tk.END)
-        scripts_config = get_scripts_config(self.client_id)
-        for module, categories in MODULE_GROUPS.items():
-            available = [c for c in categories if scripts_config.get(c)]
-            if not available:
-                continue
-            submenu = tk.Menu(self.func_menu, tearoff=0)
-            for category in available:
-                submenu.add_command(
-                    label=category,
-                    command=lambda c=category: self._select_category(c),
-                )
-            self.func_menu.add_cascade(label=module, menu=submenu)
-
     def _format_current_function(self, category, script_name=None):
         """拼出「当前功能」的完整面包屑：一级模块 / 分类 / 脚本（如选中具体脚本）"""
         module = get_module_for_category(category) or ""
@@ -1906,9 +1890,8 @@ class AutomationGUI:
         self._update_title()
         self._log(f"[配置] 已切换客户端: {name}")
         self.logger.info(f"切换客户端: {cid}")
-        # 重建树与功能菜单（应用 unsupported 过滤），并复位到有效分类
+        # 重建树（应用 unsupported 过滤），并复位到有效分类
         self._build_script_tree()
-        self._rebuild_func_menu()
         supported = [c for c in CATEGORIES if get_scripts_config(self.client_id).get(c)]
         if self.current_category not in supported:
             self.current_category = supported[0] if supported else ""
