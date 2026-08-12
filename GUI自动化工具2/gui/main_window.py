@@ -473,15 +473,9 @@ class AutomationGUI:
         menubar = tk.Menu(self.root)
         self.root.config(menu=menubar)
 
-        # 功能菜单（随客户端动态显示支持的分类）
-        self.func_menu = tk.Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="功能", menu=self.func_menu)
-        self._rebuild_func_menu()
-
         # 工具菜单
         tool_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="工具", menu=tool_menu)
-        tool_menu.add_command(label="清空日志", command=self._clear_log)
         tool_menu.add_command(label="打开日志目录", command=self._open_log_dir)
         tool_menu.add_command(label="打开数据目录", command=self._open_data_dir)
         tool_menu.add_separator()
@@ -504,8 +498,6 @@ class AutomationGUI:
             value="简洁",
             command=self._on_log_level_change
         )
-        settings_menu.add_separator()
-        settings_menu.add_command(label="日志级别说明", command=self._show_log_level_help)
         settings_menu.add_separator()
         settings_menu.add_command(label="右侧标签页设置", command=self._open_right_tabs_dialog)
         settings_menu.add_separator()
@@ -2282,16 +2274,6 @@ class AutomationGUI:
         self.level_label.config(text=f"日志: {self.log_level.get()}")
         self._log(f"日志级别已切换为: {self.log_level.get()}")
         self.logger.info(f"日志级别切换为: {self.log_level.get()}")
-
-    def _show_log_level_help(self):
-        """日志级别说明"""
-        messagebox.showinfo(
-            "日志级别说明",
-            "详细日志：显示窗口/GUI 操作信息以及子脚本的 print 输出。\n\n"
-            "简洁日志：仅显示窗口/GUI 的关键信息（开始、完成、错误等），"
-            "不显示子脚本内部的 print 输出，界面更清爽，适合普通用户。\n\n"
-            "当前级别可通过「设置」菜单随时切换，默认「详细日志」。"
-        )
 
     def _set_countdown_sec(self):
         """设置脚本开头的操作倒计时秒数（0=不等待），持久化到用户配置。
