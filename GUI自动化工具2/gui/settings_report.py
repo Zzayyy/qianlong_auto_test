@@ -63,7 +63,7 @@ class SettingsReportPanel:
         tk.Label(
             header,
             text="交易系统设置 · 差异报告中心",
-            anchor=tk.W,
+            anchor=tk.CENTER,
             font=("Microsoft YaHei UI", 15, "bold"),
             foreground="#1f2d3d",
         ).pack(fill=tk.X)
@@ -154,21 +154,27 @@ class SettingsReportPanel:
 
         footer = ttk.Frame(self.parent)
         footer.pack(fill=tk.X, pady=(6, 0))
-        ttk.Button(
+        self.open_dir_btn = ttk.Button(
             footer,
             text="打开批次目录",
             command=self.open_batch_dir,
-        ).pack(side=tk.LEFT)
-        ttk.Button(
+            state=tk.DISABLED,
+        )
+        self.open_dir_btn.pack(side=tk.LEFT)
+        self.open_txt_btn = ttk.Button(
             footer,
             text="打开总TXT",
             command=lambda: self._open_current_path("txt_path"),
-        ).pack(side=tk.LEFT, padx=(5, 0))
-        ttk.Button(
+            state=tk.DISABLED,
+        )
+        self.open_txt_btn.pack(side=tk.LEFT, padx=(5, 0))
+        self.open_xlsx_btn = ttk.Button(
             footer,
             text="打开总Excel",
             command=lambda: self._open_current_path("xlsx_path"),
-        ).pack(side=tk.LEFT, padx=(5, 0))
+            state=tk.DISABLED,
+        )
+        self.open_xlsx_btn.pack(side=tk.LEFT, padx=(5, 0))
         ttk.Button(
             footer,
             text="删除选中批次",
@@ -370,8 +376,17 @@ class SettingsReportPanel:
         if summary:
             self._load_summary(summary)
 
+    def _update_footer_buttons(self):
+        """根据当前是否有选中批次，启用或禁用底部打开按钮。"""
+        state = tk.NORMAL if self._current_summary else tk.DISABLED
+        if hasattr(self, "open_dir_btn"):
+            self.open_dir_btn.config(state=state)
+            self.open_txt_btn.config(state=state)
+            self.open_xlsx_btn.config(state=state)
+
     def _load_summary(self, summary):
         self._current_summary = summary
+        self._update_footer_buttons()
         totals = summary.get("totals", {})
         self.overall_var.set(summary.get("overall_status", "—"))
         self.module_count_var.set(str(totals.get("模块数", len(summary.get("modules", [])))))
@@ -429,6 +444,7 @@ class SettingsReportPanel:
 
     def _clear_summary(self):
         self._current_summary = None
+        self._update_footer_buttons()
         for variable in (
             self.overall_var,
             self.module_count_var,
@@ -478,7 +494,17 @@ class SettingsReportPanel:
 
     def open_batch_dir(self):
         if self._current_summary:
-            self._open_path(self._current_summary.get("batch_dir", ""))
+            batch_dir = self._current_summary.get("batch_dir", "")
+            if batch_dir:
+                target = Path(batch_dir)
+                # 目录不存在时自动创建，避免用户看到"不存在"警告
+                if not target.exists():
+                    try:
+                        target.mkdir(parents=True, exist_ok=True)
+                    except OSError as exc:
+                        messagebox.showerror("报告中心", f"无法创建目录:\n{exc}")
+                        return
+            self._open_path(batch_dir)
 
     def delete_selected_batch(self):
         """二次确认后，将当前批次目录整体移动到 Windows 回收站。"""
