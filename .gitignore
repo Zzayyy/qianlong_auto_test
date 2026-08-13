@@ -31,6 +31,8 @@ logs/
 # .workbuddy/ 是产品改名前的残留记忆目录，仅作历史备份，请勿手动修改
 .codebuddy/
 .workbuddy/
+.trae/
+.codebase-memory/
 
 # 交易系统设置——测试快照目录；JSON 标准入库，仅 .bak 历史备份被忽略
 交易系统设置_测试结果/
