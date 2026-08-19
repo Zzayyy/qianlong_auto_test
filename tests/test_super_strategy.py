@@ -792,5 +792,144 @@ class TacticsOcrTests(unittest.TestCase):
         get_controls.assert_not_called()
 
 
+class TacticsHighlightTests(unittest.TestCase):
+    """颜色判定的单元测试：通过合成 panel_image 直接验证高亮判定逻辑。"""
+
+    @staticmethod
+    def _panel_with_highlight(target: str) -> "PIL.Image.Image":
+        from PIL import Image
+        width = max(right for _, (_, _, right, _) in tactics_panel.FORMAL_TARGET_CELLS.items())
+        height = max(bottom for _, (_, _, _, bottom) in tactics_panel.FORMAL_TARGET_CELLS.items())
+        # 默认全部填充深色
+        panel = Image.new("RGB", (width, height), (24, 24, 24))
+        # 对所有非目标 cell 填充接近深色背景，避免误选
+        import numpy as np
+        arr = np.array(panel)  # 拿可写副本
+        for name, (l, t, r, b) in tactics_panel.FORMAL_TARGET_CELLS.items():
+            if name == target:
+                arr[t:b, l:r, 0] = 35
+                arr[t:b, l:r, 1] = 90
+                arr[t:b, l:r, 2] = 200
+            else:
+                arr[t:b, l:r, 0] = 24
+                arr[t:b, l:r, 1] = 24
+                arr[t:b, l:r, 2] = 24
+        return Image.fromarray(arr)
+
+    def test_cell_bright_pct_returns_zero_for_entirely_dark_image(self):
+        from PIL import Image
+        import numpy as np
+        dark = np.zeros((10, 10, 3), dtype=np.uint8)
+        self.assertEqual(tactics_panel._cell_bright_pct(dark), 0.0)
+        bright = np.full((10, 10, 3), 200, dtype=np.uint8)
+        self.assertEqual(tactics_panel._cell_bright_pct(bright), 1.0)
+        panel = Image.fromarray(np.zeros((4, 4, 3), dtype=np.uint8))
+        self.assertEqual(tactics_panel._cell_bright_pct(np.asarray(panel)), 0.0)
+
+    def test_detect_selected_formal_target_picks_the_unique_bright_cell(self):
+        panel = self._panel_with_highlight("牛市认购")
+        selected, pct_map = tactics_panel._detect_selected_formal_target(panel)
+        self.assertEqual(selected, "牛市认购")
+        self.assertGreater(pct_map["牛市认购"], 0.5)
+        for name, pct in pct_map.items():
+            if name != "牛市认购":
+                self.assertLess(pct, 0.10, msg=f"{name} 不应为高亮: {pct}")
+
+    def test_detect_selected_formal_target_returns_none_when_all_dark(self):
+        from PIL import Image
+        import numpy as np
+        width = max(right for _, (_, _, right, _) in tactics_panel.FORMAL_TARGET_CELLS.items())
+        height = max(bottom for _, (_, _, _, bottom) in tactics_panel.FORMAL_TARGET_CELLS.items())
+        panel = Image.new("RGB", (width, height), (24, 24, 24))
+        selected, pct_map = tactics_panel._detect_selected_formal_target(panel)
+        self.assertIsNone(selected)
+        self.assertTrue(all(v < 0.05 for v in pct_map.values()), pct_map)
+
+    @mock.patch("core.tactics_panel.get_tactics_panel", return_value=12)
+    @mock.patch("core.tactics_panel.capture_window_image", return_value=object())
+    @mock.patch("core.tactics_panel.reset_tactics_scroll")
+    @mock.patch("core.tactics_panel._click_client")
+    def test_click_skips_when_target_already_highlighted(
+        self, click_client, _reset, _capture, _panel
+    ):
+        panel = self._panel_with_highlight("牛市认购")
+        hit = {
+            "text": "牛市认购",
+            "score": 0.99,
+            "left": 110,
+            "top": 200,
+            "right": 190,
+            "bottom": 242,
+            "cx": 150,
+            "cy": 221,
+            "ocr_elapsed": 0.05,
+            "mode": "recognition_only",
+        }
+        with (
+            mock.patch(
+                "core.tactics_panel.crop_child_from_main",
+                return_value=(panel, (0, 0)),
+            ),
+            mock.patch(
+                "core.tactics_panel._scan_formal_target",
+                return_value=(hit, panel, (0, 0)),
+            ),
+        ):
+            result = tactics_panel.click_tactics_item(11, "牛市认购", delay=0)
+
+        click_client.assert_not_called()
+        self.assertEqual(result["mode"], "already_selected")
+        self.assertIn("牛市认购", result["highlight_pct_map"])
+        self.assertGreater(result["highlight_pct_map"]["牛市认购"], 0.5)
+
+    @mock.patch("core.tactics_panel.get_tactics_panel", return_value=12)
+    @mock.patch("core.tactics_panel.capture_window_image", return_value=object())
+    @mock.patch("core.tactics_panel.reset_tactics_scroll")
+    @mock.patch("core.tactics_panel._click_client")
+    def test_click_proceeds_when_target_is_not_highlighted(
+        self, click_client, _reset, _capture, _panel
+    ):
+        from PIL import Image
+        import numpy as np
+        # 完全无选中态的 panel
+        width = max(right for _, (_, _, right, _) in tactics_panel.FORMAL_TARGET_CELLS.items())
+        height = max(bottom for _, (_, _, _, bottom) in tactics_panel.FORMAL_TARGET_CELLS.items())
+        panel = Image.new("RGB", (width, height), (24, 24, 24))
+        hit = {
+            "text": "牛市认购",
+            "score": 0.99,
+            "left": 110,
+            "top": 200,
+            "right": 190,
+            "bottom": 242,
+            "cx": 150,
+            "cy": 221,
+            "ocr_elapsed": 0.05,
+            "mode": "recognition_only",
+        }
+        with (
+            mock.patch(
+                "core.tactics_panel.crop_child_from_main",
+                return_value=(panel, (100, 200)),
+            ),
+            mock.patch(
+                "core.tactics_panel._scan_formal_target",
+                return_value=(hit, panel, (100, 200)),
+            ),
+            mock.patch(
+                "core.tactics_panel.win32gui.GetWindowRect",
+                return_value=(100, 200, 300, 800),
+            ),
+            mock.patch(
+                "core.tactics_panel.dpi_unaware", return_value=nullcontext()
+            ),
+        ):
+            result = tactics_panel.click_tactics_item(11, "牛市认购", delay=0)
+
+        click_client.assert_called_once()
+        self.assertEqual(result["mode"], "recognition_only")
+        self.assertNotIn("highlight_pct_map", result)
+
+
 if __name__ == "__main__":
     unittest.main()

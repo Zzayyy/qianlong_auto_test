@@ -616,9 +616,13 @@ def _match_target(items: list[dict], target: str, *, fuzzy_threshold: float) -> 
     return ranked[0][1]
 
 
-def _recognize_formal_target(main_hwnd: int, panel_hwnd: int, target: str,
-                             min_conf: float = 0.80) -> dict | None:
-    """识别单个已知菜单格，跳过耗时的整页文字检测。"""
+def _scan_formal_target(main_hwnd: int, panel_hwnd: int, target: str,
+                        min_conf: float = 0.80
+                        ) -> tuple[dict | None, Image.Image, tuple[int, int]]:
+    """识别单个已知菜单格，跳过耗时的整页文字检测，同时返回 panel 截图。
+
+    OCR 与后续高亮判定共用同一张 panel_image，避免重复 PrintWindow。
+    """
     rect = FORMAL_TARGET_CELLS[target]
     main_image = capture_window_image(main_hwnd)
     panel_image, origin = crop_child_from_main(
@@ -626,7 +630,7 @@ def _recognize_formal_target(main_hwnd: int, panel_hwnd: int, target: str,
     )
     left, top, right, bottom = rect
     if right > panel_image.width or bottom > panel_image.height:
-        return None
+        return None, panel_image, origin
     cell = panel_image.crop(rect).resize(
         ((right - left) * 3, (bottom - top) * 3), Image.Resampling.LANCZOS
     )
@@ -638,13 +642,13 @@ def _recognize_formal_target(main_hwnd: int, panel_hwnd: int, target: str,
     texts = list(getattr(output, "txts", ()) or ())
     scores = list(getattr(output, "scores", ()) or ())
     if len(texts) != 1 or len(scores) != 1:
-        return None
+        return None, panel_image, origin
     if _normalize(texts[0]) != _normalize(target) or float(scores[0]) < min_conf:
         print(
             f"[WARN] 快速菜单格校验未通过: 期望={target!r}, "
             f"识别={texts[0]!r}, 置信度={float(scores[0]):.3f}"
         )
-        return None
+        return None, panel_image, origin
     return {
         "text": str(texts[0]),
         "score": float(scores[0]),
@@ -656,7 +660,52 @@ def _recognize_formal_target(main_hwnd: int, panel_hwnd: int, target: str,
         "cy": origin[1] + (top + bottom) / 2,
         "ocr_elapsed": elapsed,
         "mode": "recognition_only",
-    }
+    }, panel_image, origin
+
+
+# 选中态高亮判定：客户端选中菜单时，整行被高亮颜色填充（钱龙是饱和蓝、
+# 部分客户端是其它色相），导致 cell 内"亮像素(brightness > 130)"占比明显
+# 高于其他 cell。当目标 cell 的占比远高于其他 5 个 cell 时即为已选中态。
+# 阈值目前是全局统一值（实测选中≈0.72、未选中≈0.07，区分度足够），暂不
+# 按客户端参数化；若未来某客户端改用"暗色反白"之类非亮色高亮再单独配置。
+_FORMAL_HIGHLIGHT_BRIGHTNESS = 130
+_FORMAL_HIGHLIGHT_MIN_PCT = 0.30
+_FORMAL_HIGHLIGHT_DELTA_PCT = 0.15
+
+
+def _cell_bright_pct(cell_pixels: np.ndarray) -> float:
+    """统计单元格里亮像素占比；空 cell 返回 0。"""
+    rgb = cell_pixels[..., :3].astype(np.int32)
+    if rgb.size == 0:
+        return 0.0
+    brightness = rgb.max(axis=-1)
+    return float((brightness > _FORMAL_HIGHLIGHT_BRIGHTNESS).mean())
+
+
+def _detect_selected_formal_target(panel_image: Image.Image
+                                   ) -> tuple[str | None, dict[str, float]]:
+    """根据 6 个 FORMAL_TARGET_CELLS 的亮像素占比，判定当前是否已有选中项。
+
+    唯一显著高于其他 cell 的项才返回，避免两个 cell 都被高亮的客户端误判。
+    调用方应确保 panel_image 完整覆盖 FORMAL_TARGET_CELLS（_scan_formal_target
+    越界时已返回 hit=None），因此这里对越界一律按"无选中"处理。
+    """
+    pct_map: dict[str, float] = {}
+    for name, rect in FORMAL_TARGET_CELLS.items():
+        left, top, right, bottom = rect
+        if right > panel_image.width or bottom > panel_image.height:
+            return None, {}
+        crop = panel_image.crop(rect).convert("RGB")
+        pct_map[name] = _cell_bright_pct(np.asarray(crop))
+    ranked = sorted(pct_map.items(), key=lambda kv: kv[1], reverse=True)
+    top_target, top_pct = ranked[0]
+    second_pct = ranked[1][1] if len(ranked) > 1 else 0.0
+    if (
+        top_pct >= _FORMAL_HIGHLIGHT_MIN_PCT
+        and top_pct - second_pct >= _FORMAL_HIGHLIGHT_DELTA_PCT
+    ):
+        return top_target, pct_map
+    return None, pct_map
 
 
 def _save_failure(image: Image.Image, target: str) -> str:
@@ -681,10 +730,22 @@ def click_tactics_item(window, target: str, *, min_conf: float = 0.80,
     panel_hwnd = get_tactics_panel(main_hwnd)
     reset_tactics_scroll(panel_hwnd)
     if target in FORMAL_TARGET_CELLS:
-        hit = _recognize_formal_target(
+        hit, panel_image, _ = _scan_formal_target(
             main_hwnd, panel_hwnd, target, min_conf=min_conf
         )
         if hit is not None:
+            # 客户端选中态由整行高亮颜色表达，若 OCR 通过时目标已处于选中态，
+            # 再点击会取消选择；必须先采样背景颜色并跳过点击。
+            selected, pct_map = _detect_selected_formal_target(panel_image)
+            if selected == target:
+                hit = dict(hit)
+                hit["mode"] = "already_selected"
+                hit["highlight_pct_map"] = pct_map
+                print(
+                    f"[OK] {target!r} 已处于选中态(亮像素占比={pct_map}), "
+                    "跳过点击以免取消"
+                )
+                return hit
             with dpi_unaware():
                 left, top, _, _ = win32gui.GetWindowRect(panel_hwnd)
             _click_client(
