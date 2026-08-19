@@ -20,6 +20,9 @@
       },
       "dongzheng": {
         "export_type": null
+      },
+      "lianchu": {
+        "export_type": null
       }
     }
   },
@@ -64,6 +67,9 @@
         "export_type": "xls_only"
       },
       "dongzheng": {
+        "export_type": "xls_only"
+      },
+      "lianchu": {
         "export_type": "xls_only"
       }
     }

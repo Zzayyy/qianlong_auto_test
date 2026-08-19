@@ -28,7 +28,7 @@
 - `行情交易/`：包含 `查询/`、`下单/`、`撤单/`、`组合申报/` 等行情交易业务脚本与模板。
 - `超级策略/`：牛市认购、牛市认沽、熊市认购、熊市认沽、卖出跨式、卖宽跨式的一键开仓入口与组合申报；共享流程位于 `core/super_strategy.py`，自绘菜单 OCR 位于 `core/tactics_panel.py`。
 - `交易系统设置/`：可从任意主界面打开的设置检查脚本。
-- `交易系统设置/` 各面板的预期标准存于 `交易系统设置/标准/<client_id>/<panel>.json`；`标准/default/` 仅作未知客户端的通用兜底（如 `default/超价设置.json`）。7 客户端均已建标准目录（`qianlong/`、`guotai_haitong/`、`zhongtai/`、`huabao/`、`guangfa/`、`dongwu/`、`dongzheng/`；钱龙和国泰为原始预设，华宝/广发/东吴/东证从实机抓取，中泰从钱龙基线复制并按需补抓）。
+- `交易系统设置/` 各面板的预期标准存于 `交易系统设置/标准/<client_id>/<panel>.json`；`标准/default/` 仅作未知客户端的通用兜底（如 `default/超价设置.json`）。7 客户端均已建标准目录（`qianlong/`、`guotai_haitong/`、`zhongtai/`、`huabao/`、`guangfa/`、`dongwu/`、`dongzheng/`；钱龙和国泰为原始预设，华宝/广发/东吴/东证从实机抓取，中泰从钱龙基线复制并按需补抓）；联储（`lianchu/`）目录已建但**暂时为空**——该客户端当前版本的交易系统设置组件不通用，暂不放标准，比对走 `default/` 兜底，待后续版本组件对齐后再补抓。
 - `交易系统设置/抓取自定义标准.py` 是排除批量执行的配置工具：只读采集客户端界面，写入 `标准/<client_id>/<panel>.json` 并在覆盖前生成 `.bak`（不删除）。`--panel` 可限定只采某面板；`--super-price` 额外采集超价参数弹窗（多页 SysListView32 滚动 + PrintWindow OCR）。
 - 标准自定义边界：**一键炒单设置**仅国泰海通独有（钱龙、guotai_haitong、zhongtai、huabao、guangfa、dongwu 其余客户端都暂无该面板，标准 unsupported 默认不抓）。其快捷键表格属用户可自由自定义内容（增删改行/单元格），默认全量抓取或 `抓取自定义标准.py --client guotai_haitong --panel 一键炒单设置` 即以其当前表格为基线，也可直接手改 JSON；**超价设置**目前是各客户端预设默认标准（钱龙 9 行 / 国泰 24 行，买=1 卖=-1），尚不支持用户自由自定义——普通抓取不触碰 `超价设置.json`（它不在 PANEL_MODULES，是期权设置里的子弹窗），只有显式 `--super-price` 才以客户端当前弹窗覆盖（仍属预设，非用户自由表格）。
 - `tests/`：不依赖真实客户端或带条件跳过的自动化测试。
@@ -47,7 +47,7 @@
 
 ## 当前状态与下一步
 
-- 当前分支包含多客户端支持（qianlong、guotai_haitong、zhongtai、huabao、guangfa、dongwu、dongzheng 七客户端；华宝 2026-08-04 新增，广发 2026-08-05 新增，东吴 2026-08-10 新增，东证期货 2026-08-12 新增，树拓扑/下单区/菜单项与钱龙不同，细节见 `clients.json` 各客户端 `description` 与 `native_tree_profile`）、统一查询驱动、组合申报、交易系统设置自动检查和状态映射。
+- 当前分支包含多客户端支持（qianlong、guotai_haitong、zhongtai、huabao、guangfa、dongwu、dongzheng、lianchu 八客户端；华宝 2026-08-04 新增，广发 2026-08-05 新增，东吴 2026-08-10 新增，东证期货 2026-08-12 新增，联储 2026-08-19 新增，树拓扑/下单区/菜单项与钱龙不同，细节见 `clients.json` 各客户端 `description` 与 `native_tree_profile`）、统一查询驱动、组合申报、交易系统设置自动检查和状态映射。联储当前版本的交易系统设置组件不通用，`标准/lianchu/` 暂为空，比对走 `default/` 兜底。
 - 超级策略菜单采用 `PrintWindow` 小区域 RapidOCR：固定菜单格先做 recognition-only 精确校验，失败后才回退区域检测；固定坐标不得绕过文字校验直接点击。
 - “加入标的/一键开仓”首次共用一次操作栏检测，后续缓存相对位置并逐按钮 OCR 复核；布局指纹或文字不符时必须回退完整检测，不能直接使用旧缓存。
 - 启用“加入标的”时，客户端先返回一键开仓结果、再延迟返回加入标的结果；成功笔数允许不同。成功、失败、停市、未登录和未知弹窗都要用 Win32 逐个关闭，完整弹窗链静默后才返回或在运行日志报错。

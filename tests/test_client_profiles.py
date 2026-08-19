@@ -516,7 +516,8 @@ class GuangfaClientProfileTests(unittest.TestCase):
         guangfa_items = ("备兑证券不足查询", "行权指派欠资欠券", "被指派行权查询",
                          "行权结果查询", "当日行权交割信息", "当日强制平仓委托")
         for client in self.clients:
-            if client["id"] == "guangfa":
+            # 联储通知查询容器与广发一致（8 子），同样保留这些菜单项
+            if client["id"] in ("guangfa", "lianchu"):
                 continue
             with self.subTest(client=client["id"]):
                 names = [s["name"] for s in module.get_scripts_config(client["id"]).get("通知查询", [])]
