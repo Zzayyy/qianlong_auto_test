@@ -27,6 +27,8 @@ from config import (
     get_output_dir,
     set_output_dir,
     get_script_filename,
+    EXCEL_REQUIRED_CATEGORIES,
+    script_needs_excel,
     IS_FROZEN,
     PROJECT_ROOT,
     get_client,
@@ -867,8 +869,8 @@ class AutomationGUI:
         if cur_sel:
             self.script_tree.selection_remove(*cur_sel)
         self._rebuild_params()
-        # 仅下单显示数据预览（其它分类隐藏并清空残留数据）
-        self._update_preview_visibility(category == "下单")
+        # 仅 Excel 驱动分类显示数据预览（其它分类隐藏并清空残留数据）
+        self._update_preview_visibility(category in EXCEL_REQUIRED_CATEGORIES)
         self._log(f"切换分类: {category}")
         self.logger.info(f"切换分类: {category}")
         # 空闲时同步状态栏（运行中不覆盖）
@@ -957,6 +959,9 @@ class AutomationGUI:
             self._build_query_params()
         elif self.current_category == "下单":
             self._build_order_params()
+        elif self.current_category == "协议行权":
+            # 协议行权（协议行权参数设置）：Excel 驱动，参数与下单一致
+            self._build_order_params()
         elif self.current_category == "组合申报":
             self._build_combo_params()
         elif self.current_category == "交易系统设置":
@@ -969,7 +974,7 @@ class AutomationGUI:
 
     def _update_params_for_selected_script(self):
         """根据选中的脚本更新参数面板"""
-        if self.current_category not in ("下单", "组合申报"):
+        if self.current_category not in ("下单", "组合申报", "协议行权"):
             # 查询/通知查询/结算单/交易系统设置 等：不需要数据预览，隐藏并清空
             self._update_preview_visibility(False)
             return
@@ -1010,6 +1015,16 @@ class AutomationGUI:
             self._update_preview_visibility(False)
             # 全自动脚本与查询脚本使用不同参数
             self._build_combo_params()
+        elif self.current_category == "协议行权":
+            # 行权分类按脚本区分参数：协议行权参数设置 需要 Excel 配置；
+            # 协议行权参数查询（通用查询驱动）使用与查询类一致的导出参数
+            # （导出格式/自动打开/TXT与XLS输出路径）。
+            if script_needs_excel(self.current_category, script["name"]):
+                self._update_preview_visibility(True)
+                self._build_order_params()
+            else:
+                self._update_preview_visibility(False)
+                self._build_query_params()
 
     def _build_query_params(self):
         """查询类参数"""
@@ -1689,9 +1704,9 @@ class AutomationGUI:
             messagebox.showerror("错误", f"脚本文件不存在:\n{script['path']}")
             return
 
-        # 下单需要检查Excel文件（全选撤单和期权下单_一键导出除外）
+        # Excel 驱动类脚本需要检查Excel文件（期权下单_一键导出和全选撤单除外）
         order_script_name = get_script_filename(script["name"])
-        if self.current_category == "下单" and order_script_name not in ("期权下单_一键导出", "全选撤单") and not self.xlsx_file.get():
+        if script_needs_excel(self.current_category, script["name"]) and not self.xlsx_file.get():
             messagebox.showwarning("提示", "请先选择Excel配置文件")
             return
 
@@ -1781,12 +1796,12 @@ class AutomationGUI:
             self._log(f"自动打开: {'是' if self.auto_open.get() else '否'}")
             self._log(f"TXT路径: {self.txt_path.get()}")
             self._log(f"XLS路径: {self.xls_path.get()}")
-        elif self.current_category == "下单":
+        elif self.current_category in ("下单", "协议行权"):
             if order_script_name == "期权下单_一键导出":
                 self._log(f"导出目标: {', '.join(export_targets)}")
                 self._log(f"输出目录: {self.export_output_dir.get()}")
                 self._log(f"文件名格式: 期权下单(新)-持仓-20260629.xls")
-            else:
+            elif script_needs_excel(self.current_category, script["name"]):
                 self._log(f"Excel文件: {self.xlsx_file.get()}")
         elif self.current_category == "组合申报":
             if script["name"] in self.COMBO_AUTO_SCRIPTS:

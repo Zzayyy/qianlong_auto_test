@@ -58,7 +58,7 @@ DEFAULT_OUTPUT_DIR = os.path.join(os.path.expanduser("~"), "Desktop")
 # GUI 的业务层级。叶子分类仍作为 Task.category 使用，以保持任务中心、历史记录、
 # 输出目录等既有逻辑稳定；MODULE_GROUPS 只负责把这些分类组织成三个一级模块。
 MODULE_GROUPS = {
-    "行情交易": ("查询", "通知查询", "结算单", "下单", "组合申报"),
+    "行情交易": ("查询", "通知查询", "结算单", "下单", "组合申报", "协议行权"),
     "超级策略": ("超级策略",),
     "交易系统设置": ("交易系统设置",),
 }
@@ -154,6 +154,31 @@ def get_script_filename(script_name: str) -> str:
     # "3. 策略委托" -> "策略委托"
     name = re.sub(r"^\d+\.\s*", "", script_name).strip()
     return name
+
+
+# ====================== Excel 配置文件依赖 ======================
+# 数据预览按分类显示的分类（分类节点选中时展示 Excel 预览面板）。
+EXCEL_REQUIRED_CATEGORIES = ("下单", "协议行权")
+# 整分类默认需要 Excel 的分类（未命中任何名单时按此兜底）。
+EXCEL_DEFAULT_CATEGORIES = ("下单",)
+# 明确需要 Excel 的脚本（去掉编号后的菜单名），用于混合分类（如 行权）。
+EXCEL_REQUIRED_SCRIPTS = frozenset({"协议行权参数设置"})
+# 属于 Excel 必选分类、但本身不需要 Excel 的脚本。
+EXCEL_OPTIONAL_SCRIPTS = frozenset({"期权下单_一键导出", "全选撤单"})
+
+
+def script_needs_excel(category: str, script_name: str) -> bool:
+    """判断脚本执行前是否必须先选择 Excel 配置文件。
+
+    判定优先级：例外脚本（不需要 Excel）> 明确需要的脚本 >
+    分类默认需要（下单）。行权等混合分类按脚本名区分。
+    """
+    name = get_script_filename(script_name)
+    if name in EXCEL_OPTIONAL_SCRIPTS:
+        return False
+    if name in EXCEL_REQUIRED_SCRIPTS:
+        return True
+    return category in EXCEL_DEFAULT_CATEGORIES
 
 
 # ====================== 脚本清单 ======================
@@ -257,6 +282,11 @@ SCRIPTS_CONFIG = {
         # 以下为华宝证券期权宝专属菜单（钱龙/国泰/中泰无此菜单，由 clients.json 的 unsupported 过滤）
         {"name": "8.组合当日成交", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\组合申报\组合当日成交"},
         {"name": "9.组合历史成交", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\组合申报\组合历史成交"},
+    ],
+    # 以下为东吴证券期权宝专属菜单（其余客户端由 clients.json 的 unsupported 过滤）
+    "协议行权": [
+        {"name": "1.协议行权参数设置", "path": rf"{PROJECT_ROOT}\行情交易\协议行权\协议行权参数设置_Excel驱动版.py"},
+        {"name": "2.协议行权参数查询", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\协议行权\协议行权参数查询"},
     ],
     "超级策略": [
         {"name": "牛市认沽", "path": rf"{PROJECT_ROOT}\超级策略\牛市认沽_一键开仓.py"},

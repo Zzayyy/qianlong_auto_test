@@ -36,9 +36,9 @@ from gui.history import (
 )
 from config import (
     MODULE_GROUPS,
-    get_script_filename,
     get_scripts_config,
     get_client_name,
+    script_needs_excel,
 )
 
 # 编队下拉中的占位项：表示当前队列是用户临时编排，未归入任何编队
@@ -636,9 +636,9 @@ class TaskCenter:
 
         # 下单需 Excel，但全选撤单/一键导出不需要
         category = self.controller.current_category
-        if category == "下单" and get_script_filename(script["name"]) not in ("期权下单_一键导出", "全选撤单"):
+        if script_needs_excel(category, script["name"]):
             if not self.controller.xlsx_file.get():
-                messagebox.showwarning("提示", "该下单脚本需要先选择 Excel 配置文件")
+                messagebox.showwarning("提示", "该脚本需要先选择 Excel 配置文件")
                 return
 
         params = self.controller.collect_params()
@@ -935,7 +935,7 @@ class TaskCenter:
             if not os.path.exists(s["path"]):
                 skipped.append((s["name"], "脚本文件不存在"))
                 continue
-            if category == "下单" and get_script_filename(s["name"]) not in ("期权下单_一键导出", "全选撤单"):
+            if script_needs_excel(category, s["name"]):
                 if not self.controller.xlsx_file.get():
                     skipped.append((s["name"], "未选择 Excel 配置文件"))
                     continue
@@ -985,9 +985,9 @@ class TaskCenter:
             messagebox.showerror("错误", f"脚本文件不存在:\n{script['path']}")
             return
         category = script.get("category") or self.controller.current_category
-        if category == "下单" and get_script_filename(script["name"]) not in ("期权下单_一键导出", "全选撤单"):
+        if script_needs_excel(category, script["name"]):
             if not self.controller.xlsx_file.get():
-                messagebox.showwarning("提示", "该下单脚本需要先选择 Excel 配置文件")
+                messagebox.showwarning("提示", "该脚本需要先选择 Excel 配置文件")
                 return
         params = self.controller.collect_params()
         item = {
