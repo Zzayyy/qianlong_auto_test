@@ -1574,6 +1574,10 @@ class AutomationGUI:
         if not iid:
             return
         self._drag_iid = iid
+        # 记录按下时的展开状态：点在展开指示器（+/− 小方框）上时，Treeview
+        # 类默认绑定会在按下阶段先行翻转；释放时据此判断是否已翻转过，
+        # 避免释放时再翻一次导致“点展开箭头没反应”的双重翻转。
+        self._press_open_state = self.script_tree.item(iid, "open")
         # 一级模块（iid 形如 module::行情交易）：落点时加入模块下全部可用分类。
         if iid.startswith("module::"):
             module = iid.split("::", 1)[1]
@@ -1671,6 +1675,13 @@ class AutomationGUI:
         iid = getattr(self, "_drag_iid", None)
         if not iid or not iid.startswith(("cat::", "module::")):
             return
+        # 按下时点在展开指示器上：Treeview 默认绑定已翻转过展开状态，
+        # 此处若再翻转等于两次抵消（表现为点箭头无法展开），直接跳过。
+        press_open = getattr(self, "_press_open_state", None)
+        if press_open is not None and self.script_tree.item(iid, "open") != press_open:
+            self._press_open_state = None
+            return
+        self._press_open_state = None
         # 仅当抬起位置就是当前选中的分类节点时才切换
         sel = self.script_tree.selection()
         if not sel or sel[0] != iid:
