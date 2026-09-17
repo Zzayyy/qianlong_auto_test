@@ -23,6 +23,9 @@
       },
       "lianchu": {
         "export_type": null
+      },
+      "yuekai": {
+        "export_type": null
       }
     }
   },
@@ -70,6 +73,9 @@
         "export_type": "xls_only"
       },
       "lianchu": {
+        "export_type": "xls_only"
+      },
+      "yuekai": {
         "export_type": "xls_only"
       }
     }
@@ -232,6 +238,9 @@
     "settle_delay": 1.0
   },
   "\\通知查询\\当日强制平仓委托": {
+    "settle_delay": 1.0
+  },
+  "\\通知查询\\风险通知查询": {
     "settle_delay": 1.0
   },
   "\\协议行权\\协议行权参数查询": {

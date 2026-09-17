@@ -256,6 +256,8 @@ SCRIPTS_CONFIG = {
         {"name": "12.行权结果查询", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\通知查询\行权结果查询"},
         {"name": "13.当日行权交割信息", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\通知查询\当日行权交割信息"},
         {"name": "14.当日强制平仓委托", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\通知查询\当日强制平仓委托"},
+        # 以下为粤开证券期权宝专属菜单（其余客户端无此菜单，由 clients.json 的 unsupported 过滤）
+        {"name": "15.风险通知查询", "path": rf"{PROJECT_ROOT}\行情交易\查询\run_query.py", "query_key": r"\通知查询\风险通知查询"},
     ],
     # 以下为国泰海通专属菜单
     "结算单": [
