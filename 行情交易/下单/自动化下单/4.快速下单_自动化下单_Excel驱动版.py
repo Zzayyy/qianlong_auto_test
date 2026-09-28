@@ -65,18 +65,20 @@ REQUIRED_COLUMNS = (
 )
 
 # 已在钱龙实机的 owner-drawn ComboLBox 中按顺序核对。
-QUOTE_TYPES = (
-    "对手价",
-    "挂盘价",
-    "涨停价",
-    "跌停价",
-    "限价",
-    "超价",
-    "市价转限",
-    "市价FAK",
-    "市价FOK",
+# 报价方式下拉项由客户端档案决定（clients.json 的 quote_types）：
+# 未配置的客户端沿用钱龙基准 9 项；中泰证券期权宝XTP 后三项不同
+# （全额成交或撤销 / 对手方最优转限价 / 市价剩余转撤销）。
+from core.quote_type import (
+    env_client_id,
+    get_quote_index,
+    get_quote_type_map,
+    get_quote_types,
 )
-QUOTE_INDEX = {name: index for index, name in enumerate(QUOTE_TYPES)}
+
+_CLIENT_ID = env_client_id()
+QUOTE_TYPES = get_quote_types(_CLIENT_ID)
+QUOTE_TYPE_MAP = get_quote_type_map(_CLIENT_ID)
+QUOTE_INDEX = get_quote_index(_CLIENT_ID)
 
 CONTROL_IDS = {
     "合约代码": 18005,

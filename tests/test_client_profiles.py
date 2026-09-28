@@ -309,8 +309,9 @@ class HuabaoClientProfileTests(unittest.TestCase):
         assert spec.loader is not None
         spec.loader.exec_module(module)
         for client in self.clients:
-            # 东吴树中也有 组合当日成交（组合申报[10,5]），不在此过滤断言范围
-            if client["id"] in ("huabao", "dongwu"):
+            # 东吴树中也有 组合当日成交（组合申报[10,5]），XTP 组合申报容器同样
+            # 含 组合当日成交[10,5]，均不在此过滤断言范围
+            if client["id"] in ("huabao", "dongwu", "zhongtai_xtp"):
                 continue
             with self.subTest(client=client["id"]):
                 scripts = module.get_scripts_config(client["id"])

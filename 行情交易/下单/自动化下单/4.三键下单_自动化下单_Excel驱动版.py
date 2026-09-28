@@ -78,24 +78,19 @@ _CLIENT_ID = os.environ.get("GUI_CLIENT_ID", "")
 PANEL_PATH = r"\其他下单方式\三键下单" if _CLIENT_ID == "dongwu" else ""
 
 
-# 报价方式映射: Excel中填写值 -> 实际下拉框显示值
-QUOTE_TYPE_MAP = {
-    "市价FOK": "市价F0K",   # 实际控件是 F0K(数字0),不是 FOK(字母O)
-}
-
-# 报价方式下拉项(以软件实际显示为准;顺序与快速下单页 owner-drawn ComboLBox 实机核对一致)
-QUOTE_TYPES = (
-    "对手价",
-    "挂盘价",
-    "涨停价",
-    "跌停价",
-    "限价",
-    "超价",
-    "市价转限",
-    "市价FAK",
-    "市价F0K",
+# 报价方式下拉项由客户端档案决定（clients.json 的 quote_types）：
+# 未配置的客户端沿用钱龙基准 9 项；中泰证券期权宝XTP 后三项不同
+# （全额成交或撤销 / 对手方最优转限价 / 市价剩余转撤销）。
+from core.quote_type import (  # noqa: E402
+    get_quote_index,
+    get_quote_type_map,
+    get_quote_types,
+    quote_text_matches as _core_quote_text_matches,
 )
-QUOTE_INDEX = {name: idx for idx, name in enumerate(QUOTE_TYPES)}
+
+QUOTE_TYPES = get_quote_types(_CLIENT_ID or None)
+QUOTE_TYPE_MAP = get_quote_type_map(_CLIENT_ID or None)
+QUOTE_INDEX = get_quote_index(_CLIENT_ID or None)
 
 QUOTE_AUTO_ID = "18083"       # 报价方式输入框 auto_id
 QTY_AUTO_ID   = "306"         # 委托数量输入框 auto_id
@@ -446,31 +441,17 @@ def _press_vk(vk_code: int) -> None:
 
 
 def _quote_text_matches(edit_hwnd, expected: str) -> bool:
-    """校验报价方式输入框文本是否为目标值。
-
-    钱龙自绘 Edit 跨进程 GetWindowText/UIA 可能拿不到文本,
-    用 WM_GETTEXTLENGTH 比对: 字符数与 GBK 字节数任一匹配即可
-    (兼容 Unicode 窗口返回字符数、ANSI/GBK 窗口返回字节数两种情况)。
-    """
-    try:
-        actual = win32gui.GetWindowText(edit_hwnd) or ""
-        if actual:
-            return actual.strip() == expected
-    except Exception:
-        pass
-    try:
-        n = win32gui.SendMessage(edit_hwnd, win32con.WM_GETTEXTLENGTH, 0, 0)
-        return n == len(expected) or n == len(expected.encode("gbk"))
-    except Exception:
-        return False
+    """校验报价方式输入框文本是否为目标值（精确比对优先，长度兜底）。"""
+    return _core_quote_text_matches(edit_hwnd, expected)
 
 
 def _quote_verified(edit_hwnd, expected: str, index=None) -> bool:
     """报价方式是否已选中。
 
-    实测(2026-07-31 中泰真机): 该自绘控件已选中"挂盘价"时 CB_GETCURSEL 仍返回 0,
-    索引不可用作判定依据; GetWindowText 也恒为空。唯一可靠的是 WM_GETTEXTLENGTH:
-    写入目标文本后长度等于目标(字符数或 GBK 字节数)即视为生效。
+    实测 2026-07-31 中泰真机: 该自绘控件已选中时 CB_GETCURSEL 仍返回 0，
+    索引不可用作判定依据。2026-09-24 XTP 实机进一步确认：UIA 的
+    ValuePattern(get_value) 能读到真实文本，故优先精确比对；
+    仅在确实读不到文本时才退回 WM_GETTEXTLENGTH 长度比较。
     """
     return _quote_text_matches(edit_hwnd, expected)
 
