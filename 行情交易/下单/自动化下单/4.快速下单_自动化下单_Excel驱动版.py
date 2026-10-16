@@ -156,18 +156,28 @@ def normalize_contract_code(value) -> str:
     return result
 
 
-def normalize_choice(value, field: str, choices: tuple[str, ...]) -> str:
-    normalized = "" if value is None else str(value).strip()
-    if normalized not in choices:
-        raise ValueError(f"{field}必须是 {'/'.join(choices)}")
-    return normalized
-
-
 def normalize_alias_choice(value, field: str, aliases: dict[str, str]) -> str:
     normalized = "" if value is None else str(value).strip()
     if normalized not in aliases:
         raise ValueError(f"{field}必须是 {'/'.join(aliases)}")
     return aliases[normalized]
+
+
+def normalize_quote_type(value) -> str:
+    """校验报价方式，并归一为客户端控件的实际显示值。
+
+    Excel 里常按习惯写 `市价FOK`(字母 O)，而钱龙系下拉第 9 项实际是
+    `市价F0K`(数字 0)——两者字形几乎一样。三键/四键/期权下单三个脚本
+    都在选择时用 `QUOTE_TYPE_MAP` 做了这层归一；本脚本此前直接拿 Excel
+    原值跟 `QUOTE_TYPES` 比对，导致 `市价FOK` 被判为非法而整批报错
+    （2026-09-24 粤开实机：下拉第 9 项确为 `市价F0K`，U+0030）。
+    这里同样先查映射表再校验，保证返回的是可直接查 `QUOTE_INDEX` 的显示值。
+    """
+    normalized = "" if value is None else str(value).strip()
+    actual = QUOTE_TYPE_MAP.get(normalized, normalized)
+    if actual not in QUOTE_TYPES:
+        raise ValueError(f"报价方式必须是 {'/'.join(QUOTE_TYPES)}")
+    return actual
 
 
 def normalize_quantity(value) -> str:
@@ -228,8 +238,8 @@ def load_orders(path: str) -> list[QuickOrder]:
                             "开平",
                             {"开": "开仓", "平": "平仓", "开仓": "开仓", "平仓": "平仓"},
                         ),
-                        quote_type=normalize_choice(
-                            item.get("报价方式"), "报价方式", QUOTE_TYPES
+                        quote_type=normalize_quote_type(
+                            item.get("报价方式")
                         ),
                         quantity=normalize_quantity(item.get("委托数量")),
                         covered=normalize_bool(item.get("备兑"), "备兑", default=False),
