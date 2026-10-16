@@ -22,7 +22,14 @@ import subprocess
 
 import tkinter as tk
 
-from config import IS_FROZEN, BASE_DIR, get_client, load_user_config
+from config import (
+    IS_FROZEN,
+    BASE_DIR,
+    USER_DATA_DIR,
+    get_client,
+    load_user_config,
+    migrate_legacy_user_data,
+)
 from gui.main_window import AutomationGUI
 
 
@@ -169,6 +176,21 @@ def _apply_tk_scaling(root):
         pass
 
 
+def _migrate_user_data_once() -> None:
+    """把老版本程序目录里的用户数据搬到 %LOCALAPPDATA%（幂等）。
+
+    必须在**任何** load_user_config() 之前执行：下面的管理员提权重启判断就要
+    读配置，若等到启动 GUI 才迁移，提权那次会按空配置误判。
+    """
+    try:
+        moved = migrate_legacy_user_data()
+        if moved:
+            print(f"[INFO] 已迁移历史用户数据到 {USER_DATA_DIR}: "
+                  f"{', '.join(moved)}")
+    except Exception as exc:
+        print(f"[WARN] 用户数据迁移失败（不影响启动）: {exc}")
+
+
 def main():
     _enable_dpi_awareness()
     root = tk.Tk()
@@ -180,6 +202,8 @@ def main():
 if __name__ == "__main__":
     # 脚本运行器模式优先：若收到 --_run_script 参数则执行子脚本后直接退出
     _run_script_mode()
+    # 迁移必须在提权判断（会读配置）之前完成
+    _migrate_user_data_once()
     if _relaunch_as_admin_if_required():
         sys.exit(0)
     main()

@@ -14,6 +14,7 @@ import os
 import sys
 import json
 import re
+import shutil
 
 # ====================== PyInstaller 打包环境 ======================
 # 判断是否从 PyInstaller 打包的 exe 运行
@@ -45,15 +46,103 @@ from core.clients import (  # noqa: E402
     get_default_client_id,
 )
 
-# ====================== 用户配置 ======================
-# 配置文件路径：打包后放在exe同级目录，开发环境放在脚本同级目录
-if IS_FROZEN:
-    CONFIG_DIR = os.path.dirname(sys.executable)
+# ====================== 用户数据目录 ======================
+# 用户数据（配置 / 任务历史 / 任务中心 / 定时计划 / 日志）放在**每用户**的
+# %LOCALAPPDATA% 下，而不是 exe 旁边。原因：
+#   旧版把 data/、logs/、config.json 放在程序目录里，而交付物是 onedir 整个
+#   文件夹。用户升级时若解压到新文件夹（或先删旧目录），这些数据会随之丢失
+#   —— 表现为「每次大更新后历史统计归零、客户端和输出目录要重设」。
+# 放到 LOCALAPPDATA 后，升级只替换程序本体，用户数据不受影响。
+APP_DIR_NAME = "钱龙期权自动化工具"
+
+# 可用 GUI_DATA_DIR 覆盖（便于测试、便携模式或换位置部署）。
+_override_dir = (os.environ.get("GUI_DATA_DIR") or "").strip()
+if _override_dir:
+    USER_DATA_DIR = os.path.abspath(_override_dir)
 else:
-    CONFIG_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
+    _root = (
+        os.environ.get("LOCALAPPDATA")
+        or os.environ.get("APPDATA")
+        or os.path.expanduser("~")
+    )
+    USER_DATA_DIR = os.path.join(_root, APP_DIR_NAME)
+
+CONFIG_DIR = USER_DATA_DIR                      # 兼容既有引用
+CONFIG_FILE = os.path.join(USER_DATA_DIR, "config.json")
+DATA_DIR = os.path.join(USER_DATA_DIR, "data")
+LOG_DIR = os.path.join(USER_DATA_DIR, "logs")
+
 # 默认输出目录：普通用户机器上放到桌面（开发者机器路径 E:\Code\3\output 不适用）
 DEFAULT_OUTPUT_DIR = os.path.join(os.path.expanduser("~"), "Desktop")
+
+
+def _legacy_user_data_locations() -> list:
+    """返回 [(旧位置, 新位置)]，用于从老版本目录一次性搬迁用户数据。
+
+    旧布局（<0.2 版本）：
+      - 打包运行：exe 同级目录的 config.json / data / logs
+      - 开发运行：GUI自动化工具2/config.json、gui/data、gui/logs
+    """
+    if IS_FROZEN:
+        legacy_root = os.path.dirname(sys.executable)
+        return [
+            (os.path.join(legacy_root, "config.json"), CONFIG_FILE),
+            (os.path.join(legacy_root, "data"), DATA_DIR),
+            (os.path.join(legacy_root, "logs"), LOG_DIR),
+        ]
+    legacy_root = os.path.dirname(os.path.abspath(__file__))
+    return [
+        (os.path.join(legacy_root, "config.json"), CONFIG_FILE),
+        (os.path.join(legacy_root, "gui", "data"), DATA_DIR),
+        (os.path.join(legacy_root, "gui", "logs"), LOG_DIR),
+    ]
+
+
+def migrate_legacy_user_data() -> list:
+    """把老版本程序目录里的用户数据搬到新的每用户目录（只补不覆盖）。
+
+    只在目标文件**不存在**时复制，因此：
+      - 反复调用安全（幂等），不会覆盖用户现有数据；
+      - 已升级过的用户不会被旧目录里的陈旧文件回灌。
+    用标记文件记录已执行，避免每次启动都去扫描旧目录。
+
+    返回已迁移的条目描述列表（供日志使用）。
+    """
+    marker = os.path.join(USER_DATA_DIR, ".legacy_migrated")
+    if os.path.exists(marker):
+        return []
+
+    migrated = []
+    try:
+        os.makedirs(USER_DATA_DIR, exist_ok=True)
+        for legacy, target in _legacy_user_data_locations():
+            if not os.path.exists(legacy):
+                continue
+            if os.path.isdir(legacy):
+                os.makedirs(target, exist_ok=True)
+                for name in os.listdir(legacy):
+                    src = os.path.join(legacy, name)
+                    dst = os.path.join(target, name)
+                    if not os.path.isfile(src) or os.path.exists(dst):
+                        continue
+                    try:
+                        shutil.copy2(src, dst)
+                        migrated.append(name)
+                    except OSError:
+                        pass
+            elif not os.path.exists(target):
+                try:
+                    shutil.copy2(legacy, target)
+                    migrated.append(os.path.basename(legacy))
+                except OSError:
+                    pass
+        with open(marker, "w", encoding="utf-8") as fh:
+            fh.write("migrated\n")
+    except OSError:
+        # 迁移失败不应阻断启动；下次启动会重试
+        return migrated
+    return migrated
+
 
 # GUI 的业务层级。叶子分类仍作为 Task.category 使用，以保持任务中心、历史记录、
 # 输出目录等既有逻辑稳定；MODULE_GROUPS 只负责把这些分类组织成三个一级模块。
@@ -123,6 +212,7 @@ def load_user_config() -> dict:
 def save_user_config(config: dict):
     """保存用户配置"""
     try:
+        os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(config, f, ensure_ascii=False, indent=2)
     except Exception as e:

@@ -31,6 +31,9 @@ from config import (
     script_needs_excel,
     IS_FROZEN,
     PROJECT_ROOT,
+    DATA_DIR,
+    LOG_DIR,
+    USER_DATA_DIR,
     get_client,
     get_client_ids,
     get_client_name,
@@ -420,13 +423,11 @@ class AutomationGUI:
         # 抓取自定义标准：勾选要抓取的面板（默认全选）
         self.capture_panels = {name: tk.BooleanVar(value=True) for name in CAPTURE_STANDARD_PANELS}
 
-        # 日志目录：打包后放在exe同级目录
-        if IS_FROZEN:
-            self.log_dir = os.path.join(os.path.dirname(sys.executable), "logs")
-            self.data_dir = os.path.join(os.path.dirname(sys.executable), "data")
-        else:
-            self.log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
-            self.data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+        # 日志与数据目录：统一放在每用户的 %LOCALAPPDATA%\钱龙期权自动化工具
+        # （见 config.USER_DATA_DIR）。放在程序目录外，升级替换程序时才不会
+        # 连带丢掉任务历史、任务中心和定时计划。
+        self.log_dir = LOG_DIR
+        self.data_dir = DATA_DIR
         os.makedirs(self.log_dir, exist_ok=True)
         os.makedirs(self.data_dir, exist_ok=True)
 
