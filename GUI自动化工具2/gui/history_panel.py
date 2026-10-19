@@ -179,24 +179,21 @@ class HistoryPanel:
         self._refresh_list()
 
     def _refresh_stats(self):
-        """计算并显示统计卡片：成功率 / 平均耗时 / 今日执行 / 历史总计"""
-        records = self.gui.history.records
-        total = len(records)
-        # 统计口径：排除「已停止」（用户手动停止，非执行结果），避免拉低成功率与平均耗时
-        finished = [r for r in records if r.get("status") in (
-            STATUS_SUCCESS, STATUS_FAILED, STATUS_ERROR)]
-        success = [r for r in finished if r.get("status") == STATUS_SUCCESS]
-        today = sum(1 for r in records if self._is_today(r.get("time", "")))
-        elapsed_vals = [float(r.get("elapsed", 0) or 0) for r in finished]
-        avg = (sum(elapsed_vals) / len(elapsed_vals)) if elapsed_vals else 0.0
-        rate = (len(success) / len(finished) * 100) if finished else 0.0
+        """计算并显示统计卡片：成功率 / 平均耗时 / 今日执行 / 历史总计
 
-        self.stat_total.config(text=str(total))
-        self.stat_today.config(text=str(today))
-        self.stat_avg.config(text=self.gui.history.format_elapsed(avg))
+        统计交给数据库聚合（SQL），不再把全部记录读进内存：
+        数据量涨到几万条时这里仍是毫秒级。
+        """
+        st = self.gui.history.stats()
+        rate = st["rate"]
+
+        self.stat_total.config(text=str(st["total"]))
+        self.stat_today.config(text=str(st["today"]))
+        self.stat_avg.config(
+            text=self.gui.history.format_elapsed(st["avg_elapsed"]))
         self.stat_success.config(text=f"{rate:.0f}%")
         # 成功率配色
-        if not finished:
+        if not st["finished"]:
             self.stat_success.config(foreground="#888888")
         elif rate >= 80:
             self.stat_success.config(foreground="#008000")
@@ -206,37 +203,39 @@ class HistoryPanel:
             self.stat_success.config(foreground="#f44747")
 
     def _refresh_list(self):
-        """刷新列表视图（应用状态 + 时间范围筛选，并按页渲染）"""
+        """刷新列表视图（筛选交给 SQL，只取当前页，不读全表）"""
         tree = self.history_tree
         tree.delete(*tree.get_children())
 
-        # 先按筛选条件过滤（records 最新在前）
         filt = self.history_filter_var.get() if hasattr(self, "history_filter_var") else "全部"
         rng = self.history_range_var.get() if hasattr(self, "history_range_var") else "全部"
         cat = self.history_category_var.get() if hasattr(self, "history_category_var") else "全部"
 
-        # 分类下拉项根据现有记录动态生成（含「全部」）；若当前选择已无对应记录则回退
-        cats = sorted({rec.get("category", "") for rec in self.gui.history.records if rec.get("category", "")})
+        # 分类下拉项来自数据库的去重列表；若当前选择已无记录则回退
+        cats = self.gui.history.categories()
         if hasattr(self, "history_category_combo"):
             self.history_category_combo["values"] = ["全部"] + cats
         if cat != "全部" and cat not in cats:
             self.history_category_var.set("全部")
             cat = "全部"
 
-        filtered = [
-            rec for rec in self.gui.history.records
-            if (filt == "全部" or rec.get("status", "") == filt)
-            and (rng == "全部" or self._in_range(rec.get("time", ""), rng))
-            and (cat == "全部" or rec.get("category", "") == cat)
-        ]
+        since = self.gui.history.range_to_since(rng)
+        status_arg = None if filt == "全部" else filt
+        category_arg = None if cat == "全部" else cat
 
-        total = len(filtered)
+        # 先取总数，用于纠正页码后再取本页数据
+        total = self.gui.history.count(status=status_arg,
+                                       category=category_arg, since=since)
         size = self.history_page_size
         total_pages = max(1, (total + size - 1) // size)
         if self.history_page > total_pages:
             self.history_page = total_pages
         if self.history_page < 1:
             self.history_page = 1
+
+        rows, _ = self.gui.history.query_page(
+            page=self.history_page, size=size, status=status_arg,
+            category=category_arg, since=since)
 
         status_tag = {
             STATUS_SUCCESS: "success",
@@ -245,8 +244,7 @@ class HistoryPanel:
             STATUS_STOPPED: "stopped",
             STATUS_RUNNING: "running",
         }
-        start = (self.history_page - 1) * size
-        for rec in filtered[start:start + size]:
+        for rec in rows:
             status = rec.get("status", "")
             tag = status_tag.get(status, "")
             elapsed = self.gui.history.format_elapsed(rec.get("elapsed", 0))
@@ -368,7 +366,7 @@ class HistoryPanel:
     # ---------- 详情 / 清空 ----------
     def clear_history(self):
         """清空任务历史（面板内「清空记录」按钮调用）"""
-        if not self.gui.history.records:
+        if not self.gui.history.has_any():
             return
         if messagebox.askyesno("确认", "确定清空所有任务历史记录？"):
             self.gui.history.clear()
@@ -384,7 +382,7 @@ class HistoryPanel:
 
     def show_detail_by_id(self, rec_id):
         """按记录 id 查看任务详情"""
-        rec = next((r for r in self.gui.history.records if r["id"] == rec_id), None)
+        rec = self.gui.history.get(rec_id)
         if not rec:
             return
         detail = rec.get("detail", "")
